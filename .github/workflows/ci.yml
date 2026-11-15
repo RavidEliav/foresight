@@ -1,8 +1,12 @@
 name: CI
 
 # Test gates 1 and 3: every PR into dev, and the dev -> main release PR.
+# Also runs on pushes to dev/main so Railway's "Wait for CI" only deploys merged
+# commits that passed.
 on:
   pull_request:
+    branches: [dev, main]
+  push:
     branches: [dev, main]
   workflow_dispatch:
 

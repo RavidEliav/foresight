@@ -39,18 +39,22 @@ def run_pipeline_page() -> None:
                 status.update(label="Run failed", state="error")
                 ui.friendly_error(f"The run could not complete: {exc}")
                 return
-            for gate in state.gates:
-                st.write(f"Gate **{gate.gate}**: {gate.status.value}")
-            if state.status == "success":
-                status.update(label=f"Run {state.run_id} completed", state="complete")
-            else:
-                status.update(label=f"Run {state.run_id} stopped", state="error")
-                ui.friendly_error(f"Stopped at a validation gate: {state.failure_reason}")
+            done = state.status == "success"
+            status.update(label=f"Run {state.run_id} {'completed' if done else 'stopped'}",
+                          state="complete" if done else "error", expanded=False)
+
+        for gate in state.gates:
+            st.write(f"Gate **{gate.gate}**: {gate.status.value}")
+        if not done:
+            ui.friendly_error(f"Stopped at a validation gate: {state.failure_reason}")
+        st.page_link(DATA_QUALITY, label="See the Data Quality results",
+                     icon=":material/verified:")
 
 
 def data_quality_page() -> None:
-    st.title("Data Quality")
-    ui.coming_soon("Phase 1")
+    from app import data_quality
+
+    data_quality.render(data_quality.latest_run_dir(settings.resolve(settings.paths.runs_dir)))
 
 
 def eda_page() -> None:
@@ -72,12 +76,13 @@ st.sidebar.title("Foresight")
 st.sidebar.caption("Semiconductor yield intelligence")
 ui.environment_badge(settings)
 
+DATA_QUALITY = st.Page(data_quality_page, title="Data Quality", icon=":material/verified:",
+                       url_path="data-quality")
 navigation = st.navigation(
     [
         st.Page(run_pipeline_page, title="Run Pipeline", icon=":material/play_arrow:",
                 url_path="run", default=True),
-        st.Page(data_quality_page, title="Data Quality", icon=":material/verified:",
-                url_path="data-quality"),
+        DATA_QUALITY,
         st.Page(eda_page, title="EDA & Insights", icon=":material/bar_chart:", url_path="eda"),
         st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),
         st.Page(report_page, title="Investigation & Report", icon=":material/description:",

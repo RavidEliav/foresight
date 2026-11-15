@@ -4,7 +4,8 @@ Stage order: ingest -> [data contract gate] -> analyze -> [features gate]
 -> investigate -> [evidence gate] -> report -> finalize. Any ERROR routes to
 handle_failure, which writes a failure report instead of crashing.
 
-The stages are placeholders in Phase 0; crews and tools are plugged in later phases.
+ingest is real (Phase 1: SECOM + Data Contract); the later stages are placeholders
+until Phases 2-3.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 from crewai.flow.flow import Flow, listen, or_, router, start
 from pydantic import BaseModel, Field
 
+from foresight.data.ingest import run_ingest
 from foresight.settings import Settings, load_settings
 from foresight.utils.logging import get_logger, setup_logging
 from foresight.utils.manifest import build_manifest, write_manifest
@@ -44,6 +46,9 @@ class ForesightState(BaseModel):
     gates: list[GateResult] = Field(default_factory=list)
     failure_reason: str | None = None
     durations: dict[str, float] = Field(default_factory=dict)
+    validation: dict | None = None
+    artifacts: dict[str, str] = Field(default_factory=dict)
+    data_checksums: dict[str, str] = Field(default_factory=dict)
 
 
 class ForesightFlow(Flow[ForesightState]):
@@ -85,7 +90,14 @@ class ForesightFlow(Flow[ForesightState]):
         setup_logging(self.settings.resolve(self.settings.paths.logs_dir), self.state.run_id)
         set_seeds(self.settings.seed)
         log.info("run %s started (mock_llm=%s)", self.state.run_id, self.settings.mock_llm)
-        self._stage("ingest")
+        start_time = time.perf_counter()
+        result = run_ingest(self.settings, run_dir)
+        self.state.validation = result.validation.model_dump(mode="json")
+        self.state.artifacts.update(result.artifacts)
+        self.state.data_checksums = result.checksums
+        self.state.stages_completed.append("ingest")
+        self.state.durations["ingest"] = round(time.perf_counter() - start_time, 4)
+        log.info("stage ingest completed")
 
     @router(ingest)
     def data_contract_gate(self):
@@ -133,6 +145,8 @@ class ForesightFlow(Flow[ForesightState]):
             stages_completed=self.state.stages_completed,
             gates=[g.model_dump() for g in self.state.gates],
             durations_s=self.state.durations,
+            data_sha256=self.state.data_checksums,
+            artifacts=sorted(Path(p).name for p in self.state.artifacts.values()),
         )
         write_manifest(manifest, Path(self.state.run_dir) / "run_manifest.json")
 

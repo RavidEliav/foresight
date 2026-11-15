@@ -29,11 +29,11 @@ def test_wrong_passcode_is_rejected(monkeypatch):
     assert any("Not authorized" in err.value for err in at.error)
 
 
-def test_correct_passcode_runs_mocked_pipeline(monkeypatch):
+def test_correct_passcode_runs_pipeline_on_validated_data(monkeypatch, secom_env):
     monkeypatch.setenv("RUN_PASSCODE", "s3cret")
     at = _app()
     at.text_input(key="passcode").input("s3cret")
     at.button(key="run").click().run()
     assert not at.exception
     assert not at.error
-    assert any("data_contract" in md.value for md in at.markdown)
+    assert any("data_contract" in md.value and "PASS" in md.value for md in at.markdown)

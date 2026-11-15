@@ -40,12 +40,28 @@ def _placeholder(gate: str) -> GateCheck:
     return check
 
 
+def data_contract_check(state: Any) -> GateResult:
+    """Turns the ingest stage's validation summary into a gate result."""
+    summary = getattr(state, "validation", None)
+    if not summary:
+        return GateResult(gate=DATA_CONTRACT, status=GateStatus.ERROR,
+                          messages=["no validation results were produced"])
+    status = GateStatus(summary["status"])
+    wanted = {GateStatus.ERROR: "ERROR", GateStatus.WARNING: "WARNING"}.get(status)
+    if wanted:
+        messages = [f"{c['name']}: {c['message']}" for c in summary["checks"]
+                    if c["status"] == wanted]
+    else:
+        messages = [f"all {len(summary['checks'])} checks passed"]
+    return GateResult(gate=DATA_CONTRACT, status=status, messages=messages)
+
+
 DATA_CONTRACT = "data_contract"
 FEATURES_PRESENT = "features_present"
 EVIDENCE_PRESENT = "evidence_present"
 
 GATE_CHECKS: dict[str, GateCheck] = {
-    DATA_CONTRACT: _placeholder(DATA_CONTRACT),
+    DATA_CONTRACT: data_contract_check,
     FEATURES_PRESENT: _placeholder(FEATURES_PRESENT),
     EVIDENCE_PRESENT: _placeholder(EVIDENCE_PRESENT),
 }

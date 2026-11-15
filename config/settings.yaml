@@ -5,7 +5,14 @@ llm:
   model: gpt-4o-mini
   temperature: 0
 
+data:
+  max_missing_ratio: 0.5              # drop features missing in more than 50% of runs
+  min_rows: 100
+  expected_fail_rate: [0.02, 0.2]     # SECOM reference: 6.6%
+
 paths:
   runs_dir: runs                      # new runs (Railway volume in production)
   logs_dir: logs
   reference_run_dir: artifacts/reference
+  data_raw_dir: data/raw              # SECOM files, downloaded on first use
+  contract_path: config/dataset_contract.json

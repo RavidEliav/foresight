@@ -4,7 +4,7 @@
 
 Author: **Ravid Eliav** · AI Developers Course, Final Project
 
-> **Status:** Phase 1 (SECOM data layer + Data Contract) done. The analyze, investigate and report stages are placeholders until Phases 2–3.
+> **Status:** Phase 2 (deterministic analytics) done: data validation, EDA, features, models, anomalies and CrewAI tools. The crews that interpret these results arrive in Phase 3.
 
 | Environment | Branch | URL |
 |---|---|---|
@@ -36,6 +36,20 @@ The pipeline downloads the data automatically on first use (set `FORESIGHT_OFFLI
 3. validates the cleaned data against the committed **Data Contract** (`config/dataset_contract.json`): required columns, types, label values, unique ids, row count are ERROR checks; unexpected columns, missing ratios, value ranges (drift), fail rate and data checksums are WARNING checks.
 
 Run outputs: `clean_data.csv`, `cleaning_report.json`, `data_profile.json`, `dataset_contract.json`, `validation_summary.json`, `run_manifest.json`. An ERROR stops the run and writes `failure_report.md`.
+
+## Analytics
+
+All numbers are computed by deterministic Python; the crews (Phase 3) only interpret them, through read-only tools in `src/foresight/tools/run_tools.py`.
+
+| Stage | What it does | Outputs |
+|---|---|---|
+| analyze | EDA over the whole dataset (Mann-Whitney U per sensor, Benjamini-Hochberg q-values, charts); time-ordered split (last 25% = test); drops near-duplicate sensors (\|r\| > 0.98, fitted on train); adds `missing_count` | `eda_report.html`, `eda_summary.json`, `features.csv`, `feature_spec.json` |
+| *features gate* | ERROR if model features are missing or a split has too few failing runs | |
+| model | 3 models + always-pass baseline; selection by time-ordered CV PR-AUC on the training split; threshold maximizes F2 on out-of-fold predictions; test metrics with bootstrap 95% CIs; stratified CV shown as an optimistic reference; permutation importance | `model.joblib`, `model_metrics.json`, `evaluation_report.md`, `predictions.csv` |
+| investigate | IsolationForest score + SPC robust z-scores per sensor, both fitted on training runs | `anomalies.csv`, `anomaly_summary.json` |
+| *evidence gate* | WARNING if the model doesn't beat random guessing, no sensor differs significantly, or anomaly flags don't separate failing runs | |
+
+Charts are written to `figures/`. SECOM is hard: on the real data the selected model reaches a test PR-AUC of about 0.09 against 0.06 for random guessing, with wide confidence intervals; the report says so plainly.
 
 ## Quick start
 

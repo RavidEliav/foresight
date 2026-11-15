@@ -16,6 +16,7 @@ def isolated_env(monkeypatch, tmp_path):
     for name in ENV_VARS:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("FORESIGHT_SKIP_DOTENV", "true")
+    monkeypatch.setenv("FORESIGHT_CONFIG", str(Path(__file__).parent / "fast_settings.yaml"))
     monkeypatch.setenv("FORESIGHT_OFFLINE", "true")
     monkeypatch.setenv("MOCK_LLM", "true")
     monkeypatch.setenv("FORESIGHT_RUNS_DIR", str(tmp_path / "runs"))
@@ -72,6 +73,17 @@ def secom_env(tmp_path):
                               settings.data.max_missing_ratio)
     contract.save(settings.paths.contract_path)
     return settings
+
+
+@pytest.fixture
+def analytics_run(secom_env, tmp_path):
+    """A run folder with clean_data.csv from the synthetic data, ready for analytics stages."""
+    from foresight.data.ingest import run_ingest
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    run_ingest(secom_env, run_dir)
+    return secom_env, run_dir
 
 
 @pytest.fixture

@@ -9,31 +9,34 @@ from foresight.validation.gates import GateResult, GateStatus
 
 pytestmark = pytest.mark.usefixtures("secom_env")
 
-INGEST_ARTIFACTS = {
-    "clean_data.csv",
-    "cleaning_report.json",
-    "data_profile.json",
-    "dataset_contract.json",
-    "validation_summary.json",
+RUN_ARTIFACTS = {
+    "clean_data.csv", "cleaning_report.json", "data_profile.json", "dataset_contract.json",
+    "validation_summary.json", "eda_report.html", "eda_summary.json", "features.csv",
+    "feature_spec.json", "model.joblib", "model_metrics.json", "evaluation_report.md",
+    "predictions.csv", "anomalies.csv", "anomaly_summary.json", "run_manifest.json",
 }
+ALL_STAGES = ["ingest", "analyze", "model", "investigate", "report"]
 
 
 def _set_gate(checks, name: str, status: GateStatus, message: str = "test") -> None:
     checks[name] = lambda _state: GateResult(gate=name, status=status, messages=[message])
 
 
-def test_successful_run_validates_data_and_completes_all_stages():
+def test_successful_run_produces_all_artifacts_through_all_stages():
     state = run_pipeline()
     assert state.status == "success"
-    assert state.stages_completed == ["ingest", "analyze", "investigate", "report"]
-    assert [g.status for g in state.gates] == [GateStatus.PASS] * 3
+    assert state.stages_completed == ALL_STAGES
+    assert [g.status for g in state.gates[:2]] == [GateStatus.PASS] * 2
+    assert state.gates[2].status in (GateStatus.PASS, GateStatus.WARNING)
     assert state.validation["status"] == "PASS"
+    assert state.feature_checks["status"] == "PASS"
 
     run_dir = Path(state.run_dir)
-    assert {p.name for p in run_dir.iterdir()} >= INGEST_ARTIFACTS
+    assert {p.name for p in run_dir.iterdir()} >= RUN_ARTIFACTS
     manifest = json.loads((run_dir / "run_manifest.json").read_text())
     assert manifest["status"] == "success"
     assert set(manifest["data_sha256"]) == {"secom.data", "secom_labels.data"}
+    assert "model.joblib" in manifest["artifacts"]
 
 
 def test_invalid_raw_labels_stop_the_run_at_the_contract_gate(secom_env):
@@ -84,7 +87,7 @@ def test_missing_contract_is_bootstrapped_with_a_warning(secom_env):
     ("gate", "completed"),
     [
         ("features_present", ["ingest", "analyze"]),
-        ("evidence_present", ["ingest", "analyze", "investigate"]),
+        ("evidence_present", ["ingest", "analyze", "model", "investigate"]),
     ],
 )
 def test_later_error_gates_stop_flow_gracefully(gate_checks, gate, completed):
@@ -101,3 +104,25 @@ def test_warning_gate_lets_flow_continue(gate_checks):
     state = run_pipeline()
     assert state.status == "success"
     assert state.gates[-1].status == GateStatus.WARNING
+
+
+def test_too_few_test_fails_stop_the_run_at_the_features_gate(secom_env):
+    secom_env.analytics.min_fails_test = 1000
+    state = run_pipeline(secom_env)
+    assert state.status == "failed"
+    assert state.stages_completed == ["ingest", "analyze"]
+    assert "test_fails" in state.failure_reason
+
+
+def test_exception_inside_a_stage_fails_gracefully(monkeypatch):
+    import foresight.flow as flow_module
+
+    def broken(*_args):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(flow_module, "run_model", broken)
+    state = run_pipeline()
+    assert state.status == "failed"
+    assert state.stages_completed == ["ingest", "analyze"]
+    assert state.failure_reason == "model stage error: disk full"
+    assert "disk full" in (Path(state.run_dir) / "failure_report.md").read_text()

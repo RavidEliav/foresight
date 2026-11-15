@@ -5,7 +5,7 @@ import numpy as np
 from foresight.settings import load_settings
 from foresight.utils.manifest import build_manifest, write_manifest
 from foresight.utils.seeds import set_seeds
-from foresight.validation.gates import GATE_CHECKS, GateStatus, run_gate
+from foresight.validation.gates import GateStatus, run_gate
 
 
 def test_seeds_make_numpy_deterministic():
@@ -27,11 +27,11 @@ def test_manifest_records_reproducibility_info(monkeypatch, tmp_path):
     assert json.loads(path.read_text())["status"] == "success"
 
 
-def test_crashing_gate_check_becomes_error():
+def test_crashing_gate_check_becomes_error(gate_checks):
     def broken(_state):
         raise ValueError("boom")
 
-    GATE_CHECKS["data_contract"] = broken
+    gate_checks["data_contract"] = broken
     result = run_gate("data_contract", state=None)
     assert result.status == GateStatus.ERROR
     assert result.blocks

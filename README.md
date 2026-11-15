@@ -8,8 +8,8 @@ Author: **Ravid Eliav** · AI Developers Course, Final Project
 
 | Environment | Branch | URL |
 |---|---|---|
-| `main` (stable) | `main` | _set after the first deploy_ |
-| `dev` (testing) | `dev` | _set after the first deploy_ |
+| `main` (stable) | `main` | https://foresight-app-main.up.railway.app |
+| `dev` (testing) | `dev` | https://foresight-app-dev.up.railway.app |
 
 ## Architecture
 
@@ -52,7 +52,17 @@ Set `MOCK_LLM=true` in `.env` to work without any LLM calls.
 
 ## Deployment (Railway)
 
-One project `foresight`, service `foresight-app`, environments `main` and `dev` with identical variables (`OPENAI_API_KEY`, `LLM_MODEL`, `RUN_PASSCODE`). Build and start are defined in [`railway.toml`](railway.toml); Railway's Railpack builder reads `.python-version` and `requirements.txt`.
+One project `foresight`, service `foresight-app`, environments `main` and `dev`. The service is defined with Railway Infrastructure as Code in [`.railway/railway.ts`](.railway/railway.ts): start command, health check, non-secret variables, and a GitHub source whose branch follows the environment name. Railway's Railpack builder reads `.python-version` and `requirements.txt`. Secrets (`OPENAI_API_KEY`, `RUN_PASSCODE`) are set in Railway with the same values in both environments: fill them in your local `.env`, then run `.\scripts\push_secrets_to_railway.ps1` (values are never printed). The IaC file keeps them with `preserve()`.
+
+Apply a configuration change (after merging it):
+
+```powershell
+cd .railway; npm install; cd ..
+railway link --project <project-id> --environment dev;  railway config plan; railway config apply
+railway link --project <project-id> --environment main; railway config plan; railway config apply
+```
+
+Code changes deploy automatically when a branch is merged (`dev` → dev environment, `main` → main environment).
 
 ## Project structure
 

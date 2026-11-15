@@ -1,0 +1,8 @@
+{
+  "name": "foresight-railway-iac",
+  "private": true,
+  "description": "Railway Infrastructure as Code SDK for .railway/railway.ts",
+  "dependencies": {
+    "railway": "^3.17.0"
+  }
+}

@@ -1,8 +1,9 @@
+"""Shared fixtures. Must not import the foresight package at module level: the deployed
+tests run with only the test tools installed."""
+
 import os
 
 import pytest
-
-from foresight.validation import gates
 
 ENV_VARS = ("LLM_MODEL", "OPENAI_API_KEY", "RUN_PASSCODE", "RAILWAY_ENVIRONMENT_NAME",
             "RAILWAY_GIT_COMMIT_SHA")
@@ -18,10 +19,17 @@ def isolated_env(monkeypatch, tmp_path):
     monkeypatch.setenv("FORESIGHT_RUNS_DIR", str(tmp_path / "runs"))
     monkeypatch.setenv("CREWAI_DISABLE_TELEMETRY", "true")
     monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
-    original_checks = dict(gates.GATE_CHECKS)
-    yield
+
+
+@pytest.fixture
+def gate_checks():
+    """The gate registry, restored after the test so replaced checks don't leak."""
+    from foresight.validation import gates
+
+    original = dict(gates.GATE_CHECKS)
+    yield gates.GATE_CHECKS
     gates.GATE_CHECKS.clear()
-    gates.GATE_CHECKS.update(original_checks)
+    gates.GATE_CHECKS.update(original)
 
 
 @pytest.fixture(scope="session")

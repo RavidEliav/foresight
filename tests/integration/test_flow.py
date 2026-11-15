@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 
 from foresight.flow import run_pipeline
-from foresight.validation.gates import GATE_CHECKS, GateResult, GateStatus
+from foresight.validation.gates import GateResult, GateStatus
 
 
-def _set_gate(name: str, status: GateStatus, message: str = "test") -> None:
-    GATE_CHECKS[name] = lambda _state: GateResult(gate=name, status=status, messages=[message])
+def _set_gate(checks, name: str, status: GateStatus, message: str = "test") -> None:
+    checks[name] = lambda _state: GateResult(gate=name, status=status, messages=[message])
 
 
 def test_successful_run_completes_all_stages():
@@ -28,8 +28,8 @@ def test_successful_run_completes_all_stages():
         ("evidence_present", ["ingest", "analyze", "investigate"]),
     ],
 )
-def test_error_gate_stops_flow_gracefully(gate, completed):
-    _set_gate(gate, GateStatus.ERROR, "broken input")
+def test_error_gate_stops_flow_gracefully(gate_checks, gate, completed):
+    _set_gate(gate_checks, gate, GateStatus.ERROR, "broken input")
     state = run_pipeline()
     assert state.status == "failed"
     assert state.stages_completed == completed
@@ -38,8 +38,8 @@ def test_error_gate_stops_flow_gracefully(gate, completed):
     assert "broken input" in report
 
 
-def test_warning_gate_lets_flow_continue():
-    _set_gate("evidence_present", GateStatus.WARNING, "thin evidence")
+def test_warning_gate_lets_flow_continue(gate_checks):
+    _set_gate(gate_checks, "evidence_present", GateStatus.WARNING, "thin evidence")
     state = run_pipeline()
     assert state.status == "success"
     assert state.gates[-1].status == GateStatus.WARNING

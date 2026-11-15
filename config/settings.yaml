@@ -1,4 +1,5 @@
 # Default settings. Environment variables override selected values (see src/foresight/settings.py).
+# FORESIGHT_CONFIG points to an alternative file (tests use a fast one).
 seed: 42
 
 llm:
@@ -9,6 +10,21 @@ data:
   max_missing_ratio: 0.5              # drop features missing in more than 50% of runs
   min_rows: 100
   expected_fail_rate: [0.02, 0.2]     # SECOM reference: 6.6%
+
+analytics:
+  test_fraction: 0.25                 # last 25% of runs by time (ADR-010)
+  cv_folds: 5                         # TimeSeriesSplit inside the training data
+  corr_threshold: 0.98                # drop near-duplicate features (fitted on train)
+  select_k: 40                        # SelectKBest inside the pipeline
+  rf_trees: 300
+  bootstrap_samples: 1000             # 95% confidence intervals on test metrics
+  permutation_top_n: 30               # permutation importance on the model's top features
+  permutation_repeats: 10
+  min_fails_train: 10                 # features gate: enough fails to learn from
+  min_fails_test: 5                   # features gate: enough fails to evaluate
+  anomaly_quantile: 0.95              # IsolationForest flag: top 5% scores of training runs
+  z_limit: 3.0                        # SPC: robust z-score limit per sensor
+  top_features: 15
 
 paths:
   runs_dir: runs                      # new runs (Railway volume in production)

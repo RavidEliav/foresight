@@ -1,8 +1,8 @@
 """Generic validation gates used between Flow stages.
 
 Each gate is a function ``(state) -> GateResult``. ERROR stops the Flow; WARNING lets it
-continue but is reported. The registry starts with placeholder checks; the real Data
-Contract and feature checks replace them in later phases.
+continue but is reported. Each stage writes a
+ValidationSummary to the Flow state; the gate after it reads that summary.
 """
 
 from __future__ import annotations
@@ -33,38 +33,39 @@ class GateResult(BaseModel):
 GateCheck = Callable[[Any], GateResult]
 
 
-def _placeholder(gate: str) -> GateCheck:
-    def check(_state: Any) -> GateResult:
-        return GateResult(gate=gate, status=GateStatus.PASS, messages=["placeholder check"])
-
-    return check
-
-
-def data_contract_check(state: Any) -> GateResult:
-    """Turns the ingest stage's validation summary into a gate result."""
-    summary = getattr(state, "validation", None)
-    if not summary:
-        return GateResult(gate=DATA_CONTRACT, status=GateStatus.ERROR,
-                          messages=["no validation results were produced"])
-    status = GateStatus(summary["status"])
-    wanted = {GateStatus.ERROR: "ERROR", GateStatus.WARNING: "WARNING"}.get(status)
-    if wanted:
-        messages = [f"{c['name']}: {c['message']}" for c in summary["checks"]
-                    if c["status"] == wanted]
-    else:
-        messages = [f"all {len(summary['checks'])} checks passed"]
-    return GateResult(gate=DATA_CONTRACT, status=status, messages=messages)
-
-
 DATA_CONTRACT = "data_contract"
 FEATURES_PRESENT = "features_present"
 EVIDENCE_PRESENT = "evidence_present"
 
-GATE_CHECKS: dict[str, GateCheck] = {
-    DATA_CONTRACT: data_contract_check,
-    FEATURES_PRESENT: _placeholder(FEATURES_PRESENT),
-    EVIDENCE_PRESENT: _placeholder(EVIDENCE_PRESENT),
+# Flow state attribute holding each gate's check summary (written by the stage before it).
+GATE_SOURCES = {
+    DATA_CONTRACT: "validation",
+    FEATURES_PRESENT: "feature_checks",
+    EVIDENCE_PRESENT: "evidence_checks",
 }
+
+
+def summary_check(gate: str) -> GateCheck:
+    """Gate check that turns a stage's ValidationSummary (stored on the state) into a result."""
+
+    def check(state: Any) -> GateResult:
+        summary = getattr(state, GATE_SOURCES[gate], None)
+        if not summary:
+            return GateResult(gate=gate, status=GateStatus.ERROR,
+                              messages=["no check results were produced"])
+        status = GateStatus(summary["status"])
+        wanted = {GateStatus.ERROR: "ERROR", GateStatus.WARNING: "WARNING"}.get(status)
+        if wanted:
+            messages = [f"{c['name']}: {c['message']}" for c in summary["checks"]
+                        if c["status"] == wanted]
+        else:
+            messages = [f"all {len(summary['checks'])} checks passed"]
+        return GateResult(gate=gate, status=status, messages=messages)
+
+    return check
+
+
+GATE_CHECKS: dict[str, GateCheck] = {name: summary_check(name) for name in GATE_SOURCES}
 
 
 def run_gate(name: str, state: Any) -> GateResult:

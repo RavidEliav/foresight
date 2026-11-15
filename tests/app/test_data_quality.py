@@ -2,7 +2,7 @@ from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
-from app.data_quality import latest_run_dir
+from app.runs import latest_run_dir
 
 
 def _render(run_dir: str | None) -> AppTest:

@@ -51,25 +51,36 @@ def run_pipeline_page() -> None:
                      icon=":material/verified:")
 
 
+def _runs_dir() -> Path:
+    return settings.resolve(settings.paths.runs_dir)
+
+
 def data_quality_page() -> None:
     from app import data_quality
+    from app.runs import latest_run_dir
 
-    data_quality.render(data_quality.latest_run_dir(settings.resolve(settings.paths.runs_dir)))
+    data_quality.render(latest_run_dir(_runs_dir()))
 
 
 def eda_page() -> None:
-    st.title("EDA & Insights")
-    ui.coming_soon("Phase 2")
+    from app import eda_page as page
+    from app.runs import latest_run_dir
+
+    page.render(latest_run_dir(_runs_dir(), "eda_summary.json"))
 
 
 def model_page() -> None:
-    st.title("Model")
-    ui.coming_soon("Phase 2")
+    from app import model_page as page
+    from app.runs import latest_run_dir
+
+    page.render(latest_run_dir(_runs_dir(), "model_metrics.json"))
 
 
 def report_page() -> None:
-    st.title("Investigation & Report")
-    ui.coming_soon("Phase 3")
+    from app import report_page as page
+    from app.runs import latest_run_dir
+
+    page.render(latest_run_dir(_runs_dir(), "anomaly_summary.json"))
 
 
 st.sidebar.title("Foresight")

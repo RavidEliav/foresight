@@ -8,21 +8,10 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from app.runs import read_json
+
 STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:",
                "ERROR": ":material/cancel:"}
-
-
-def latest_run_dir(runs_dir: Path) -> Path | None:
-    """Newest run folder that has a validation summary (run ids sort by time)."""
-    if not runs_dir.exists():
-        return None
-    runs = sorted(p for p in runs_dir.iterdir() if (p / "validation_summary.json").exists())
-    return runs[-1] if runs else None
-
-
-def _read(run_dir: Path, name: str) -> dict | None:
-    path = run_dir / name
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
 def render(run_dir: Path | None) -> None:
@@ -31,7 +20,7 @@ def render(run_dir: Path | None) -> None:
         st.info("No run yet. Start one on the Run Pipeline page to validate the SECOM data.")
         return
 
-    summary = _read(run_dir, "validation_summary.json")
+    summary = read_json(run_dir, "validation_summary.json")
     st.caption(f"Run `{run_dir.name}`")
     status = summary["status"]
     counts = summary["counts"]
@@ -43,8 +32,8 @@ def render(run_dir: Path | None) -> None:
     checks = pd.DataFrame(summary["checks"])[["status", "name", "message"]]
     st.dataframe(checks, hide_index=True, width="stretch", height=35 * (len(checks) + 1) + 3)
 
-    profile = _read(run_dir, "data_profile.json")
-    report = _read(run_dir, "cleaning_report.json")
+    profile = read_json(run_dir, "data_profile.json")
+    report = read_json(run_dir, "cleaning_report.json")
     if profile and report:
         st.subheader("Cleaned dataset")
         cols = st.columns(4)
@@ -55,7 +44,7 @@ def render(run_dir: Path | None) -> None:
         st.markdown("**Cleaning decisions**")
         st.markdown("\n".join(f"- {d}" for d in report["decisions"]))
 
-    contract = _read(run_dir, "dataset_contract.json")
+    contract = read_json(run_dir, "dataset_contract.json")
     if contract:
         with st.expander("Data Contract"):
             st.markdown(

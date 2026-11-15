@@ -32,11 +32,28 @@ class DataSettings(BaseModel):
     expected_fail_rate: tuple[float, float] = (0.02, 0.2)
 
 
+class AnalyticsSettings(BaseModel):
+    test_fraction: float = 0.25
+    cv_folds: int = 5
+    corr_threshold: float = 0.98
+    select_k: int = 40
+    rf_trees: int = 300
+    bootstrap_samples: int = 1000
+    permutation_top_n: int = 30
+    permutation_repeats: int = 10
+    min_fails_train: int = 10
+    min_fails_test: int = 5
+    anomaly_quantile: float = 0.95
+    z_limit: float = 3.0
+    top_features: int = 15
+
+
 class Settings(BaseModel):
     seed: int = 42
     llm: LLMSettings = LLMSettings()
     paths: PathSettings = PathSettings()
     data: DataSettings = DataSettings()
+    analytics: AnalyticsSettings = AnalyticsSettings()
     mock_llm: bool = False
     run_passcode: str = ""
     environment: str = "local"
@@ -52,7 +69,7 @@ def _as_bool(value: str | None) -> bool:
 def load_settings(config_path: Path | None = None) -> Settings:
     if not _as_bool(os.getenv("FORESIGHT_SKIP_DOTENV")):
         load_dotenv(PROJECT_ROOT / ".env", override=False)
-    path = config_path or DEFAULT_CONFIG
+    path = config_path or Path(os.getenv("FORESIGHT_CONFIG", DEFAULT_CONFIG))
     data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
     settings = Settings(**(data or {}))
 

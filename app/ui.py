@@ -24,7 +24,3 @@ def passcode_ok(settings: Settings, entered: str) -> bool:
 
 def friendly_error(message: str) -> None:
     st.error(message, icon=":material/error:")
-
-
-def coming_soon(phase: str) -> None:
-    st.info(f"This page is built in {phase}.", icon=":material/construction:")

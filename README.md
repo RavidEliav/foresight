@@ -4,7 +4,7 @@
 
 Author: **Ravid Eliav** · AI Developers Course, Final Project
 
-> **Status:** Phase 0 (foundation). The Flow stages are placeholders; the data layer, analytics and crews are added in the next phases.
+> **Status:** Phase 1 (SECOM data layer + Data Contract) done. The analyze, investigate and report stages are placeholders until Phases 2–3.
 
 | Environment | Branch | URL |
 |---|---|---|
@@ -19,6 +19,23 @@ SECOM -> [Data Contract gate] -> Data Analyst Crew -> Data Scientist Crew -> [Fe
 ```
 
 Python tools compute every number; LLM agents interpret the results. Any ERROR at a gate stops the run and writes `failure_report.md`.
+
+## Data
+
+**SECOM** (UCI Machine Learning Repository, [dataset 179](https://archive.ics.uci.edu/dataset/179/secom)): 1,567 production runs × 590 anonymized sensor features, a pass/fail label (`-1`/`1`, about 6.6% fail) and a timestamp per run. License: CC BY 4.0.
+
+```powershell
+python scripts/download_data.py     # downloads into data/raw (not committed) and prints SHA-256
+python scripts/build_contract.py    # rebuilds config/dataset_contract.json from the real data
+```
+
+The pipeline downloads the data automatically on first use (set `FORESIGHT_OFFLINE=true` to forbid downloads). Every run:
+
+1. validates the raw files (590 numeric features, labels `-1`/`1`, parseable timestamps, enough rows),
+2. cleans them: drops features with more than 50% missing values (28) and constant features (116), maps labels to `0` pass / `1` fail, sorts by time, and **keeps** the remaining missing values (imputation is fitted on the training split in the model pipeline),
+3. validates the cleaned data against the committed **Data Contract** (`config/dataset_contract.json`): required columns, types, label values, unique ids, row count are ERROR checks; unexpected columns, missing ratios, value ranges (drift), fail rate and data checksums are WARNING checks.
+
+Run outputs: `clean_data.csv`, `cleaning_report.json`, `data_profile.json`, `dataset_contract.json`, `validation_summary.json`, `run_manifest.json`. An ERROR stops the run and writes `failure_report.md`.
 
 ## Quick start
 
@@ -38,7 +55,7 @@ Set `MOCK_LLM=true` in `.env` to work without any LLM calls.
 
 | Layer | Command |
 |---|---|
-| Unit, integration, Streamlit AppTest | `pytest` |
+| Unit, data, integration, Streamlit AppTest (synthetic SECOM, offline) | `pytest` |
 | Smoke + Playwright E2E (app must be running) | `python -m playwright install chromium` then `pytest tests/smoke tests/e2e` |
 
 `BASE_URL` points the smoke and E2E tests at another app (default `http://localhost:8501`).

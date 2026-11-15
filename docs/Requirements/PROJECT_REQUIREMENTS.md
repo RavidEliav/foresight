@@ -549,6 +549,7 @@ docs/                              # open this folder as a vault in Obsidian
 ├── Architecture/                  # Flow diagram, crews & agents, Data Contract
 ├── Model/                         # model_card.md, evaluation_report.md (final copies)
 ├── Results/                       # engineering_report.md, insights.md, key charts (PNG)
+├── Milestones/                    # one note per finished phase (delivered, tests, links, issues)
 ├── Lessons-Learned/               # retrospective notes
 ├── Presentation/                  # slide deck (PDF) and demo video link
 └── templates/                     # note templates: decision, lesson, milestone

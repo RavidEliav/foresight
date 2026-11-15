@@ -22,12 +22,21 @@ class PathSettings(BaseModel):
     runs_dir: Path = Path("runs")
     logs_dir: Path = Path("logs")
     reference_run_dir: Path = Path("artifacts/reference")
+    data_raw_dir: Path = Path("data/raw")
+    contract_path: Path = Path("config/dataset_contract.json")
+
+
+class DataSettings(BaseModel):
+    max_missing_ratio: float = 0.5
+    min_rows: int = 100
+    expected_fail_rate: tuple[float, float] = (0.02, 0.2)
 
 
 class Settings(BaseModel):
     seed: int = 42
     llm: LLMSettings = LLMSettings()
     paths: PathSettings = PathSettings()
+    data: DataSettings = DataSettings()
     mock_llm: bool = False
     run_passcode: str = ""
     environment: str = "local"
@@ -49,8 +58,15 @@ def load_settings(config_path: Path | None = None) -> Settings:
 
     if model := os.getenv("LLM_MODEL"):
         settings.llm.model = model
-    if runs_dir := os.getenv("FORESIGHT_RUNS_DIR"):
-        settings.paths.runs_dir = Path(runs_dir)
+    path_overrides = {
+        "FORESIGHT_RUNS_DIR": "runs_dir",
+        "FORESIGHT_LOGS_DIR": "logs_dir",
+        "FORESIGHT_DATA_DIR": "data_raw_dir",
+        "FORESIGHT_CONTRACT_PATH": "contract_path",
+    }
+    for env_name, field in path_overrides.items():
+        if value := os.getenv(env_name):
+            setattr(settings.paths, field, Path(value))
     settings.mock_llm = _as_bool(os.getenv("MOCK_LLM"))
     settings.run_passcode = os.getenv("RUN_PASSCODE", "")
     settings.environment = os.getenv("RAILWAY_ENVIRONMENT_NAME", "local")

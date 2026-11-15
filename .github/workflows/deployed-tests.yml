@@ -1,0 +1,63 @@
+name: Deployed tests
+
+# Test gates 2 and 4: after Railway reports a successful deployment of dev or main.
+# Repository variables DEV_URL and MAIN_URL hold the public Railway URLs.
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Railway environment to test
+        type: choice
+        options: [dev, main]
+        default: dev
+
+jobs:
+  deployed:
+    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target environment
+        id: target
+        env:
+          DISPATCH_ENV: ${{ inputs.environment }}
+          DEPLOY_ENV: ${{ github.event.deployment.environment }}
+          DEV_URL: ${{ vars.DEV_URL }}
+          MAIN_URL: ${{ vars.MAIN_URL }}
+        run: |
+          name="${DISPATCH_ENV:-$DEPLOY_ENV}"
+          if [[ "$name" == *dev* ]]; then env=dev; url="$DEV_URL"; else env=main; url="$MAIN_URL"; fi
+          if [[ -z "$url" ]]; then echo "No URL configured for $env" && exit 1; fi
+          echo "env=$env" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Testing $env at $url"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest==9.2.0 pytest-playwright==0.10.0 requests==2.34.2
+          python -m playwright install --with-deps chromium
+
+      - name: Smoke and read-only Playwright E2E tests
+        env:
+          BASE_URL: ${{ steps.target.outputs.url }}
+          EXPECTED_ENV: ${{ steps.target.outputs.env }}
+        run: >
+          pytest tests/smoke tests/e2e -m deployed -p no:cacheprovider
+          --tracing retain-on-failure --screenshot only-on-failure --video retain-on-failure
+
+      - name: Upload Playwright results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-playwright-${{ steps.target.outputs.env }}
+          path: test-results/
+          retention-days: 7

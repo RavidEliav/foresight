@@ -1,0 +1,25 @@
+[project]
+name = "foresight"
+version = "0.1.0"
+description = "Multi-agent semiconductor yield intelligence on SECOM (CrewAI Flow + Streamlit)"
+authors = [{ name = "Ravid Eliav" }]
+requires-python = ">=3.11,<3.14"
+license = { text = "MIT" }
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests/unit", "tests/integration", "tests/app"]
+markers = [
+    "smoke: health checks against a running app (BASE_URL)",
+    "e2e: Playwright browser tests against a running app (BASE_URL)",
+    "deployed: read-only tests that are safe to run against Railway dev/main",
+]
+addopts = "-ra"

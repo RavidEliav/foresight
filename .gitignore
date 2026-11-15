@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets
+.env
+
+# Data (downloaded by scripts/download_data.py)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Run outputs (the committed reference run lives in artifacts/reference/)
+runs/
+logs/*
+!logs/.gitkeep
+
+# Testing
+test-results/
+playwright-report/
+
+# Obsidian (personal workspace layout)
+docs/.obsidian/workspace*.json
+docs/.obsidian/cache
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

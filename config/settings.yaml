@@ -1,0 +1,11 @@
+# Default settings. Environment variables override selected values (see src/foresight/settings.py).
+seed: 42
+
+llm:
+  model: gpt-4o-mini
+  temperature: 0
+
+paths:
+  runs_dir: runs                      # new runs (Railway volume in production)
+  logs_dir: logs
+  reference_run_dir: artifacts/reference

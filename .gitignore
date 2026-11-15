@@ -28,6 +28,9 @@ playwright-report/
 docs/.obsidian/workspace*.json
 docs/.obsidian/cache
 
+# Railway IaC SDK
+.railway/node_modules/
+
 # OS / editors
 .DS_Store
 Thumbs.db

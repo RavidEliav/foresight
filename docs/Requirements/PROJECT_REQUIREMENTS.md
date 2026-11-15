@@ -279,7 +279,7 @@ This document combines three sources into one specification, plus the author's o
 |---|---|---|
 | D1 | The app is publicly reachable on a Railway-generated domain (`*.up.railway.app`) | One Railway **project** `foresight` with two **environments**, `main` and `dev`. The **service** `foresight-app` runs in both, and each environment has its own generated domain |
 | D2 | Automatic deploys from GitHub, one branch per environment | The `main` environment deploys from the `main` branch and the `dev` environment from the `dev` branch. A merge to either branch triggers a deploy to the matching environment. No PR preview environments |
-| D3 | Build and start are defined in code | Railway's default builder (Railpack) auto-detects Python from `requirements.txt`. A config-as-code file `railway.toml` pins the start command: `streamlit run app/streamlit_app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true`. Pin the Python version with `.python-version` (**3.11**; CrewAI supports 3.10–3.13) |
+| D3 | Build and start are defined in code | Railway's default builder (Railpack) auto-detects Python from `requirements.txt`. Railway **Infrastructure as Code** (`.railway/railway.ts`) defines the service, its start command (`streamlit run app/streamlit_app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true`), health check and non-secret variables. It is applied per environment with `railway config plan` / `railway config apply`. (Config as Code files like `railway.toml` are deprecated and stop being read on 2026-12-01.) Pin the Python version with `.python-version` (**3.11**; CrewAI supports 3.10–3.13) |
 | D4 | Secrets live in Railway variables, never in the repo. **Both environments use the same variables** | `OPENAI_API_KEY` (or other LLM key), `LLM_MODEL`, `RUN_PASSCODE`, optional `SUPABASE_URL`/`SUPABASE_KEY`. The `dev` environment is created as a duplicate of `main`, which copies every variable. Any later variable change is applied to both environments so they stay identical. The UI environment badge reads Railway's built-in `RAILWAY_ENVIRONMENT_NAME`, so no environment-specific variable is needed. `.env.example` lists the names only |
 | D5 | The demo works without waiting for a full LLM run | The deployed app ships a **committed reference run** in `artifacts/` and displays it instantly. A "Run pipeline" button triggers a fresh run, with progress shown and a timeout guard |
 | D6 | Writable artifacts survive restarts (if fresh runs are enabled) | Attach a Railway **volume** (e.g., mounted at `/app/runs`), or store run outputs in Supabase. The container filesystem is otherwise temporary |
@@ -288,17 +288,27 @@ This document combines three sources into one specification, plus the author's o
 | D9 | Documented and verified | The README lists **both** live URLs (`main` and `dev`) and has a "Deploy to Railway" section (GitHub auto-deploy, or `railway login` → `railway link` → `railway up --environment <env>`). The `main` deployment is confirmed healthy (status SUCCESS, smoke and Playwright E2E tests passed) before the demo is recorded |
 | D10 | Promotion only through `dev`, with a test gate at every step | Features reach `main` only through a `dev → main` PR. Hotfixes also go through `dev`. Four test gates (see §9.2) must pass: CI + local Playwright E2E on PRs to `dev`, smoke + E2E after the `dev` deploy, CI + E2E plus a dev-health check on the `dev → main` PR, and smoke + E2E after the `main` deploy. If the `main` tests fail, roll back to the previous deployment in Railway |
 
-Example `railway.toml`:
+`.railway/railway.ts` (the branch follows the environment name, so one file serves both environments):
 
-```toml
-[build]
-builder = "RAILPACK"
+```ts
+import { defineRailway, github, preserve, project, service } from "railway/iac";
 
-[deploy]
-startCommand = "streamlit run app/streamlit_app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
-healthcheckPath = "/_stcore/health"
-healthcheckTimeout = 120
-restartPolicyType = "ON_FAILURE"
+export default defineRailway((ctx) => {
+  const branch = ctx.environment === "main" ? "main" : "dev";
+  const app = service("foresight-app", {
+    source: github("RavidEliav/foresight", { branch }),
+    start: "streamlit run app/streamlit_app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true",
+    healthcheck: "/_stcore/health",
+    healthcheckTimeout: 120,
+    env: {
+      LLM_MODEL: "gpt-4o-mini",
+      MOCK_LLM: "false",
+      OPENAI_API_KEY: preserve(),   // secrets are set in Railway, never in source
+      RUN_PASSCODE: preserve(),
+    },
+  });
+  return project("foresight", { resources: [app] });
+});
 ```
 
 ### 9.2 Environments, Release Workflow & Testing [DECISION]
@@ -369,10 +379,12 @@ main env  <--auto-deploy--  main branch  <--merge--  [GATE 3: CI + local E2E + d
 **Setup commands (example):**
 
 ```bash
-railway init --name foresight                           # creates the project (first environment renamed to "main" in the dashboard)
-railway environment new dev --duplicate main            # dev gets the same config and variables as main
-railway variable set LLM_MODEL=gpt-4o-mini --service foresight-app --environment main
-railway variable set LLM_MODEL=gpt-4o-mini --service foresight-app --environment dev   # keep both identical
+railway init --name foresight                    # project; default environment renamed to "main"
+railway environment new dev                       # second environment
+railway link --project <id> --environment main && railway config apply
+railway link --project <id> --environment dev  && railway config apply   # same file, same variables
+railway domain --service foresight-app --environment main                 # public URLs
+railway domain --service foresight-app --environment dev
 ```
 
 ---
@@ -412,7 +424,7 @@ railway variable set LLM_MODEL=gpt-4o-mini --service foresight-app --environment
 foresight/
 ├── README.md                 # overview, architecture, setup, run, results
 ├── requirements.txt          # pinned versions
-├── railway.toml              # Railway build/start/healthcheck config
+├── .railway/railway.ts       # Railway Infrastructure as Code (service, start, healthcheck, variables)
 ├── .python-version           # pinned Python for Railway build
 ├── .env.example
 ├── config/                   # settings.yaml (thresholds, seeds, LLM model)

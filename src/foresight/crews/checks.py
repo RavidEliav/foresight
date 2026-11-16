@@ -29,11 +29,14 @@ REQUIRED_SECTIONS = {
                               "Recommended next steps", "Data quality and model limitations"],
 }
 SENSOR = re.compile(r"\bf_\d{3}\b")
-NUMBER = re.compile(r"(?<![\w.\-/:])\d+(?:\.\d+)?%?(?![\w\-/:])")
+# A signed number (the sign only when it isn't a range dash), thousands separators allowed;
+# possessive/atomic parts stop "12.5-14.25" from backtracking to "12".
+NUMBER = re.compile(r"(?:(?<![\w.%])-)?(?<![\w.:/])(?>\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?+%?+"
+                    r"(?![\w:/])")
 TRACEABLE_SHARE = 0.9
 CONFIDENCE = re.compile(r"confidence[\s*:=_-]*(?:level)?[\s*:=_-]*(high|medium|low)\b"
                         r"|\b(high|medium|low)[\s*_-]+confidence", re.IGNORECASE)
-Q_VALUE = re.compile(r"\bq(?:-value)?\s*(?:of|=|:|<|≈)?\s*(\d+(?:\.\d+)?(?:e-?\d+)?)",
+Q_VALUE = re.compile(r"\bq(?:[-_ ]?value)?\s*(?:of|=|:|<|≤|≈)?\s*(\d+(?:\.\d+)?(?:e[-+]?\d+)?)",
                      re.IGNORECASE)
 HIGH_CONFIDENCE_Q = 0.001
 
@@ -43,31 +46,49 @@ def headings(text: str) -> list[str]:
 
 
 def section(text: str, title: str) -> str:
-    match = re.search(rf"^#{{1,3}}\s+{re.escape(title)}\s*$(.*?)(?=^#{{1,3}}\s|\Z)", text,
-                      re.MULTILINE | re.IGNORECASE | re.DOTALL)
-    return match.group(1) if match else ""
+    """Body of the first heading that starts with ``title``, up to the next heading of the same
+    or a higher level (sub-headings stay inside)."""
+    body: list[str] = []
+    level = None
+    for line in text.splitlines():
+        heading = re.match(r"^(#{1,6})\s+(.*)$", line)
+        if heading and level is not None and len(heading.group(1)) <= level:
+            break
+        if heading and level is None:
+            if heading.group(2).strip().lower().startswith(title.lower()):
+                level = len(heading.group(1))
+            continue
+        if level is not None:
+            body.append(line)
+    return "\n".join(body)
 
 
 def checkable_numbers(text: str) -> list[str]:
     """Numbers worth checking: decimals, percentages and integers of 10 or more (not dates,
     sensor ids, run ids in 'run 123', or list numbering)."""
     text = SENSOR.sub("", text)
-    text = re.sub(r"\b\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?\b", "", text)
+    text = re.sub(r"\b\d{4}-\d{2}(?:-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?)?\b", "", text)
     text = re.sub(r"\b[Rr]uns?\s+#?\d+", "", text)
     text = re.sub(r"\bADR-\d+", "", text)
     found = []
     for token in NUMBER.findall(text):
-        bare = token.rstrip("%")
-        if "." in bare or token.endswith("%") or float(bare) >= 10:
+        bare = token.rstrip("%").replace(",", "")
+        if "." in bare or token.endswith("%") or abs(float(bare)) >= 10:
             found.append(token)
     return found
 
 
+def traced(token: str, allowed: set[str]) -> bool:
+    bare = token.rstrip("%")
+    return any(t in allowed for t in (token, bare, bare.replace(",", "")))
+
+
 def numbered_items(text: str) -> list[str]:
-    """Split a markdown section into its numbered list items (continuation lines included)."""
+    """Split a markdown section into its numbered list items or sub-headings (continuation
+    lines included)."""
     items: list[str] = []
     for line in text.splitlines():
-        if re.match(r"^\s*\d+[.)]\s", line):
+        if re.match(r"^\s*\d+[.)]\s", line) or re.match(r"^#{2,6}\s", line):
             items.append(line)
         elif items and line.strip():
             items[-1] += " " + line.strip()
@@ -109,7 +130,7 @@ def check_output(name: str, text: str, run_dir: Path, known_sensors: set[str],
         else "every sensor mentioned exists in the data"))
 
     numbers = checkable_numbers(text)
-    untraced = [n for n in numbers if n not in allowed and n.rstrip("%") not in allowed]
+    untraced = [n for n in numbers if not traced(n, allowed)]
     share = 1 - len(untraced) / len(numbers) if numbers else 1.0
     checks.append(Check(
         name=f"{name}: traceable numbers",

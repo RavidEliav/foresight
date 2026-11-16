@@ -19,7 +19,7 @@
     {
       "name": "insights.md: traceable numbers",
       "status": "PASS",
-      "message": "100% of 27 numbers found in the run files"
+      "message": "100% of 35 numbers found in the run files"
     },
     {
       "name": "model_card.md: sections",
@@ -34,7 +34,7 @@
     {
       "name": "model_card.md: traceable numbers",
       "status": "PASS",
-      "message": "100% of 20 numbers found in the run files"
+      "message": "100% of 26 numbers found in the run files"
     },
     {
       "name": "investigation.md: sections",
@@ -49,7 +49,7 @@
     {
       "name": "investigation.md: traceable numbers",
       "status": "PASS",
-      "message": "100% of 36 numbers found in the run files"
+      "message": "100% of 51 numbers found in the run files"
     },
     {
       "name": "investigation.md: cited facts",
@@ -59,7 +59,7 @@
     {
       "name": "investigation.md: confidence rubric",
       "status": "PASS",
-      "message": "all 4 hypotheses follow the confidence rubric"
+      "message": "all 5 hypotheses follow the confidence rubric"
     },
     {
       "name": "engineering_report.md: sections",
@@ -74,12 +74,12 @@
     {
       "name": "engineering_report.md: traceable numbers",
       "status": "PASS",
-      "message": "100% of 28 numbers found in the run files"
+      "message": "100% of 37 numbers found in the run files"
     },
     {
       "name": "engineering_report.md: confidence rubric",
       "status": "PASS",
-      "message": "all 4 hypotheses follow the confidence rubric"
+      "message": "all 5 hypotheses follow the confidence rubric"
     }
   ]
 }

@@ -94,13 +94,15 @@ def run_crew(name: str, settings: Settings, run_dir: Path,
         else get_llm(settings)
     crew, tasks, outputs = build_crew(name, run_dir, llm, inputs)
     start = time.perf_counter()
-    result = crew.kickoff()
+    crew.kickoff()
     written = {}
     for task_name, file_name in outputs.items():
         path = run_dir / file_name
         path.write_text(clean_markdown(tasks[task_name].output.raw), encoding="utf-8")
         written[file_name] = str(path)
-    usage = result.token_usage.model_dump() if result.token_usage else {}
+    # One LLM instance is shared by the crew's agents (and created per run), so its own counter
+    # is the crew's usage; CrewOutput.token_usage would add it once per agent.
+    usage = llm.get_token_usage_summary().model_dump()
     log.info("crew %s finished in %.1fs (%s tokens)", name, time.perf_counter() - start,
              usage.get("total_tokens", 0))
     return CrewRunResult(crew=name, outputs=written,

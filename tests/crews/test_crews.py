@@ -12,10 +12,20 @@ from foresight.crews.checks import (
     checkable_numbers,
     confidence_problems,
     known_sensor_names,
+    numbered_items,
+    section,
+    traced,
 )
 from foresight.crews.facts import all_facts, allowed_numbers
 from foresight.crews.mock_llm import MockLLM
-from foresight.crews.runner import CREWS, CrewRunResult, build_crew, clean_markdown, load_config
+from foresight.crews.runner import (
+    CREWS,
+    CrewRunResult,
+    build_crew,
+    clean_markdown,
+    load_config,
+    run_crew,
+)
 from foresight.data.ingest import run_ingest
 from foresight.settings import load_settings
 from foresight.tools.run_tools import build_tools
@@ -54,8 +64,8 @@ def test_crew_configs_are_consistent(crew):
     assert len(outputs) == 1 and outputs[0]["output"] in REQUIRED_SECTIONS
     assert "{revision_notes}" in outputs[0]["description"]
     descriptions = " ".join(t["description"] for t in config["tasks"])
-    for section in REQUIRED_SECTIONS[outputs[0]["output"]]:
-        assert section in descriptions
+    for heading in REQUIRED_SECTIONS[outputs[0]["output"]]:
+        assert heading in descriptions
 
 
 def test_official_crews_have_at_least_three_agents():
@@ -195,6 +205,35 @@ def test_crew_is_not_revised_more_than_configured(run_dir, tmp_path, monkeypatch
 def test_checkable_numbers_ignore_dates_ids_and_sensors():
     text = "Run 1254 on 2008-10-02T21:32:00 and f_059 had 6.6% fails, 24 of 392 runs, step 3."
     assert checkable_numbers(text) == ["6.6%", "24", "392"]
+
+
+def test_checkable_numbers_handle_separators_ranges_and_signs():
+    text = "1,567 runs in 2008-07; effect -0.73 and -12.5; CI 0.031-0.212; 12.5-14.25; 4–35%."
+    assert checkable_numbers(text) == ["1,567", "-0.73", "-12.5", "0.031", "0.212", "12.5",
+                                       "14.25", "35%"]
+    assert traced("1,567", {"1567"}) and traced("6.6%", {"6.6"})
+    assert not traced("-0.38", {"0.38"})
+
+
+def test_rubric_reads_q_value_spellings_and_sub_headings():
+    assert confidence_problems(["1. Hypothesis (q_value = 2.5e-08). Confidence: high (two "
+                                "signals).", "2. Hypothesis (q ≤ 1e-6). Confidence: high."]) == []
+    text = ("## Hypotheses (AI-generated)\n### Hypothesis 1\nf_059 differs. Confidence: low\n"
+            "### Hypothesis 2\nDrift. Confidence: medium\n## Suggested verification\n- logs\n")
+    assert numbered_items(section(text, "Hypotheses")) == [
+        "### Hypothesis 1 f_059 differs. Confidence: low",
+        "### Hypothesis 2 Drift. Confidence: medium"]
+
+
+def test_crew_usage_counts_each_llm_call_once(run_dir, tmp_path):
+    run = tmp_path / "run"
+    shutil.copytree(run_dir, run)
+    settings = load_settings(Path(__file__).parents[1] / "fast_settings.yaml")
+    settings.mock_llm = True
+    inputs = {Path(n).stem: (run / n).read_text() for n in stages.REPORT_INPUTS}
+    usage = run_crew("report", settings, run, inputs).usage
+    assert usage["successful_requests"] == 2  # two agents, one call each
+    assert usage["total_tokens"] > 0
 
 
 def test_clean_markdown_strips_code_fences():

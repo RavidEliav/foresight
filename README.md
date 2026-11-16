@@ -75,7 +75,7 @@ Each crew runs right after the deterministic work of its stage. Agents, tasks an
 
 If a crew's own output fails a check, the crew gets the findings and revises it once (`llm.crew_revisions` in `config/settings.yaml`). Revisions are listed in `crew_revisions.json` and in the report checks.
 
-**Mock or real LLM.** With `MOCK_LLM=true`, a deterministic mock LLM writes the outputs from the same facts and goes through the same CrewAI agents, tasks and checks. Tests and CI use it, and a session guard makes any paid call fail a test. With the real model (`gpt-4o-mini`, temperature 0), a full run takes about 3.5 minutes and about 72,000 tokens (around 2 US cents). CrewAI's cloud tracing and telemetry are turned off: they added about 15 seconds per crew, and Foresight keeps its own logs and run manifest.
+**Mock or real LLM.** With `MOCK_LLM=true`, a deterministic mock LLM writes the outputs from the same facts and goes through the same CrewAI agents, tasks and checks. Tests and CI use it, and a session guard makes any paid call fail a test. With the real model (`gpt-4o-mini`, temperature 0), a full run takes about 3.5 minutes and about 23,000 tokens (under 1 US cent). CrewAI's cloud tracing and telemetry are turned off: they added about 15 seconds per crew, and Foresight keeps its own logs and run manifest.
 
 **Reference run.** [`artifacts/reference/`](artifacts/reference) holds a complete real run (gpt-4o-mini, all gates and all 15 report checks PASS). The app shows it until a newer run exists.
 

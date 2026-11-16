@@ -13,7 +13,8 @@ RUN_ARTIFACTS = {
     "clean_data.csv", "cleaning_report.json", "data_profile.json", "dataset_contract.json",
     "validation_summary.json", "eda_report.html", "eda_summary.json", "features.csv",
     "feature_spec.json", "model.joblib", "model_metrics.json", "evaluation_report.md",
-    "predictions.csv", "anomalies.csv", "anomaly_summary.json", "run_manifest.json",
+    "predictions.csv", "oof_predictions.csv", "anomalies.csv", "anomaly_summary.json",
+    "risk_scores.csv", "risk_summary.json", "run_manifest.json",
 }
 ALL_STAGES = ["ingest", "analyze", "model", "investigate", "report"]
 

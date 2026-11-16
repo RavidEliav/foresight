@@ -19,6 +19,10 @@ def render(run_dir: Path | None) -> None:
         return
 
     st.caption(f"Run `{run_dir.name}`")
+    risk = read_json(run_dir, "risk_summary.json")
+    if risk:
+        _render_risk(risk)
+
     st.subheader("Anomalies")
     cols = st.columns(3)
     cols[0].metric("Runs flagged", summary["runs_flagged"])
@@ -41,3 +45,28 @@ def render(run_dir: Path | None) -> None:
 
     st.info("Hypotheses and the engineering report from the Investigation and Report crews "
             "are added in Phase 3.", icon=":material/construction:")
+
+
+def _render_risk(risk: dict) -> None:
+    st.subheader("Risk ranking")
+    chosen = risk["recommended_ranking"]
+    budget = risk["alarm_budget"]
+    test = risk["test"][chosen]
+    label = "model + anomaly score" if chosen == "combined" else "model alone"
+    st.markdown(f"Recommended ranking: **{label}** (chosen by cross-validation on the training "
+                f"period). Flagging the riskiest {budget:.0%} of test-period runs finds "
+                f"**{test['recall_at_budget']:.0%}** of failing runs with **"
+                f"{test['precision_at_budget']:.0%}** precision; random flagging would find "
+                f"about {budget:.0%}.")
+    comparison = pd.DataFrame([
+        {"ranking": name, "CV PR-AUC": risk["cv_mean_per_fold"][name]["pr_auc"],
+         "CV recall at budget": risk["cv_mean_per_fold"][name]["recall_at_budget"],
+         "test PR-AUC": risk["test"][name]["pr_auc"],
+         "test recall at budget": risk["test"][name]["recall_at_budget"],
+         "test precision at budget": risk["test"][name]["precision_at_budget"]}
+        for name in ("model", "anomaly", "combined")])
+    st.dataframe(comparison, hide_index=True, width="stretch")
+    top = pd.DataFrame(risk["top_risk_runs"])
+    if not top.empty:
+        st.markdown("**Riskiest test-period runs**")
+        st.dataframe(top, hide_index=True, width="stretch")

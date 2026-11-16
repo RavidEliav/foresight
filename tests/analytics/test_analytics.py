@@ -11,12 +11,16 @@ from foresight.analytics.features import FeatureSpec, engineer, time_split, xy
 from foresight.analytics.modeling import (
     BASELINE,
     bootstrap_ci,
+    budget_flags,
     build_models,
     choose_threshold,
     classification_metrics,
+    flags_for,
+    operating_point_cv,
     time_cv,
     train_and_evaluate,
 )
+from foresight.analytics.risk import rank_risk
 from foresight.analytics.stages import (
     evidence_checks,
     feature_checks,
@@ -82,7 +86,8 @@ def test_threshold_and_metrics():
     proba = np.array([0.1, 0.2, 0.3, 0.6, 0.7, 0.9])
     threshold = choose_threshold(y, proba)
     assert threshold == pytest.approx(0.7)
-    metrics = classification_metrics(y, proba, threshold)
+    metrics = classification_metrics(y, proba, flags_for(proba, {"type": "threshold",
+                                                                 "value": threshold}))
     assert metrics["recall_fail"] == 1.0 and metrics["precision_fail"] == 1.0
     assert choose_threshold(y, np.full(6, np.nan)) == 0.5
 
@@ -91,9 +96,10 @@ def test_bootstrap_ci_is_reproducible_and_contains_the_point_estimate():
     rng = np.random.default_rng(0)
     y = np.r_[np.zeros(80), np.ones(20)].astype(int)
     proba = np.clip(y * 0.4 + rng.random(100) * 0.6, 0, 1)
-    first = bootstrap_ci(y, proba, 0.5, 200, seed=1)
-    assert first == bootstrap_ci(y, proba, 0.5, 200, seed=1)
-    point = classification_metrics(y, proba, 0.5)["pr_auc"]
+    rule = {"type": "budget", "value": 0.2}
+    first = bootstrap_ci(y, proba, rule, 200, seed=1)
+    assert first == bootstrap_ci(y, proba, rule, 200, seed=1)
+    point = classification_metrics(y, proba, flags_for(proba, rule))["pr_auc"]
     assert first["pr_auc"][0] <= point <= first["pr_auc"][1]
 
 
@@ -101,9 +107,10 @@ def test_time_cv_skips_folds_without_failing_runs():
     X = pd.DataFrame({"a": np.arange(60.0)})
     y = pd.Series([0] * 40 + [1, 0] * 10)
     model = build_models(AnalyticsSettings(rf_trees=5, select_k=1), 0)["logreg_l1"][1]
-    scores, oof = time_cv(model, X, y, folds=3)
+    scores, oof, fold_ids = time_cv(model, X, y, folds=3)
     assert len(scores) == 1
     assert np.isnan(oof[:40]).all()
+    assert (fold_ids[:40] == -1).all() and (fold_ids[45:] == 2).all()
 
 
 def test_train_and_evaluate_selects_a_real_model_and_writes_artifacts(analytics_run):
@@ -114,8 +121,14 @@ def test_train_and_evaluate_selects_a_real_model_and_writes_artifacts(analytics_
     metrics = train_and_evaluate(frame, spec, settings.analytics, settings.seed, run_dir)
 
     assert metrics["selected_model"] != BASELINE
-    assert set(metrics["comparison"]) == {"logreg_l1", "random_forest", "rf_select_k", BASELINE}
+    assert set(metrics["comparison"]) == {"logreg_l1", "random_forest", "rf_regularized",
+                                          "rf_select_k", BASELINE}
     assert 0 <= metrics["threshold"] <= 1
+    n_test = spec.split_counts["test"]["runs"]
+    assert metrics["operating_point"]["alarms_in_test"] == np.ceil(0.10 * n_test)
+    cm = metrics["confusion_matrix"]
+    assert cm["tp"] + cm["fp"] == metrics["operating_point"]["alarms_in_test"]
+    assert set(metrics["operating_point_cv"]) == {"alarm_budget", "fixed_threshold"}
     assert metrics["test_metrics"]["pr_auc"] > metrics["baseline_pr_auc"]
     assert sum(metrics["confusion_matrix"].values()) == spec.split_counts["test"]["runs"]
     report = (run_dir / "evaluation_report.md").read_text()
@@ -126,6 +139,10 @@ def test_train_and_evaluate_selects_a_real_model_and_writes_artifacts(analytics_
     assert bundle["model"].predict_proba(X_test).shape == (len(X_test), 2)
     predictions = pd.read_csv(run_dir / "predictions.csv")
     assert len(predictions) == len(X_test)
+    assert predictions["predicted_fail"].sum() == metrics["operating_point"]["alarms_in_test"]
+    oof = pd.read_csv(run_dir / "oof_predictions.csv")
+    assert set(oof["run_id"]) <= set(frame.loc[frame["split"] == "train", "run_id"])
+    assert oof["fold"].min() >= 0
 
 
 def test_training_is_deterministic(analytics_run):
@@ -189,3 +206,51 @@ def test_investigate_stage_returns_evidence_checks(analytics_run):
     result = run_investigate(settings, run_dir)
     assert result.checks.status in (GateStatus.PASS, GateStatus.WARNING)
     assert (run_dir / "anomalies.csv").exists()
+
+
+def test_budget_flags_flags_exactly_the_top_share():
+    scores = np.array([0.1, 0.9, 0.5, 0.9, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8])
+    flags = budget_flags(scores, 0.2)
+    assert flags.tolist() == [0, 1, 0, 1, 0, 0, 0, 0, 0, 0]
+    assert budget_flags(scores, 0.01).sum() == 1  # at least one alarm
+    assert budget_flags(np.array([]), 0.1).sum() == 0
+
+
+def test_operating_point_cv_reports_both_rules_per_fold():
+    y = np.array([0, 0, 0, 1, 0, 0, 0, 1])
+    oof = np.array([0.1, 0.2, 0.3, 0.9, 0.1, 0.2, 0.8, 0.3])
+    folds = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+    result = operating_point_cv(y, oof, folds, budget=0.25, threshold=0.5)
+    assert result["alarm_budget"]["recall_fail"] == 0.5  # fold 0 catches it, fold 1 misses
+    assert result["fixed_threshold"]["recall_fail"] == 0.5
+
+
+def test_risk_ranking_is_chosen_by_cv_and_ranks_test_runs(analytics_run):
+    settings, run_dir = analytics_run
+    run_analyze(settings, run_dir)
+    run_model(settings, run_dir)
+    frame = pd.read_csv(run_dir / "features.csv", parse_dates=["timestamp"])
+    spec = FeatureSpec.model_validate_json((run_dir / "feature_spec.json").read_text())
+    detect(frame, spec, settings.analytics, settings.seed, run_dir)
+    summary = rank_risk(run_dir, settings.analytics, settings.seed)
+
+    cv = summary["cv_mean_per_fold"]
+    expected = "combined" if cv["combined"]["pr_auc"] > cv["model"]["pr_auc"] else "model"
+    assert summary["recommended_ranking"] == expected
+    ranked = pd.read_csv(run_dir / "risk_scores.csv")
+    assert ranked["risk_score"].is_monotonic_decreasing
+    assert ranked["flagged"].sum() == np.ceil(0.10 * len(ranked))
+    assert ranked["flagged"].iloc[: int(ranked["flagged"].sum())].all()
+    assert summary["top_risk_runs"][0]["run_id"] == int(ranked["run_id"].iloc[0])
+
+
+def test_evidence_checks_flag_a_ranking_that_is_no_better_than_random():
+    metrics = {"test_metrics": {"pr_auc": 0.2}, "baseline_pr_auc": 0.06,
+               "selected_model": "rf_regularized"}
+    risk = {"recommended_ranking": "model", "alarm_budget": 0.1,
+            "test": {"model": {"recall_at_budget": 0.05}}}
+    summary = evidence_checks(metrics, {"flag_lift": 2.0},
+                              {"significant_features_q_below_0.05": 3}, risk)
+    statuses = {c.name: c.status for c in summary.checks}
+    assert statuses["risk_ranking_adds_value"] == GateStatus.WARNING
+    assert statuses["model_beats_baseline"] == GateStatus.PASS

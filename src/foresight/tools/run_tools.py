@@ -97,6 +97,19 @@ class AnomalySummaryTool(_RunTool):
         return _dump(summary, ["anomaly_summary.json"])
 
 
+class RiskRankingTool(_RunTool):
+    name: str = "risk_ranking"
+    description: str = ("Risk ranking of the test-period runs: which ranking is recommended "
+                        "(model alone or model + anomaly score, chosen by cross-validation), "
+                        "how many failing runs it finds with the alarm budget, and the "
+                        "riskiest runs with their strongest signals.")
+
+    def _run(self) -> str:
+        if error := self._missing("risk_summary.json"):
+            return error
+        return _dump(_read(self.run_dir, "risk_summary.json"), ["risk_summary.json"])
+
+
 class RunLookupInput(BaseModel):
     run_id: int = Field(description="Production run id (0-1566)")
 
@@ -104,8 +117,8 @@ class RunLookupInput(BaseModel):
 class RunLookupTool(_RunTool):
     name: str = "run_details"
     description: str = ("Details of one production run: label, timestamp, anomaly score and "
-                        "flag, number of sensors out of limits, strongest signals, and the "
-                        "model's fail probability if the run is in the test period.")
+                        "flag, number of sensors out of limits, strongest signals, and, for "
+                        "test-period runs, the model's fail probability and the risk rank.")
     args_schema: type[BaseModel] = RunLookupInput
 
     def _run(self, run_id: int) -> str:
@@ -125,6 +138,15 @@ class RunLookupTool(_RunTool):
                 details["fail_probability"] = float(match.iloc[0]["fail_probability"])
                 details["predicted_fail"] = int(match.iloc[0]["predicted_fail"])
                 sources.append("predictions.csv")
+        risk = self.run_dir / "risk_scores.csv"
+        if risk.exists():
+            ranked = pd.read_csv(risk).reset_index(drop=True)
+            match = ranked[ranked["run_id"] == run_id]
+            if not match.empty:
+                details["risk_score"] = float(match.iloc[0]["risk_score"])
+                details["risk_rank_in_test"] = int(match.index[0]) + 1
+                details["flagged_by_alarm_budget"] = int(match.iloc[0]["flagged"])
+                sources.append("risk_scores.csv")
         return _dump({"run": details}, sources)
 
 
@@ -160,5 +182,5 @@ class SensorStatsTool(_RunTool):
 
 def build_tools(run_dir: Path) -> dict[str, BaseTool]:
     tools = [DataQualityTool, EdaSummaryTool, ModelMetricsTool, AnomalySummaryTool,
-             RunLookupTool, SensorStatsTool]
+             RiskRankingTool, RunLookupTool, SensorStatsTool]
     return {tool.model_fields["name"].default: tool(run_dir=run_dir) for tool in tools}

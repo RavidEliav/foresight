@@ -38,11 +38,11 @@ def call(tool, **kwargs):
 
 def test_all_tools_are_registered(tools):
     assert set(tools) == {"data_quality_summary", "eda_summary", "model_metrics",
-                          "anomaly_summary", "run_details", "sensor_stats"}
+                          "anomaly_summary", "risk_ranking", "run_details", "sensor_stats"}
 
 
 @pytest.mark.parametrize("name", ["data_quality_summary", "eda_summary", "model_metrics",
-                                  "anomaly_summary"])
+                                  "anomaly_summary", "risk_ranking"])
 def test_summary_tools_return_traceable_compact_json(tools, name):
     raw = tools[name].run()
     payload = json.loads(raw)
@@ -64,7 +64,8 @@ def test_run_details_includes_test_period_prediction(tools, built):
     payload = call(tools["run_details"], run_id=run_id)
     assert payload["run"]["run_id"] == run_id
     assert "fail_probability" in payload["run"]
-    assert "predictions.csv" in payload["source_files"]
+    assert payload["run"]["risk_rank_in_test"] >= 1
+    assert {"predictions.csv", "risk_scores.csv"} <= set(payload["source_files"])
 
 
 def test_run_details_unknown_run(tools):

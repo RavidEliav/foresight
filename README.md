@@ -45,11 +45,13 @@ All numbers are computed by deterministic Python; the crews (Phase 3) only inter
 |---|---|---|
 | analyze | EDA over the whole dataset (Mann-Whitney U per sensor, Benjamini-Hochberg q-values, charts); time-ordered split (last 25% = test); drops near-duplicate sensors (\|r\| > 0.98, fitted on train); adds `missing_count` | `eda_report.html`, `eda_summary.json`, `features.csv`, `feature_spec.json` |
 | *features gate* | ERROR if model features are missing or a split has too few failing runs | |
-| model | 3 models + always-pass baseline; selection by time-ordered CV PR-AUC on the training split; threshold maximizes F2 on out-of-fold predictions; test metrics with bootstrap 95% CIs; stratified CV shown as an optimistic reference; permutation importance | `model.joblib`, `model_metrics.json`, `evaluation_report.md`, `predictions.csv` |
-| investigate | IsolationForest score + SPC robust z-scores per sensor, both fitted on training runs | `anomalies.csv`, `anomaly_summary.json` |
-| *evidence gate* | WARNING if the model doesn't beat random guessing, no sensor differs significantly, or anomaly flags don't separate failing runs | |
+| model | 4 models (L1 logistic regression, random forest, regularized forest, forest on top-40 sensors) + always-pass baseline; selection by time-ordered CV PR-AUC on the training split; **operating point = alarm budget** (flag the riskiest 10% of runs scored; the F2-tuned fixed threshold is reported for comparison); test metrics with bootstrap 95% CIs; stratified CV as an optimistic reference; permutation importance; risk-over-time chart | `model.joblib`, `model_metrics.json`, `evaluation_report.md`, `predictions.csv`, `oof_predictions.csv` |
+| investigate | IsolationForest score + SPC robust z-scores per sensor, both fitted on training runs; **risk ranking**: model probability and anomaly score combined (percentile-rank average) only if that beats the model alone in time-ordered CV | `anomalies.csv`, `anomaly_summary.json`, `risk_scores.csv`, `risk_summary.json` |
+| *evidence gate* | WARNING if the model doesn't beat random guessing, no sensor differs significantly, anomaly flags don't separate failing runs, or the risk ranking finds no more failing runs than random flagging | |
 
-Charts are written to `figures/`. SECOM is hard: on the real data the selected model reaches a test PR-AUC of about 0.09 against 0.06 for random guessing, with wide confidence intervals; the report says so plainly.
+Charts are written to `figures/`.
+
+**Results on the real data.** SECOM is hard and drifts over time. The fixed threshold tuned on older runs raises no alarms in the test period; the alarm budget keeps working. The recommended ranking (model + anomaly score) flags 40 of 392 test-period runs and finds 5 of the 24 failing runs (21%, 95% CI 4–35%) with 12.5% precision, about twice the base fail rate. All choices were made with cross-validation on the training period; the test period was scored once.
 
 ## Quick start
 

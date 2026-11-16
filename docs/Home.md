@@ -8,7 +8,8 @@ Multi-agent semiconductor yield intelligence on SECOM. Author: Ravid Eliav.
 ## Status
 - Phase 0: foundation and deployment pipeline (done, see [[Phase 0 - Foundation]])
 - Phase 1: SECOM data layer and Data Contract (done, see [[Phase 1 - Data layer and Data Contract]])
-- Phase 2: deterministic analytics (next)
+- Phase 2 and 2.1: deterministic analytics (done, see [[Phase 2 - Deterministic analytics]])
+- Phase 3: CrewAI crews (next)
 - Proposal submitted Nov 18, awaiting the professor's feedback
 
 ## Links
@@ -20,8 +21,8 @@ Multi-agent semiconductor yield intelligence on SECOM. Author: Ravid Eliav.
 
 ## Notes
 - [[PROJECT_REQUIREMENTS|Requirements]] · [[PROJECT_PROPOSAL|Proposal]]
-- Decisions: [[ADR-001 SECOM as dataset]] · [[ADR-002 Four-crew merged Flow]] · [[ADR-003 Railway main and dev with same variables]] · [[ADR-004 Test gates and Playwright E2E]] · [[ADR-005 Tools compute, agents interpret]] · [[ADR-006 RAG and embeddings as stretch]] · [[ADR-007 Railway IaC instead of railway.toml]] · [[ADR-008 Keep missing values, impute on training split]] · [[ADR-009 Committed reference Data Contract]] · [[ADR-010 Time-ordered 75-25 split]]
-- Milestones: [[Phase 0 - Foundation]] · [[Phase 1 - Data layer and Data Contract]]
+- Decisions: [[ADR-001 SECOM as dataset]] · [[ADR-002 Four-crew merged Flow]] · [[ADR-003 Railway main and dev with same variables]] · [[ADR-004 Test gates and Playwright E2E]] · [[ADR-005 Tools compute, agents interpret]] · [[ADR-006 RAG and embeddings as stretch]] · [[ADR-007 Railway IaC instead of railway.toml]] · [[ADR-008 Keep missing values, impute on training split]] · [[ADR-009 Committed reference Data Contract]] · [[ADR-010 Time-ordered 75-25 split]] · [[ADR-011 Time CV model selection and alarm budget]] · [[ADR-012 Two anomaly methods, combined with the model only if CV helps]]
+- Milestones: [[Phase 0 - Foundation]] · [[Phase 1 - Data layer and Data Contract]] · [[Phase 2 - Deterministic analytics]]
 
 ## Milestones
 | Date | Milestone |

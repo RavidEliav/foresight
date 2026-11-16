@@ -39,10 +39,11 @@ class AnalyticsSettings(BaseModel):
     select_k: int = 40
     rf_trees: int = 300
     bootstrap_samples: int = 1000
-    permutation_top_n: int = 30
-    permutation_repeats: int = 10
+    permutation_top_n: int = 20
+    permutation_repeats: int = 5
     min_fails_train: int = 10
     min_fails_test: int = 5
+    alarm_budget: float = 0.10
     anomaly_quantile: float = 0.95
     z_limit: float = 3.0
     top_features: int = 15

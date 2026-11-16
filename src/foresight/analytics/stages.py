@@ -13,6 +13,7 @@ from foresight.analytics.anomalies import detect
 from foresight.analytics.eda import build_eda
 from foresight.analytics.features import SPLIT, FeatureSpec, engineer
 from foresight.analytics.modeling import train_and_evaluate
+from foresight.analytics.risk import rank_risk
 from foresight.settings import Settings
 from foresight.validation.contract import Check, ValidationSummary
 from foresight.validation.gates import GateStatus
@@ -76,23 +77,28 @@ def run_model(settings: Settings, run_dir: Path) -> StageResult:
     train_and_evaluate(frame, spec, settings.analytics, settings.seed, run_dir)
     return StageResult(artifacts={name: str(run_dir / file) for name, file in (
         ("model", "model.joblib"), ("model_metrics", "model_metrics.json"),
-        ("evaluation_report", "evaluation_report.md"), ("predictions", "predictions.csv"))})
+        ("evaluation_report", "evaluation_report.md"), ("predictions", "predictions.csv"),
+        ("oof_predictions", "oof_predictions.csv"))})
 
 
 def run_investigate(settings: Settings, run_dir: Path) -> StageResult:
-    """Anomaly detection; checks that the evidence for the report exists (evidence gate)."""
+    """Anomaly detection and risk ranking; checks the evidence for the report (evidence gate)."""
     frame, spec = load_features(run_dir)
     anomalies = detect(frame, spec, settings.analytics, settings.seed, run_dir)
+    risk = rank_risk(run_dir, settings.analytics, settings.seed)
     metrics = json.loads((run_dir / "model_metrics.json").read_text(encoding="utf-8"))
     eda = json.loads((run_dir / "eda_summary.json").read_text(encoding="utf-8"))
     return StageResult(
         artifacts={"anomalies": str(run_dir / "anomalies.csv"),
-                   "anomaly_summary": str(run_dir / "anomaly_summary.json")},
-        checks=evidence_checks(metrics, anomalies, eda),
+                   "anomaly_summary": str(run_dir / "anomaly_summary.json"),
+                   "risk_scores": str(run_dir / "risk_scores.csv"),
+                   "risk_summary": str(run_dir / "risk_summary.json")},
+        checks=evidence_checks(metrics, anomalies, eda, risk),
     )
 
 
-def evidence_checks(metrics: dict, anomalies: dict, eda: dict) -> ValidationSummary:
+def evidence_checks(metrics: dict, anomalies: dict, eda: dict,
+                    risk: dict | None = None) -> ValidationSummary:
     pr_auc = metrics["test_metrics"]["pr_auc"]
     baseline = metrics["baseline_pr_auc"]
     significant = eda.get("significant_features_q_below_0.05", 0)
@@ -112,4 +118,13 @@ def evidence_checks(metrics: dict, anomalies: dict, eda: dict) -> ValidationSumm
               message=f"failing runs are flagged {lift}x as often as passing runs" if lift
               else "anomaly flags do not separate failing runs"),
     ]
+    if risk is not None:
+        chosen = risk["recommended_ranking"]
+        recall = risk["test"][chosen]["recall_at_budget"]
+        budget = risk["alarm_budget"]
+        checks.append(Check(
+            name="risk_ranking_adds_value",
+            status=GateStatus.PASS if recall > budget else GateStatus.WARNING,
+            message=f"{chosen} ranking finds {recall:.0%} of failing runs with a "
+                    f"{budget:.0%} alarm budget (random: about {budget:.0%})"))
     return ValidationSummary.from_checks(checks)

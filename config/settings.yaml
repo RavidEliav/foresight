@@ -18,10 +18,11 @@ analytics:
   select_k: 40                        # SelectKBest inside the pipeline
   rf_trees: 300
   bootstrap_samples: 1000             # 95% confidence intervals on test metrics
-  permutation_top_n: 30               # permutation importance on the model's top features
-  permutation_repeats: 10
+  permutation_top_n: 20               # permutation importance on the model's top features
+  permutation_repeats: 5
   min_fails_train: 10                 # features gate: enough fails to learn from
   min_fails_test: 5                   # features gate: enough fails to evaluate
+  alarm_budget: 0.10                  # operating point: flag the riskiest 10% of runs scored
   anomaly_quantile: 0.95              # IsolationForest flag: top 5% scores of training runs
   z_limit: 3.0                        # SPC: robust z-score limit per sensor
   top_features: 15

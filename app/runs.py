@@ -64,6 +64,14 @@ def no_run(what: str) -> None:
     st.info(f"No {what} yet. Start a run on the Run Pipeline page.")
 
 
+def figure_path(run_dir: Path, relative: str | None) -> Path | None:
+    """Runs made on Windows store "figures\\x.png"; normalise so they also load on Linux."""
+    if not relative:
+        return None
+    path = run_dir.joinpath(*relative.replace("\\", "/").split("/"))
+    return path if path.exists() else None
+
+
 def show_figure(run_dir: Path, relative: str | None, caption: str | None = None) -> None:
-    if relative and (run_dir / relative).exists():
-        st.image(str(run_dir / relative), caption=caption, width="stretch")
+    if path := figure_path(run_dir, relative):
+        st.image(str(path), caption=caption, width="stretch")

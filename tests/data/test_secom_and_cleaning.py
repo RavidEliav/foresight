@@ -85,6 +85,17 @@ def test_uploaded_csv_accepts_iso_timestamps_and_any_sensor_names(tmp_path):
     assert uploaded["timestamp"].notna().all() and list(uploaded["label_raw"]) == [-1, 1]
 
 
+def test_uploaded_csv_accepts_time_zones_fractions_and_mixed_formats(tmp_path):
+    path = tmp_path / "upload.csv"
+    path.write_text("timestamp,label,f_000\n2008-07-19T11:55:00Z,-1,1\n"
+                    "2008-07-19T14:55:00.123+02:00,1,2\n"
+                    "19/07/2008 13:00:00,-1,3\nnot a date,-1,4\n")
+    stamps = load_csv(path)["timestamp"]
+    assert [str(t) for t in stamps[:3]] == ["2008-07-19 11:55:00", "2008-07-19 12:55:00.123000",
+                                            "2008-07-19 13:00:00"]
+    assert stamps.isna().tolist() == [False, False, False, True]  # left to the raw checks
+
+
 def test_uploaded_csv_without_a_label_column_is_rejected(tmp_path):
     path = tmp_path / "upload.csv"
     path.write_text("timestamp,f_000\n2008-07-19T11:55:00,1.5\n")

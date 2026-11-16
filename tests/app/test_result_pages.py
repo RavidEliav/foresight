@@ -92,6 +92,18 @@ def test_model_page_shows_the_model_card(run_dir):
     assert any("## Model purpose" in md.value for md in at.markdown)
 
 
+def test_figures_saved_with_windows_paths_still_load(tmp_path):
+    from app.runs import figure_path
+
+    (tmp_path / "figures").mkdir()
+    (tmp_path / "figures" / "chart.png").write_bytes(b"png")
+    expected = tmp_path / "figures" / "chart.png"
+    assert figure_path(tmp_path, "figures\\chart.png") == expected
+    assert figure_path(tmp_path, "figures/chart.png") == expected
+    assert figure_path(tmp_path, "figures/missing.png") is None
+    assert figure_path(tmp_path, None) is None
+
+
 def test_viewable_runs_are_successful_runs_then_the_reference(tmp_path, run_dir):
     import json
 

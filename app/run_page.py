@@ -52,6 +52,7 @@ def render(settings: Settings, results_page=None) -> None:
     active = jobs.active_run(settings)
     run_id = watched or (active.run_id if active else None)
     if run_id:
+        st.session_state["watch_run"] = run_id  # keep showing it after it finishes
         st.divider()
         _show_run(settings, run_id, results_page)
     _history(settings)

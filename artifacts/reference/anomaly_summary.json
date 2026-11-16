@@ -226,6 +226,6 @@
     }
   ],
   "figures": {
-    "anomaly_scores": "figures\\anomaly_scores.png"
+    "anomaly_scores": "figures/anomaly_scores.png"
   }
 }

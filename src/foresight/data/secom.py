@@ -115,9 +115,13 @@ def load_csv(path: Path) -> pd.DataFrame:
     sensors = table.drop(columns=list(UPLOAD_COLUMNS))
     sensors.columns = feature_names(sensors.shape[1])
     text = table["timestamp"].astype(str)
-    stamps = pd.to_datetime(text, format=TIMESTAMP_FORMAT, errors="coerce")
-    retry = stamps.isna()
-    stamps.loc[retry] = pd.to_datetime(text[retry], format="ISO8601", errors="coerce")
+    try:
+        secom = pd.to_datetime(text, format=TIMESTAMP_FORMAT, errors="coerce")
+        # ISO 8601, any precision; times with a zone are converted to UTC and made naive
+        iso = pd.to_datetime(text, format="ISO8601", errors="coerce", utc=True).dt.tz_convert(None)
+        stamps = secom.astype("datetime64[us]").fillna(iso.astype("datetime64[us]"))
+    except (TypeError, ValueError) as exc:
+        raise SecomDataError(f"cannot read the timestamp column: {exc}") from exc
     labels = pd.to_numeric(table["label"], errors="coerce")
     frame = pd.DataFrame({"run_id": range(len(table)), "timestamp": stamps, "label_raw": labels})
     return pd.concat([frame, sensors], axis=1)

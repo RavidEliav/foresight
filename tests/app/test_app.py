@@ -57,6 +57,24 @@ def test_run_limit_is_explained(monkeypatch):
     assert any("still in progress" in w.value for w in at.warning)
 
 
+def test_run_found_by_progress_stays_visible_after_it_finishes(monkeypatch):
+    """A visitor who didn't start the run (e.g. after a refresh) still sees how it ended."""
+    from foresight.progress import ProgressTracker
+    from foresight.settings import load_settings
+
+    settings = load_settings()
+    tracker = ProgressTracker.create(jobs.runs_dir(settings) / "20260101T000000000000Z",
+                                     "20260101T000000000000Z")
+    tracker.running()
+    tracker.stage_started("ingest")
+    at = _app()
+    assert any("is running" in i.value for i in at.info)
+
+    tracker.finish("timeout", "stopped by the timeout guard after 1200 s")
+    at.run()
+    assert any("timeout guard" in e.value for e in at.error)
+
+
 def test_finished_run_shows_stages_gates_and_becomes_viewable(monkeypatch, secom_env):
     """start_run replaced by a synchronous run: the page shows the finished run's progress."""
     monkeypatch.setenv("RUN_PASSCODE", "s3cret")

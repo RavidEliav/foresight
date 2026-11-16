@@ -126,8 +126,14 @@ def expected_env() -> str | None:
 
 
 @pytest.fixture(scope="session")
-def e2e_passcode() -> str:
-    """Passcode of the app under test (E5/E6 start runs, so only against a local mock app)."""
+def e2e_passcode(app_url) -> str:
+    """Passcode of the app under test. E5/E6 start pipeline runs, so they only run against a
+    local app (MOCK_LLM=true) unless E2E_ALLOW_RUNS=1 is set explicitly."""
+    from urllib.parse import urlparse
+
+    local = urlparse(app_url).hostname in ("localhost", "127.0.0.1")
+    if not local and os.getenv("E2E_ALLOW_RUNS") != "1":
+        pytest.skip("E5/E6 start runs: only against a local mock app (or set E2E_ALLOW_RUNS=1)")
     if not E2E_PASSCODE:
         pytest.skip("set RUN_PASSCODE (or E2E_PASSCODE) to the passcode of the app under test")
     return E2E_PASSCODE

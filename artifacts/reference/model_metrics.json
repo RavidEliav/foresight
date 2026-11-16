@@ -266,9 +266,9 @@
     }
   ],
   "figures": {
-    "pr_curve": "figures\\pr_curve.png",
-    "confusion_matrix": "figures\\confusion_matrix.png",
-    "scores_over_time": "figures\\scores_over_time.png",
-    "feature_importance": "figures\\feature_importance.png"
+    "pr_curve": "figures/pr_curve.png",
+    "confusion_matrix": "figures/confusion_matrix.png",
+    "scores_over_time": "figures/scores_over_time.png",
+    "feature_importance": "figures/feature_importance.png"
   }
 }

@@ -45,7 +45,16 @@ jobs:
       - name: Install Playwright Chromium
         run: python -m playwright install --with-deps chromium
 
-      - name: Start app (mocked LLM)
+      # E6 runs the whole pipeline on the real SECOM data: keep the download between CI runs
+      - name: Cache SECOM data
+        uses: actions/cache@v4
+        with:
+          path: data/raw
+          key: secom-uci-179-v1
+
+      - name: Start app (mocked LLM, fast settings)
+        env:
+          FORESIGHT_CONFIG: tests/fast_settings.yaml
         run: |
           streamlit run app/streamlit_app.py --server.port 8501 --server.headless true &
           for i in $(seq 1 60); do
@@ -54,7 +63,7 @@ jobs:
           done
           echo "App did not become healthy" && exit 1
 
-      - name: Smoke and Playwright E2E tests
+      - name: Smoke and Playwright E2E tests (E1-E6)
         env:
           BASE_URL: http://localhost:8501
         run: >

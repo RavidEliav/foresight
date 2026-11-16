@@ -2,7 +2,7 @@
 // One service in two environments: each environment deploys from the Git branch
 // with the same name (main -> main, dev -> dev) and gets the same variables.
 // Secrets are set in Railway and kept here with preserve().
-import { defineRailway, github, preserve, project, service } from "railway/iac";
+import { defineRailway, github, preserve, project, service, volume } from "railway/iac";
 
 const START =
   "streamlit run app/streamlit_app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true";
@@ -15,6 +15,11 @@ export default defineRailway((ctx) => {
     start: START,
     healthcheck: "/_stcore/health",
     healthcheckTimeout: 120,
+    // Pipeline runs (one folder each, about 10 MB) survive redeploys and restarts; one volume per
+    // environment. Size and region match what Railway created.
+    volumeMounts: {
+      "/app/runs": volume("foresight-runs", { sizeMB: 500, region: "iad" }),
+    },
     env: {
       LLM_MODEL: "gpt-4o-mini",
       MOCK_LLM: "false",

@@ -28,6 +28,12 @@ analytics:
   z_limit: 3.0                        # SPC: robust z-score limit per sensor
   top_features: 15
 
+app:
+  run_timeout_s: 1200                 # timeout guard: a run is stopped after 20 minutes
+  max_runs_per_hour: 6                # cost control; one run at a time as well
+  heartbeat_s: 15                     # background run heartbeat (stale after 90 s = interrupted)
+  keep_runs: 20                       # older finished runs are deleted (runs volume is 500 MB)
+
 paths:
   runs_dir: runs                      # new runs (Railway volume in production)
   logs_dir: logs

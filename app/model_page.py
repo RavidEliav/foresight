@@ -25,7 +25,7 @@ def render(run_dir: Path | None) -> None:
         return
 
     split = metrics["split"]
-    st.caption(f"{run_label(run_dir).capitalize()} · trained on {split['train']['runs']} runs "
+    st.caption(f"{run_label(run_dir)} · trained on {split['train']['runs']} runs "
                f"({split['train']['fails']} fails), tested on the next {split['test']['runs']} "
                f"runs ({split['test']['fails']} fails) from {metrics['test_start'][:10]}")
     op = metrics["operating_point"]

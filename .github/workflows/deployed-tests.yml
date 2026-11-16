@@ -46,7 +46,7 @@ jobs:
           pip install pytest==9.2.0 pytest-playwright==0.10.0 requests==2.34.2
           python -m playwright install --with-deps chromium
 
-      - name: Smoke and read-only Playwright E2E tests
+      - name: Smoke and read-only Playwright E2E tests (E1-E4)
         env:
           BASE_URL: ${{ steps.target.outputs.url }}
           EXPECTED_ENV: ${{ steps.target.outputs.env }}

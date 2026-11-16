@@ -330,7 +330,7 @@ def train_and_evaluate(frame: pd.DataFrame, spec: FeatureSpec, cfg: AnalyticsSet
     train_rows = frame[frame["split"] == "train"]
     fig_paths = _plot_evaluation(y_true, test_proba, best, metrics, importance,
                                  test_rows["timestamp"].to_numpy(), out_dir / "figures")
-    metrics["figures"] = {k: str(v.relative_to(out_dir)) for k, v in fig_paths.items()}
+    metrics["figures"] = {k: v.relative_to(out_dir).as_posix() for k, v in fig_paths.items()}
     joblib.dump({"model": fitted_models[best], "name": best, "threshold": threshold,
                  "alarm_budget": cfg.alarm_budget, "features": spec.features,
                  "trained_on": "train split", "test_start": spec.test_start},

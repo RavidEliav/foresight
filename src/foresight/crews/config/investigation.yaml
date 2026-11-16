@@ -62,7 +62,8 @@ tasks:
         supporting evidence, is clearly marked as a hypothesis and ends with
         "Confidence: <high|medium|low> (<reason>)". Confidence rubric:
         high = q < 0.001 AND supported by a second independent signal (out-of-limit rate,
-        model importance or anomaly flags); quote the q-value in the hypothesis;
+        model importance or anomaly flags; effect size does not count, it comes from the same
+        test); quote the q-value and name the second signal in the hypothesis;
         medium = one strong statistical signal;
         low = weak or indirect evidence (for example a few individual runs or risk scores).
       - Suggested verification: how an engineer could test each hypothesis (for example

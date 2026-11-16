@@ -28,6 +28,7 @@ from foresight.analytics.stages import (
     run_report,
 )
 from foresight.data.ingest import run_ingest
+from foresight.progress import ProgressTracker
 from foresight.settings import Settings, load_settings
 from foresight.utils.logging import get_logger, setup_logging
 from foresight.utils.manifest import build_manifest, write_manifest
@@ -67,6 +68,8 @@ class ForesightState(BaseModel):
 
 class ForesightFlow(Flow[ForesightState]):
     settings: Settings = Field(default_factory=load_settings)
+    dataset: Path | None = None
+    tracker: ProgressTracker | None = None
 
     def _stage(self, name: str, work: Callable[[], StageResult] | None = None,
                checks_attr: str | None = None) -> None:
@@ -74,6 +77,7 @@ class ForesightFlow(Flow[ForesightState]):
         if self.state.stage_error:
             return
         start_time = time.perf_counter()
+        self.tracker.stage_started(name)
         try:
             if work is None:
                 Path(self.state.run_dir, f"{name}.json").write_text(
@@ -87,9 +91,11 @@ class ForesightFlow(Flow[ForesightState]):
         except Exception as exc:  # fail gracefully: report it, never crash the app
             log.exception("stage %s failed", name)
             self.state.stage_error = f"{name} stage error: {exc}"
+            self.tracker.stage_finished(name, time.perf_counter() - start_time, ok=False)
             return
         self.state.stages_completed.append(name)
         self.state.durations[name] = round(time.perf_counter() - start_time, 4)
+        self.tracker.stage_finished(name, self.state.durations[name])
         log.info("stage %s completed in %.1fs", name, self.state.durations[name])
 
     def _gate(self, name: str) -> str:
@@ -98,6 +104,7 @@ class ForesightFlow(Flow[ForesightState]):
             return FAILED
         result = run_gate(name, self.state)
         self.state.gates.append(result)
+        self.tracker.gate(name, result.status.value, result.messages)
         log.log(
             40 if result.blocks else 30 if result.status == GateStatus.WARNING else 20,
             "gate %s: %s %s",
@@ -115,18 +122,22 @@ class ForesightFlow(Flow[ForesightState]):
         return Path(self.state.run_dir)
 
     def _ingest(self) -> StageResult:
-        result = run_ingest(self.settings, self._run_dir)
+        result = run_ingest(self.settings, self._run_dir, self.dataset)
         self.state.data_checksums = result.checksums
         return StageResult(artifacts=result.artifacts, checks=result.validation)
 
     @start()
     def ingest(self):
         if not self.state.run_id:
-            self.state.run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+            self.state.run_id = new_run_id()
         run_dir = self.settings.resolve(self.settings.paths.runs_dir) / self.state.run_id
         run_dir.mkdir(parents=True, exist_ok=True)
         self.state.run_dir = str(run_dir)
         self.state.status = "running"
+        if self.tracker is None:
+            self.tracker = ProgressTracker.create(
+                run_dir, self.state.run_id, "Uploaded CSV" if self.dataset else None)
+        self.tracker.running()
         setup_logging(self.settings.resolve(self.settings.paths.logs_dir), self.state.run_id)
         set_seeds(self.settings.seed)
         log.info("run %s started (mock_llm=%s)", self.state.run_id, self.settings.mock_llm)
@@ -173,6 +184,7 @@ class ForesightFlow(Flow[ForesightState]):
     def finalize(self):
         self.state.status = "success"
         self._write_manifest()
+        self.tracker.finish("success")
 
     @listen(or_(FAILED))
     def handle_failure(self):
@@ -185,6 +197,7 @@ class ForesightFlow(Flow[ForesightState]):
         Path(self.state.run_dir, "failure_report.md").write_text(report, encoding="utf-8")
         log.error("run %s failed: %s", self.state.run_id, self.state.failure_reason)
         self._write_manifest()
+        self.tracker.finish("failed", self.state.failure_reason)
 
     def _write_manifest(self) -> None:
         manifest = build_manifest(
@@ -202,7 +215,17 @@ class ForesightFlow(Flow[ForesightState]):
         write_manifest(manifest, Path(self.state.run_dir) / "run_manifest.json")
 
 
-def run_pipeline(settings: Settings | None = None) -> ForesightState:
-    flow = ForesightFlow(settings=settings or load_settings(), suppress_flow_events=True)
-    flow.kickoff()
+def new_run_id() -> str:
+    """Run ids sort by time (the app relies on that)."""
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+
+
+def run_pipeline(settings: Settings | None = None, run_id: str | None = None,
+                 dataset: Path | None = None,
+                 tracker: ProgressTracker | None = None) -> ForesightState:
+    """Run the whole Flow. ``dataset`` is an uploaded CSV (default: the built-in SECOM files);
+    ``tracker`` lets the background runner share progress.json (and add a heartbeat)."""
+    flow = ForesightFlow(settings=settings or load_settings(), dataset=dataset, tracker=tracker,
+                         suppress_flow_events=True)
+    flow.kickoff(inputs={"run_id": run_id} if run_id else None)
     return flow.state

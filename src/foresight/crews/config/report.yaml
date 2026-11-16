@@ -50,7 +50,8 @@ tasks:
       - Keep only numbers that appear in the insights, model card or investigation above.
       - Every numbered hypothesis must be labeled "Hypothesis" and end with
         "Confidence: <level> (<reason>)" exactly as in the investigation; do not raise any
-        confidence level, and keep the q-value quoted in every high-confidence hypothesis.
+        confidence level, and keep the q-value and the second signal quoted in every
+        high-confidence hypothesis.
       - Replace any causal claim ("causes", "is the root cause") with an association.
       - Describe the model's performance as modest; never call it "effective" or "accurate".
       - Keep the six required sections and the "# Engineering report" title.

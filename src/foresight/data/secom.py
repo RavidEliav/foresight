@@ -90,3 +90,45 @@ def load_raw(raw_dir: Path) -> pd.DataFrame:
         }
     )
     return pd.concat([frame, features], axis=1)
+
+
+UPLOAD_COLUMNS = ("timestamp", "label")
+
+
+def load_csv(path: Path) -> pd.DataFrame:
+    """Load an uploaded CSV into the same raw layout as :func:`load_raw`.
+
+    Expected columns: ``timestamp`` (SECOM ``dd/mm/yyyy HH:MM:SS`` or ISO 8601), ``label``
+    (-1 pass, 1 fail) and the sensor columns, in SECOM order (any names; they are renamed
+    to f_000, f_001, ...). Problems with the content are left to the raw validation checks.
+    """
+    try:
+        table = pd.read_csv(path)
+    except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError, UnicodeDecodeError,
+            ValueError) as exc:
+        raise SecomDataError(f"cannot read the uploaded CSV: {exc}") from exc
+    table.columns = [str(c).strip() for c in table.columns]
+    missing = [c for c in UPLOAD_COLUMNS if c not in table.columns]
+    if missing:
+        raise SecomDataError(f"the uploaded CSV has no {' or '.join(missing)} column "
+                             f"(expected: {', '.join(UPLOAD_COLUMNS)} and the sensor columns)")
+    sensors = table.drop(columns=list(UPLOAD_COLUMNS))
+    sensors.columns = feature_names(sensors.shape[1])
+    text = table["timestamp"].astype(str)
+    try:
+        secom = pd.to_datetime(text, format=TIMESTAMP_FORMAT, errors="coerce")
+        # ISO 8601, any precision; times with a zone are converted to UTC and made naive
+        iso = pd.to_datetime(text, format="ISO8601", errors="coerce", utc=True).dt.tz_convert(None)
+        stamps = secom.astype("datetime64[us]").fillna(iso.astype("datetime64[us]"))
+    except (TypeError, ValueError) as exc:
+        raise SecomDataError(f"cannot read the timestamp column: {exc}") from exc
+    labels = pd.to_numeric(table["label"], errors="coerce")
+    frame = pd.DataFrame({"run_id": range(len(table)), "timestamp": stamps, "label_raw": labels})
+    return pd.concat([frame, sensors], axis=1)
+
+
+def to_upload_csv(raw: pd.DataFrame) -> bytes:
+    """A raw SECOM frame in the upload format (used as a downloadable template)."""
+    table = raw.drop(columns=["run_id"]).rename(columns={"label_raw": "label"})
+    table["timestamp"] = table["timestamp"].dt.strftime(TIMESTAMP_FORMAT)
+    return table.to_csv(index=False).encode("utf-8")

@@ -17,7 +17,7 @@ def render(run_dir: Path | None) -> None:
         no_run("analysis")
         return
 
-    st.caption(f"{run_label(run_dir).capitalize()} · descriptive statistics over the whole "
+    st.caption(f"{run_label(run_dir)} · descriptive statistics over the whole "
                "dataset")
     overview = eda["overview"]
     cols = st.columns(4)

@@ -12,7 +12,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from foresight.data.cleaning import CleaningConfig, clean, profile
-from foresight.data.secom import SecomDataError, ensure_secom, load_raw
+from foresight.data.secom import SecomDataError, ensure_secom, load_csv, load_raw, sha256
 from foresight.settings import Settings
 from foresight.utils.logging import get_logger
 from foresight.validation.contract import (
@@ -39,12 +39,17 @@ def _write_json(path: Path, payload: dict) -> str:
     return str(path)
 
 
-def run_ingest(settings: Settings, run_dir: Path) -> IngestResult:
+def run_ingest(settings: Settings, run_dir: Path, dataset: Path | None = None) -> IngestResult:
+    """Ingest the built-in SECOM files, or ``dataset`` (an uploaded CSV) when given."""
     raw_dir = settings.resolve(settings.paths.data_raw_dir)
     artifacts: dict[str, str] = {}
     try:
-        checksums = ensure_secom(raw_dir)
-        raw = load_raw(raw_dir)
+        if dataset is not None:
+            checksums = {dataset.name: sha256(dataset)}
+            raw = load_csv(dataset)
+        else:
+            checksums = ensure_secom(raw_dir)
+            raw = load_raw(raw_dir)
     except (SecomDataError, OSError) as exc:
         checks = [Check(name="load_raw", status=GateStatus.ERROR, message=str(exc))]
         return _finish(run_dir, checks, artifacts, {})
@@ -53,7 +58,13 @@ def run_ingest(settings: Settings, run_dir: Path) -> IngestResult:
     if any(c.status == GateStatus.ERROR for c in checks):
         return _finish(run_dir, checks, artifacts, checksums)
 
-    cleaned, report = clean(raw, CleaningConfig(max_missing_ratio=settings.data.max_missing_ratio))
+    contract_path = settings.resolve(settings.paths.contract_path)
+    contract = DatasetContract.load(contract_path) if contract_path.exists() else None
+    config = CleaningConfig(max_missing_ratio=settings.data.max_missing_ratio)
+    if contract is not None:
+        config.contract_features = contract.features.required
+        config.contract_dropped = contract.dropped_columns
+    cleaned, report = clean(raw, config)
     clean_path = run_dir / "clean_data.csv"
     cleaned.to_csv(clean_path, index=False, date_format="%Y-%m-%dT%H:%M:%S")
     artifacts["clean_data"] = str(clean_path)
@@ -61,10 +72,7 @@ def run_ingest(settings: Settings, run_dir: Path) -> IngestResult:
                                                report.model_dump())
     artifacts["data_profile"] = _write_json(run_dir / "data_profile.json", profile(cleaned))
 
-    contract_path = settings.resolve(settings.paths.contract_path)
-    if contract_path.exists():
-        contract = DatasetContract.load(contract_path)
-    else:
+    if contract is None:
         contract = build_contract(cleaned, report, checksums, settings.data.min_rows,
                                   settings.data.max_missing_ratio,
                                   settings.data.expected_fail_rate)

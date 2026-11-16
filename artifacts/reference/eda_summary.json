@@ -257,9 +257,9 @@
     "A difference between failing and passing runs is a correlation, not a cause."
   ],
   "figures": {
-    "fail_rate_over_time": "figures\\fail_rate_over_time.png",
-    "missingness": "figures\\missingness.png",
-    "top_features": "figures\\top_features.png",
-    "correlation": "figures\\correlation.png"
+    "fail_rate_over_time": "figures/fail_rate_over_time.png",
+    "missingness": "figures/missingness.png",
+    "top_features": "figures/top_features.png",
+    "correlation": "figures/correlation.png"
   }
 }

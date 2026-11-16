@@ -169,7 +169,7 @@ def build_eda(cleaned: pd.DataFrame, out_dir: Path, top_n: int = 15) -> dict:
         paths["top_features"] = _plot_top_features(cleaned, names[:6], fig_dir / "top_features.png")
         if len(names) > 1:
             paths["correlation"] = _plot_correlation(cleaned, names, fig_dir / "correlation.png")
-    summary["figures"] = {k: str(v.relative_to(out_dir)) for k, v in paths.items()}
+    summary["figures"] = {k: v.relative_to(out_dir).as_posix() for k, v in paths.items()}
 
     (out_dir / "eda_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (out_dir / "eda_report.html").write_text(_render_html(summary, top, paths), encoding="utf-8")

@@ -56,7 +56,7 @@ def detect(frame: pd.DataFrame, spec: FeatureSpec, cfg: AnalyticsSettings, seed:
 
     summary = _summarize(result, beyond, frame["label"], limit, cfg)
     summary["figures"] = {"anomaly_scores": str(_plot(result, limit, out_dir / "figures" /
-                                                      "anomaly_scores.png").relative_to(out_dir))}
+                                                      "anomaly_scores.png").relative_to(out_dir).as_posix())}
     (out_dir / "anomaly_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary
 

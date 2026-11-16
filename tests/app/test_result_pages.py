@@ -65,13 +65,26 @@ def test_model_page_shows_metrics_with_confidence_intervals(run_dir):
 def test_report_page_shows_anomalies(run_dir):
     at = _render("app.report_page", run_dir)
     assert not at.exception
-    assert at.metric[0].label == "Runs flagged"
-    assert [h.value for h in at.subheader] == ["Engineering report", "Risk ranking", "Anomalies"]
+    assert [m.label for m in at.metric] == ["Runs flagged", "Flag rate: failing runs",
+                                            "Flag rate: passing runs",
+                                            "Sensors out of limits per run"]
+    assert [h.value for h in at.subheader] == ["Engineering report", "Investigation",
+                                               "Risk ranking", "Anomalies"]
     assert "Report safety checks: **PASS**" in at.success[0].value
     assert any("## What was detected" in md.value for md in at.markdown)
     assert not any(md.value.startswith("# Engineering report") for md in at.markdown)
-    assert any("Recommended ranking" in md.value for md in at.markdown)
+    assert any("Recommended ranking" in md.value and " of " in md.value and "alarms" in md.value
+               for md in at.markdown)
     assert any("Most anomalous runs" in md.value for md in at.markdown)
+
+
+def test_investigation_is_split_into_labelled_blocks(run_dir):
+    at = _render("app.report_page", run_dir)
+    labels = [md.value for md in at.markdown if "-badge[" in md.value]
+    assert [label.split("[")[1].split("]")[0] for label in labels] == [
+        "Facts", "Assumptions", "Hypotheses", "Suggested verification"]
+    assert {b.label for b in at.get("download_button")} >= {"Download engineering_report.md",
+                                                            "Download investigation.md"}
 
 
 def test_model_page_shows_the_model_card(run_dir):
@@ -79,12 +92,36 @@ def test_model_page_shows_the_model_card(run_dir):
     assert any("## Model purpose" in md.value for md in at.markdown)
 
 
-def test_pages_fall_back_to_the_reference_run(tmp_path, run_dir):
-    from app.runs import latest_run_dir
+def test_figures_saved_with_windows_paths_still_load(tmp_path):
+    from app.runs import figure_path
 
+    (tmp_path / "figures").mkdir()
+    (tmp_path / "figures" / "chart.png").write_bytes(b"png")
+    expected = tmp_path / "figures" / "chart.png"
+    assert figure_path(tmp_path, "figures\\chart.png") == expected
+    assert figure_path(tmp_path, "figures/chart.png") == expected
+    assert figure_path(tmp_path, "figures/missing.png") is None
+    assert figure_path(tmp_path, None) is None
+
+
+def test_viewable_runs_are_successful_runs_then_the_reference(tmp_path, run_dir):
+    import json
+
+    from app.runs import describe_run, viewable_runs
+
+    runs = tmp_path / "runs"
+    for name, status in (("20261116T100000000000Z", "success"),
+                         ("20261116T110000000000Z", "failed"),
+                         ("20261116T120000000000Z", "success")):
+        (runs / name).mkdir(parents=True)
+        (runs / name / "run_manifest.json").write_text(json.dumps({"status": status}))
     reference = tmp_path / "reference"
     reference.mkdir()
-    (reference / "eda_summary.json").write_text("{}")
-    assert latest_run_dir(tmp_path / "no-runs", "eda_summary.json", reference) == reference
-    assert latest_run_dir(run_dir.parent, "eda_summary.json", reference) == run_dir
-    assert latest_run_dir(tmp_path / "no-runs", "model_metrics.json", reference) is None
+    (reference / "run_manifest.json").write_text(json.dumps({"status": "success"}))
+
+    found = viewable_runs(runs, reference)
+    assert [p.name for p in found] == ["20261116T120000000000Z", "20261116T100000000000Z",
+                                      "reference"]
+    assert describe_run(found[0]) == "2026-11-16 12:00 UTC · SECOM (UCI)"
+    assert describe_run(found[-1]) == "Reference run (committed)"
+    assert viewable_runs(tmp_path / "none", None) == []

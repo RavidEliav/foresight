@@ -50,12 +50,20 @@ class AnalyticsSettings(BaseModel):
     top_features: int = 15
 
 
+class AppSettings(BaseModel):
+    run_timeout_s: int = 1200        # timeout guard for one pipeline run
+    max_runs_per_hour: int = 6       # cost and abuse control (one run at a time as well)
+    heartbeat_s: int = 15            # a run without a heartbeat for 90 s counts as interrupted
+    keep_runs: int = 20              # older finished runs are deleted (the volume is 500 MB)
+
+
 class Settings(BaseModel):
     seed: int = 42
     llm: LLMSettings = LLMSettings()
     paths: PathSettings = PathSettings()
     data: DataSettings = DataSettings()
     analytics: AnalyticsSettings = AnalyticsSettings()
+    app: AppSettings = AppSettings()
     mock_llm: bool = False
     run_passcode: str = ""
     environment: str = "local"

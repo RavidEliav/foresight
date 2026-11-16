@@ -145,8 +145,11 @@ def test_confidence_rubric():
         "1. Hypothesis: risky runs fail. Confidence level: high (supported by risk scores).",
         "2. Hypothesis: f_205 differs (q = 0.0027). High confidence.",
         "3. Hypothesis: no level stated.",
+        "4. Hypothesis: f_103 differs (q = 2.1e-06). Confidence: high (strong effect size).",
     ]) == ["#1 is 'high' without q < 0.001", "#2 is 'high' without q < 0.001",
-           "#3 has no confidence level"]
+           "#3 has no confidence level",
+           "#4 is 'high' without a second signal (out-of-limit rate, model importance or "
+           "anomaly flags)"]
 
 
 def test_overstated_confidence_is_reported(run_dir, context):
@@ -216,8 +219,9 @@ def test_checkable_numbers_handle_separators_ranges_and_signs():
 
 
 def test_rubric_reads_q_value_spellings_and_sub_headings():
-    assert confidence_problems(["1. Hypothesis (q_value = 2.5e-08). Confidence: high (two "
-                                "signals).", "2. Hypothesis (q ≤ 1e-6). Confidence: high."]) == []
+    assert confidence_problems([
+        "1. Hypothesis (q_value = 2.5e-08). Confidence: high (out-of-limit rate too).",
+        "2. Hypothesis (q ≤ 1e-6). Confidence: high (also flagged as anomalous)."]) == []
     text = ("## Hypotheses (AI-generated)\n### Hypothesis 1\nf_059 differs. Confidence: low\n"
             "### Hypothesis 2\nDrift. Confidence: medium\n## Suggested verification\n- logs\n")
     assert numbered_items(section(text, "Hypotheses")) == [

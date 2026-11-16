@@ -15,6 +15,9 @@ LABEL_MAPPING = {-1: 0, 1: 1}  # 0 = pass, 1 = fail
 
 class CleaningConfig(BaseModel):
     max_missing_ratio: float = 0.5
+    # Set from the Data Contract: keep exactly its features instead of re-deciding per dataset
+    contract_features: list[str] | None = None
+    contract_dropped: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class CleaningReport(BaseModel):
@@ -47,12 +50,32 @@ def clean(
     frame = frame.sort_values(["timestamp", "run_id"], kind="stable").reset_index(drop=True)
     frame["label"] = frame.pop("label_raw").map(LABEL_MAPPING)
 
-    missing = frame[features].isna().mean()
-    high_missing = sorted(missing[missing > config.max_missing_ratio].index)
-    remaining = [c for c in features if c not in high_missing]
-    unique_counts = frame[remaining].nunique(dropna=True)
-    constant = sorted(unique_counts[unique_counts <= 1].index)
-    kept = [c for c in remaining if c not in constant]
+    if config.contract_features is not None:
+        # Same columns as the reference data, so a subset or a newer batch stays comparable
+        keep = set(config.contract_features)
+        dropped = config.contract_dropped
+        high_missing = sorted(set(dropped.get("high_missing", [])) & set(features))
+        constant = sorted(set(dropped.get("constant", [])) & set(features))
+        kept = [c for c in features if c in keep]
+        other = len(features) - len(kept) - len(high_missing) - len(constant)
+        column_decisions = [
+            f"Applied the Data Contract: kept its {len(kept)} features.",
+            f"Dropped {len(high_missing)} features the contract marks as more than "
+            f"{config.max_missing_ratio:.0%} missing and {len(constant)} it marks as constant"
+            + (f", and {other} other features not in the contract." if other else "."),
+        ]
+    else:
+        missing = frame[features].isna().mean()
+        high_missing = sorted(missing[missing > config.max_missing_ratio].index)
+        remaining = [c for c in features if c not in high_missing]
+        unique_counts = frame[remaining].nunique(dropna=True)
+        constant = sorted(unique_counts[unique_counts <= 1].index)
+        kept = [c for c in remaining if c not in constant]
+        column_decisions = [
+            f"Dropped {len(high_missing)} features with more than "
+            f"{config.max_missing_ratio:.0%} missing values.",
+            f"Dropped {len(constant)} constant features (one unique value).",
+        ]
 
     cleaned = frame[META_COLUMNS + kept]
     report = CleaningReport(
@@ -69,9 +92,7 @@ def clean(
             "Dropped exact duplicate runs (same features and timestamp).",
             "Sorted runs by timestamp for time-aware splits.",
             "Mapped labels -1 -> 0 (pass) and 1 -> 1 (fail).",
-            f"Dropped {len(high_missing)} features with more than "
-            f"{config.max_missing_ratio:.0%} missing values.",
-            f"Dropped {len(constant)} constant features (one unique value).",
+            *column_decisions,
             "Kept remaining missing values; imputation is fitted on the training split "
             "inside the model pipeline.",
         ],

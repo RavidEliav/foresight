@@ -4,7 +4,7 @@
 - every sensor name mentioned exists in the cleaned dataset
 - numbers can be traced to the run's summary files (or were derived from them)
 - facts in the investigation cite a source file
-- hypotheses follow the confidence rubric ("high" needs q < 0.001)
+- hypotheses follow the confidence rubric ("high" needs q < 0.001 and a second signal)
 """
 
 from __future__ import annotations
@@ -38,6 +38,9 @@ CONFIDENCE = re.compile(r"confidence[\s*:=_-]*(?:level)?[\s*:=_-]*(high|medium|l
                         r"|\b(high|medium|low)[\s*_-]+confidence", re.IGNORECASE)
 Q_VALUE = re.compile(r"\bq(?:[-_ ]?value)?\s*(?:of|=|:|<|≤|≈)?\s*(\d+(?:\.\d+)?(?:e[-+]?\d+)?)",
                      re.IGNORECASE)
+# Independent second signals the rubric accepts (effect size is part of the same test)
+SECOND_SIGNAL = re.compile(r"out[- ]of[- ](?:control[- ])?limits?|importance|anomal",
+                           re.IGNORECASE)
 HIGH_CONFIDENCE_Q = 0.001
 
 
@@ -97,7 +100,8 @@ def numbered_items(text: str) -> list[str]:
 
 def confidence_problems(hypotheses: list[str]) -> list[str]:
     """Hypotheses that state no confidence level, or claim high confidence without citing
-    q < 0.001 (the rubric in the investigation prompt)."""
+    q < 0.001 and naming a second, independent signal (the rubric in the investigation
+    prompt)."""
     problems = []
     for i, item in enumerate(hypotheses, start=1):
         match = CONFIDENCE.search(item)
@@ -108,6 +112,9 @@ def confidence_problems(hypotheses: list[str]) -> list[str]:
             qs = [float(q) for q in Q_VALUE.findall(item)]
             if not any(q < HIGH_CONFIDENCE_Q for q in qs):
                 problems.append(f"#{i} is 'high' without q < {HIGH_CONFIDENCE_Q}")
+            elif not SECOND_SIGNAL.search(item):
+                problems.append(f"#{i} is 'high' without a second signal (out-of-limit "
+                                "rate, model importance or anomaly flags)")
     return problems
 
 

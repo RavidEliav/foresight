@@ -8,6 +8,8 @@ import pytest
 
 ENV_VARS = ("LLM_MODEL", "OPENAI_API_KEY", "RUN_PASSCODE", "RAILWAY_ENVIRONMENT_NAME",
             "RAILWAY_GIT_COMMIT_SHA")
+# Read before isolated_env removes RUN_PASSCODE: E5/E6 type it into the app under test
+E2E_PASSCODE = os.getenv("E2E_PASSCODE") or os.getenv("RUN_PASSCODE")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -121,3 +123,11 @@ def app_url() -> str:
 def expected_env() -> str | None:
     """Environment the deployed app should report (dev/main); None skips the check."""
     return os.getenv("EXPECTED_ENV") or None
+
+
+@pytest.fixture(scope="session")
+def e2e_passcode() -> str:
+    """Passcode of the app under test (E5/E6 start runs, so only against a local mock app)."""
+    if not E2E_PASSCODE:
+        pytest.skip("set RUN_PASSCODE (or E2E_PASSCODE) to the passcode of the app under test")
+    return E2E_PASSCODE

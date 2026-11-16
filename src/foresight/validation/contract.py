@@ -129,11 +129,18 @@ def _preview(items: list[str], limit: int = 5) -> str:
     return shown + (f" (+{len(items) - limit} more)" if len(items) > limit else "")
 
 
+def _plain(value: object) -> object:
+    """numpy scalar -> plain Python value (2.0 -> 2) so messages read naturally."""
+    value = value.item() if hasattr(value, "item") else value
+    return int(value) if isinstance(value, float) and value.is_integer() else value
+
+
 def validate_raw(raw: pd.DataFrame, min_rows: int) -> list[Check]:
     """Checks on the raw files before any cleaning."""
     features = feature_columns(raw)
     non_numeric = [c for c in features if not ptypes.is_numeric_dtype(raw[c])]
-    bad_labels = sorted(set(raw["label_raw"].dropna().unique()) - set(RAW_LABELS))
+    bad_labels = sorted((_plain(v) for v in set(raw["label_raw"].dropna().unique())
+                         - set(RAW_LABELS)), key=str)
     null_labels = int(raw["label_raw"].isna().sum())
     bad_timestamps = int(raw["timestamp"].isna().sum())
     return [
@@ -144,7 +151,8 @@ def validate_raw(raw: pd.DataFrame, min_rows: int) -> list[Check]:
                f"non-numeric feature columns: {_preview(non_numeric)}"),
         _check("raw_label_values", not bad_labels and not null_labels,
                "labels are -1 (pass) or 1 (fail)",
-               f"unexpected label values {bad_labels}, missing labels: {null_labels}"),
+               f"unexpected label values {bad_labels}, missing or non-numeric labels: "
+               f"{null_labels}"),
         _check("raw_timestamps", bad_timestamps == 0, "all timestamps parsed",
                f"{bad_timestamps} timestamps are missing or unparseable"),
         _check("raw_row_count", len(raw) >= min_rows, f"{len(raw)} rows",

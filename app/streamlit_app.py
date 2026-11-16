@@ -17,49 +17,43 @@ from foresight.settings import load_settings  # noqa: E402
 
 st.set_page_config(page_title="Foresight", page_icon=":material/insights:", layout="wide")
 settings = load_settings()
+VIEW_KEY = "view_run"
+PINNED_KEY = "view_pinned"  # True once the user picks a run in the sidebar
 
 
 def run_pipeline_page() -> None:
-    st.title("Run Pipeline")
-    st.caption("Validate SECOM data, analyze it, investigate failures and produce the report.")
+    from app import run_page
 
-    if not settings.run_passcode:
-        st.info("Pipeline runs are disabled: RUN_PASSCODE is not configured.")
-    entered = st.text_input("Passcode", type="password", key="passcode")
-    if st.button("Run pipeline", key="run", type="primary"):
-        if not ui.passcode_ok(settings, entered):
-            ui.friendly_error("Not authorized: wrong or missing passcode.")
-            return
-        from foresight.flow import run_pipeline
-
-        with st.status("Running pipeline...", expanded=True) as status:
-            try:
-                state = run_pipeline(settings)
-            except Exception as exc:  # show a friendly message, never a stack trace
-                status.update(label="Run failed", state="error")
-                ui.friendly_error(f"The run could not complete: {exc}")
-                return
-            done = state.status == "success"
-            status.update(label=f"Run {state.run_id} {'completed' if done else 'stopped'}",
-                          state="complete" if done else "error", expanded=False)
-
-        for gate in state.gates:
-            st.write(f"Gate **{gate.gate}**: {gate.status.value}")
-        if not done:
-            ui.friendly_error(f"Stopped at a validation gate: {state.failure_reason}")
-        st.page_link(DATA_QUALITY, label="See the Data Quality results",
-                     icon=":material/verified:")
+    run_page.render(settings, DATA_QUALITY)
 
 
 def _runs_dir() -> Path:
     return settings.resolve(settings.paths.runs_dir)
 
 
-def _latest(required: str) -> Path | None:
-    from app.runs import latest_run_dir
+def _run_selector() -> Path | None:
+    """Sidebar choice of the run shown on the result pages (newest successful run first)."""
+    from app.run_page import NEW_RUN_KEY
+    from app.runs import describe_run, viewable_runs
 
-    return latest_run_dir(_runs_dir(), required,
-                          settings.resolve(settings.paths.reference_run_dir))
+    runs = viewable_runs(_runs_dir(), settings.resolve(settings.paths.reference_run_dir))
+    if not runs:
+        return None
+    options = [str(p) for p in runs]
+    if new := st.session_state.pop(NEW_RUN_KEY, None):  # a run just finished: show it
+        st.session_state[VIEW_KEY] = str(_runs_dir() / new)
+        st.session_state[PINNED_KEY] = False
+    if not st.session_state.get(PINNED_KEY) or st.session_state.get(VIEW_KEY) not in options:
+        st.session_state[VIEW_KEY] = options[0]  # follow the newest run until one is picked
+    choice = st.sidebar.selectbox("Results shown", options, key=VIEW_KEY,
+                                  format_func=lambda p: describe_run(Path(p)),
+                                  on_change=lambda: st.session_state.update({PINNED_KEY: True}))
+    return Path(choice)
+
+
+def _latest(required: str) -> Path | None:
+    run_dir = SELECTED
+    return run_dir if run_dir is not None and (run_dir / required).exists() else None
 
 
 def data_quality_page() -> None:
@@ -89,13 +83,14 @@ def report_page() -> None:
 st.sidebar.title("Foresight")
 st.sidebar.caption("Semiconductor yield intelligence")
 ui.environment_badge(settings)
+SELECTED = _run_selector()
 
 DATA_QUALITY = st.Page(data_quality_page, title="Data Quality", icon=":material/verified:",
                        url_path="data-quality")
 navigation = st.navigation(
     [
         st.Page(run_pipeline_page, title="Run Pipeline", icon=":material/play_arrow:",
-                url_path="run", default=True),
+                default=True),
         DATA_QUALITY,
         st.Page(eda_page, title="EDA & Insights", icon=":material/bar_chart:", url_path="eda"),
         st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),

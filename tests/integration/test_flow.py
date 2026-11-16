@@ -3,8 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from foresight.data.secom import LABELS_FILE
+from foresight.data.secom import LABELS_FILE, load_raw, to_upload_csv
 from foresight.flow import run_pipeline
+from foresight.progress import load_progress
 from foresight.validation.gates import GateResult, GateStatus
 
 pytestmark = pytest.mark.usefixtures("secom_env")
@@ -57,6 +58,34 @@ def test_invalid_raw_labels_stop_the_run_at_the_contract_gate(secom_env):
     assert not (run_dir / "clean_data.csv").exists()
     summary = json.loads((run_dir / "validation_summary.json").read_text())
     assert summary["status"] == "ERROR"
+    progress = load_progress(run_dir)
+    assert progress.status == "failed"
+    assert [s.status for s in progress.stages] == ["done"] + ["skipped"] * 4
+
+
+def test_uploaded_csv_with_a_bad_label_stops_at_the_contract_gate(secom_env, tmp_path):
+    raw = load_raw(secom_env.paths.data_raw_dir)
+    raw.loc[:4, "label_raw"] = 2
+    upload = tmp_path / "broken.csv"
+    upload.write_bytes(to_upload_csv(raw))
+
+    state = run_pipeline(dataset=upload)
+    assert state.status == "failed"
+    assert state.stages_completed == ["ingest"]
+    assert "unexpected label values [2]" in state.failure_reason
+
+
+def test_uploaded_subset_runs_against_the_reference_contract(secom_env, tmp_path):
+    raw = load_raw(secom_env.paths.data_raw_dir)
+    upload = tmp_path / "recent.csv"
+    upload.write_bytes(to_upload_csv(raw.iloc[30:]))  # a later batch of runs
+
+    state = run_pipeline(dataset=upload)
+    assert state.status == "success", state.failure_reason
+    validation = {c["name"]: c["status"] for c in state.validation["checks"]}
+    assert validation["required_columns"] == "PASS"
+    assert validation["data_checksums"] == "WARNING"  # not the files the contract was built on
+    assert load_progress(Path(state.run_dir)).status == "success"
 
 
 def test_data_missing_contract_feature_stops_the_run(secom_env):

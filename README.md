@@ -4,7 +4,7 @@
 
 Author: **Ravid Eliav** · AI Developers Course, Final Project
 
-> **Status:** Phase 3 (CrewAI crews) done: four crews interpret the deterministic results and write the insights, the model card, the investigation and the engineering report; every crew output is checked automatically. Next: Phase 4 (full app: background runs, persistent run storage, end-to-end tests).
+> **Status:** Phase 4 (full app) done: runs start in the background with live progress and a timeout guard, CSV uploads go through the same Data Contract, runs are kept on a Railway volume, and Playwright covers scenarios E1–E6. Next: Phase 5 (RAG stretch: "Ask Foresight").
 
 | Environment | Branch | URL |
 |---|---|---|
@@ -79,6 +79,29 @@ If a crew's own output fails a check, the crew gets the findings and revises it 
 
 **Reference run.** [`artifacts/reference/`](artifacts/reference) holds a complete real run (gpt-4o-mini, all gates and all 15 report checks PASS). The app shows it until a newer run exists.
 
+## The app
+
+| Page | What it shows |
+|---|---|
+| Run Pipeline | Dataset choice (built-in SECOM or an uploaded CSV), passcode, live progress per stage and crew, gate results, the data checks that failed, and the run history (status, duration, tokens, report checks) |
+| Data Quality | Data Contract validation, cleaning decisions, the contract itself |
+| EDA & Insights | Fail rate over time, sensors that differ, the Data Analyst crew's insights |
+| Model | Metrics with 95% CIs, model comparison, model card |
+| Investigation & Report | Report safety checks, the engineering report (download), the investigation in colour-labelled blocks (Facts / Assumptions / Hypotheses / Suggested verification), risk ranking, anomalies |
+
+The sidebar's **Results shown** picks which successful run the result pages display; it follows the newest run until you choose another one, and the committed reference run is always available.
+
+**Background runs.** "Run pipeline" starts `python -m foresight.cli run` as a separate process, so a run continues when the page is refreshed or closed. The run writes `progress.json` (stages, gates, a heartbeat every 15 s) and `run.log` into its folder. Guards (`app` in `config/settings.yaml`):
+
+- one run at a time and at most 6 runs per hour (cost control),
+- a timeout guard stops a run after 20 minutes and records why,
+- a run whose heartbeat stopped (for example after a redeploy) is shown as interrupted,
+- only the newest 20 finished runs are kept.
+
+**Uploading data.** A CSV with `timestamp` (`dd/mm/yyyy HH:MM:SS` or ISO 8601), `label` (-1 pass, 1 fail) and the 590 sensor columns in SECOM order. The page offers SECOM itself in this format as a template. Uploads are cleaned with the committed Data Contract's feature list (so a smaller or newer batch stays comparable) and validated like the built-in data; a broken file stops at the contract gate with the failed checks listed.
+
+From a terminal: `python -m foresight.cli run [--dataset file.csv] [--timeout 600]`.
+
 ## Quick start
 
 Requires **Python 3.11** (CrewAI supports 3.10–3.13).
@@ -97,10 +120,21 @@ Set `MOCK_LLM=true` in `.env` to work without any LLM calls.
 
 | Layer | Command |
 |---|---|
-| Unit, data, crews (mock LLM), integration, Streamlit AppTest (synthetic SECOM, offline) | `pytest` |
+| Unit, data, crews (mock LLM), integration, background runs, Streamlit AppTest (synthetic SECOM, offline) | `pytest` |
 | Smoke + Playwright E2E (app must be running) | `python -m playwright install chromium` then `pytest tests/smoke tests/e2e` |
 
 `BASE_URL` points the smoke and E2E tests at another app (default `http://localhost:8501`).
+
+| E2E | Scenario | Where |
+|---|---|---|
+| E1 | App loads, environment badge | CI, `dev`, `main` |
+| E2 | Every result page shows its content | CI, `dev`, `main` |
+| E3 | Facts / Assumptions / Hypotheses labels; report download | CI, `dev`, `main` |
+| E4 | Wrong passcode is rejected, no run starts | CI, `dev`, `main` |
+| E5 | Broken CSV upload stops at the contract gate with a clear error | CI only (starts a run) |
+| E6 | Full run: live progress through all crews, then the new run's report | CI only (mock LLM) |
+
+E5 and E6 need the app's passcode in `RUN_PASSCODE` (or `E2E_PASSCODE`); start the app with `MOCK_LLM=true` and, for speed, `FORESIGHT_CONFIG=tests/fast_settings.yaml`. The deployed suite (`-m deployed`) is read-only and never spends LLM tokens.
 
 ## Release workflow
 
@@ -111,7 +145,7 @@ Set `MOCK_LLM=true` in `.env` to work without any LLM calls.
 
 ## Deployment (Railway)
 
-One project `foresight`, service `foresight-app`, environments `main` and `dev`. The service is defined with Railway Infrastructure as Code in [`.railway/railway.ts`](.railway/railway.ts): start command, health check, non-secret variables, and a GitHub source whose branch follows the environment name. Railway's Railpack builder reads `.python-version` and `requirements.txt`. Secrets (`OPENAI_API_KEY`, `RUN_PASSCODE`) are set in Railway with the same values in both environments: fill them in your local `.env`, then run `.\scripts\push_secrets_to_railway.ps1` (values are never printed). The IaC file keeps them with `preserve()`.
+One project `foresight`, service `foresight-app`, environments `main` and `dev`. The service is defined with Railway Infrastructure as Code in [`.railway/railway.ts`](.railway/railway.ts): start command, health check, non-secret variables, a **volume** `foresight-runs` (500 MB, one per environment) mounted at `/app/runs` so runs survive redeploys, and a GitHub source whose branch follows the environment name. Railway's Railpack builder reads `.python-version` and `requirements.txt`. Secrets (`OPENAI_API_KEY`, `RUN_PASSCODE`) are set in Railway with the same values in both environments: fill them in your local `.env`, then run `.\scripts\push_secrets_to_railway.ps1` (values are never printed), then redeploy both environments so the new values load. The IaC file keeps them with `preserve()`.
 
 Apply a configuration change (after merging it):
 
@@ -128,7 +162,7 @@ Code changes deploy automatically when a branch is merged (`dev` → dev environ
 ```
 app/            Streamlit app (entry point: app/streamlit_app.py)
 config/         settings.yaml (seed, LLM model, paths)
-src/foresight/  flow.py, crews/, tools/, validation/, utils/
+src/foresight/  flow.py, jobs.py + cli.py (background runs), progress.py, data/, analytics/, crews/, tools/, validation/, utils/
 tests/          unit/, integration/, app/, smoke/, e2e/
 scripts/        data download and helper scripts
 data/           raw/ and processed/ (not committed)

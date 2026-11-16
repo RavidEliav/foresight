@@ -21,7 +21,7 @@ def render(run_dir: Path | None) -> None:
         return
 
     summary = read_json(run_dir, "validation_summary.json")
-    st.caption(run_label(run_dir).capitalize())
+    st.caption(run_label(run_dir))
     status = summary["status"]
     counts = summary["counts"]
     message = (f"Data Contract validation: **{status}** · {counts['PASS']} passed, "
@@ -36,11 +36,12 @@ def render(run_dir: Path | None) -> None:
     report = read_json(run_dir, "cleaning_report.json")
     if profile and report:
         st.subheader("Cleaned dataset")
-        cols = st.columns(4)
+        cols = st.columns(5)
         cols[0].metric("Runs", f"{profile['rows']:,}")
-        cols[1].metric("Features kept", f"{report['features_out']} / {report['features_in']}")
-        cols[2].metric("Fail rate", f"{profile['fail_rate']:.1%}")
-        cols[3].metric("Missing cells", f"{profile['missing_cells_ratio']:.2%}")
+        cols[1].metric("Failing runs", f"{profile['label_counts'].get('1', 0):,}")
+        cols[2].metric("Features kept", f"{report['features_out']} / {report['features_in']}")
+        cols[3].metric("Fail rate", f"{profile['fail_rate']:.1%}")
+        cols[4].metric("Missing cells", f"{profile['missing_cells_ratio']:.2%}")
         st.markdown("**Cleaning decisions**")
         st.markdown("\n".join(f"- {d}" for d in report["decisions"]))
 

@@ -1,4 +1,4 @@
-"""Helpers shared by the result pages: find the latest run and read its artifacts."""
+"""Helpers shared by the result pages: find the runs to show and read their artifacts."""
 
 from __future__ import annotations
 
@@ -9,19 +9,38 @@ from pathlib import Path
 import streamlit as st
 
 
-def latest_run_dir(runs_dir: Path, required: str = "validation_summary.json",
-                   fallback: Path | None = None) -> Path | None:
-    """Newest run folder that contains ``required`` (run ids sort by time), else ``fallback``
-    (the committed reference run) if it contains it."""
-    runs = sorted(p for p in runs_dir.iterdir() if (p / required).exists()) \
-        if runs_dir.exists() else []
-    if runs:
-        return runs[-1]
-    return fallback if fallback is not None and (fallback / required).exists() else None
+def successful_runs(runs_dir: Path) -> list[Path]:
+    """Finished, successful runs, newest first (failed runs are shown on the Run page)."""
+    if not runs_dir.exists():
+        return []
+    found = []
+    for path in sorted(runs_dir.iterdir(), reverse=True):
+        manifest = read_json(path, "run_manifest.json") if path.is_dir() else None
+        if manifest and manifest.get("status") == "success":
+            found.append(path)
+    return found
+
+
+def viewable_runs(runs_dir: Path, reference: Path | None) -> list[Path]:
+    runs = successful_runs(runs_dir)
+    if reference is not None and (reference / "run_manifest.json").exists():
+        runs.append(reference)
+    return runs
+
+
+def describe_run(run_dir: Path) -> str:
+    """Short label for the run selector, e.g. '2026-11-16 15:14 UTC · SECOM (UCI)'."""
+    if run_dir.name == "reference":
+        return "Reference run (committed)"
+    progress = read_json(run_dir, "progress.json") or {}
+    name = run_dir.name
+    when = (f"{name[:4]}-{name[4:6]}-{name[6:8]} {name[9:11]}:{name[11:13]} UTC"
+            if len(name) >= 13 and name[8] == "T" else name)
+    return f"{when} · {progress.get('dataset', 'SECOM (UCI)')}"
 
 
 def run_label(run_dir: Path) -> str:
-    return "reference run" if run_dir.name == "reference" else f"run `{run_dir.name}`"
+    return "Reference run" if run_dir.name == "reference" else f"Run `{run_dir.name}`"
 
 
 def show_markdown_file(run_dir: Path, name: str, download_label: str | None = None) -> bool:

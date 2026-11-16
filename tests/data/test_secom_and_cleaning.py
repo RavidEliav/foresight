@@ -1,13 +1,15 @@
 import pandas as pd
 import pytest
 
-from foresight.data.cleaning import clean, profile
+from foresight.data.cleaning import CleaningConfig, clean, profile
 from foresight.data.secom import (
     LABELS_FILE,
     SecomDataError,
     checksums,
     ensure_secom,
+    load_csv,
     load_raw,
+    to_upload_csv,
 )
 
 
@@ -64,3 +66,42 @@ def test_profile_reports_imbalance(tmp_path, secom_factory):
     assert stats["rows"] == 150
     assert stats["label_counts"] == {"0": 135, "1": 15}
     assert stats["fail_rate"] == pytest.approx(0.1)
+
+
+def test_uploaded_csv_loads_like_the_secom_files(tmp_path, secom_factory):
+    raw = load_raw(secom_factory(tmp_path))
+    path = tmp_path / "upload.csv"
+    path.write_bytes(to_upload_csv(raw))
+    uploaded = load_csv(path)
+    pd.testing.assert_frame_equal(uploaded, raw, check_dtype=False)
+
+
+def test_uploaded_csv_accepts_iso_timestamps_and_any_sensor_names(tmp_path):
+    path = tmp_path / "upload.csv"
+    path.write_text("timestamp,label,temp,pressure\n2008-07-19T11:55:00,-1,1.5,2\n"
+                    "2008-07-19T12:55:00,1,1.7,\n")
+    uploaded = load_csv(path)
+    assert list(uploaded.columns) == ["run_id", "timestamp", "label_raw", "f_000", "f_001"]
+    assert uploaded["timestamp"].notna().all() and list(uploaded["label_raw"]) == [-1, 1]
+
+
+def test_uploaded_csv_without_a_label_column_is_rejected(tmp_path):
+    path = tmp_path / "upload.csv"
+    path.write_text("timestamp,f_000\n2008-07-19T11:55:00,1.5\n")
+    with pytest.raises(SecomDataError, match="no label column"):
+        load_csv(path)
+
+
+def test_cleaning_with_a_contract_keeps_its_features_on_a_subset(tmp_path, secom_factory):
+    raw = load_raw(secom_factory(tmp_path))
+    _, reference = clean(raw)
+    kept = [f"f_{i:03d}" for i in range(15, 590)]
+    subset = raw.iloc[:40].copy()
+    subset["f_300"] = 7.0  # constant in this subset, but part of the contract
+    cleaned, report = clean(subset, CleaningConfig(
+        contract_features=kept,
+        contract_dropped={"high_missing": reference.dropped_high_missing,
+                          "constant": reference.dropped_constant}))
+    assert [c for c in cleaned.columns if c.startswith("f_")] == kept
+    assert report.dropped_constant == reference.dropped_constant
+    assert report.decisions[3] == "Applied the Data Contract: kept its 575 features."

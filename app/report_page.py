@@ -21,7 +21,7 @@ def render(run_dir: Path | None) -> None:
         no_run("investigation")
         return
 
-    st.caption(run_label(run_dir).capitalize())
+    st.caption(run_label(run_dir))
     _render_report(run_dir)
 
     risk = read_json(run_dir, "risk_summary.json")
@@ -29,11 +29,16 @@ def render(run_dir: Path | None) -> None:
         _render_risk(risk)
 
     st.subheader("Anomalies")
-    cols = st.columns(3)
+    cols = st.columns(4)
     cols[0].metric("Runs flagged", summary["runs_flagged"])
     cols[1].metric("Flag rate: failing runs", f"{summary['flag_rate_fail']:.1%}")
     cols[2].metric("Flag rate: passing runs", f"{summary['flag_rate_pass']:.1%}",
                    help=f"Failing runs are flagged {summary['flag_lift']}x as often")
+    if "mean_out_of_limit_fail" in summary:
+        fail, ok = summary["mean_out_of_limit_fail"], summary["mean_out_of_limit_pass"]
+        cols[3].metric("Sensors out of limits per run", f"{fail} vs {ok}",
+                       help="Average number of sensors outside their control limits (|z| > 3): "
+                            "failing runs vs passing runs")
     show_figure(run_dir, summary["figures"].get("anomaly_scores"))
 
     sensors = pd.DataFrame(summary["sensors_more_often_out_of_limit_in_fails"])
@@ -62,7 +67,8 @@ def _render_report(run_dir: Path) -> None:
             st.markdown("Required sections are present, every sensor mentioned exists in the "
                         "data, numbers can be traced to the run files, every fact in the "
                         "investigation cites its source file, and every hypothesis follows the "
-                        "confidence rubric (\"high\" needs q < 0.001). A crew whose output "
+                        "confidence rubric (\"high\" needs q < 0.001 and a second, independent "
+                        "signal). A crew whose output "
                         "fails a check revises it once; any revisions are listed below.")
             st.dataframe(pd.DataFrame(checks["checks"])[["status", "name", "message"]],
                          hide_index=True, width="stretch")
@@ -71,8 +77,33 @@ def _render_report(run_dir: Path) -> None:
         with st.container(border=True):
             show_markdown_file(run_dir, "engineering_report.md", "Download engineering_report.md")
     if (run_dir / "investigation.md").exists():
-        with st.expander("Investigation: facts, assumptions and hypotheses"):
-            show_markdown_file(run_dir, "investigation.md", "Download investigation.md")
+        _render_investigation(run_dir / "investigation.md")
+
+
+INVESTIGATION_SECTIONS = [
+    ("Facts", "green", "measured results, each with its source file"),
+    ("Assumptions", "gray", "what the analysis takes for granted"),
+    ("Hypotheses", "orange", "AI-generated, to be verified by an engineer"),
+    ("Suggested verification", "blue", "how to test each hypothesis"),
+]
+
+
+def _render_investigation(path: Path) -> None:
+    """Facts, assumptions and hypotheses in separate, colour-labelled blocks."""
+    from foresight.crews.checks import section
+
+    text = path.read_text(encoding="utf-8")
+    st.subheader("Investigation")
+    for title, color, meaning in INVESTIGATION_SECTIONS:
+        body = section(text, title).strip()
+        if not body:
+            continue
+        with st.container(border=True):
+            st.markdown(f":{color}-badge[{title}] :gray[{meaning}]")
+            st.markdown(body)
+    st.download_button("Download investigation.md", path.read_bytes(),
+                       file_name="investigation.md", mime="text/markdown",
+                       key="download-investigation.md")
 
 
 def _render_risk(risk: dict) -> None:
@@ -81,10 +112,12 @@ def _render_risk(risk: dict) -> None:
     budget = risk["alarm_budget"]
     test = risk["test"][chosen]
     label = "model + anomaly score" if chosen == "combined" else "model alone"
+    found = (f" ({test['fails_found']} of {test['fails_total']}, {test['alarms']} alarms)"
+             if "fails_found" in test else "")
     st.markdown(f"Recommended ranking: **{label}** (chosen by cross-validation on the training "
                 f"period). Flagging the riskiest {budget:.0%} of test-period runs finds "
-                f"**{test['recall_at_budget']:.0%}** of failing runs with **"
-                f"{test['precision_at_budget']:.0%}** precision; random flagging would find "
+                f"**{test['recall_at_budget']:.0%}** of failing runs{found} with **"
+                f"{test['precision_at_budget']:.1%}** precision; random flagging would find "
                 f"about {budget:.0%}.")
     comparison = pd.DataFrame([
         {"ranking": name, "CV PR-AUC": risk["cv_mean_per_fold"][name]["pr_auc"],

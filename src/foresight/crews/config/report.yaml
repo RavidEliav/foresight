@@ -53,6 +53,9 @@ tasks:
         confidence level, and keep the q-value and the second signal quoted in every
         high-confidence hypothesis.
       - Replace any causal claim ("causes", "is the root cause") with an association.
+      - Keep every "Background:" sentence with its [background: <file> § <section>] citation
+        exactly as in the investigation; remove any background claim that has no citation.
+        Background is general knowledge and never evidence.
       - Describe the model's performance as modest; never call it "effective" or "accurate".
       - Keep the six required sections and the "# Engineering report" title.
       Return the full final report.

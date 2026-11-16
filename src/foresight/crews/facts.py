@@ -13,6 +13,7 @@ from pathlib import Path
 SOURCE_FILES = (
     "validation_summary.json", "cleaning_report.json", "data_profile.json", "feature_spec.json",
     "eda_summary.json", "model_metrics.json", "anomaly_summary.json", "risk_summary.json",
+    "similar_runs.json",
 )
 
 
@@ -144,12 +145,67 @@ def anomaly_facts(run_dir: Path, top: int = 6) -> str:
                          f"{'fail' if run['label'] else 'pass'}): risk {run['risk_score']:.3f}, "
                          f"strongest signals {run['top_signals'] or 'none'} "
                          "[source: risk_summary.json]")
+    lines += similar_facts(run_dir, top=0)  # per-run neighbours: the tool and the app table
     return "\n".join(lines)
+
+
+def similar_facts(run_dir: Path, top: int = 3) -> list[str]:
+    s = read(run_dir, "similar_runs.json")
+    if not s:
+        return []
+    k = s["k"]
+    lines = []
+    if s["neighbour_fail_share_for_failing_test_runs"] is not None:
+        lines.append(
+            f"- Similar-run search ({s['method']}): among the {k} most similar past runs, "
+            f"{pct(s['neighbour_fail_share_for_failing_test_runs'])} failed for failing test "
+            f"runs vs {pct(s['neighbour_fail_share_for_passing_test_runs'])} for passing test "
+            f"runs (training fail rate {pct(s['train_fail_rate'])}) [source: similar_runs.json]")
+    for q in s["queries"][:top]:
+        lines.append(
+            f"- Run {q['run_id']} ({q['reason']}, label {'fail' if q['label'] else 'pass'}): "
+            f"{q['neighbours_failed']} of its {q['k']} most similar past runs failed (nearest "
+            f"distance {q['nearest_distance']}) [source: similar_runs.json]")
+    return lines
+
+
+def similar_overall(run_dir: Path) -> str:
+    """The overall similar-run comparison as one Facts bullet (the investigation must report it
+    before any per-run anecdote)."""
+    lines = similar_facts(run_dir, top=0)
+    return lines[0] if lines else "- No similar-run evidence available."
+
+
+BACKGROUND_QUERIES = (
+    "a sensor is out of control limits more often in failing runs than in passing runs",
+    "the fail rate changes from month to month, drift and maintenance",
+    "many sensors tested at once, false discovery rate and q-values",
+    "anomalous runs flagged by isolation forest",
+    "how an engineer verifies a hypothesis with logs and experiments",
+)
+
+
+def background_passages(settings) -> str:
+    """Knowledge passages for the Investigation crew, each with the exact citation to copy
+    (retrieval is deterministic; the crew chooses and restates one)."""
+    from foresight.rag.knowledge import cite, search_knowledge
+
+    seen: set[str] = set()
+    lines = []
+    for query in BACKGROUND_QUERIES:
+        for hit in search_knowledge(query, settings, k=1):
+            citation = cite(hit)
+            if citation in seen:
+                continue
+            seen.add(citation)
+            lines.append(f"- {citation} {hit.chunk.text}")
+    return "\n".join(lines) or "- (no background passages available)"
 
 
 def all_facts(run_dir: Path) -> dict[str, str]:
     return {"data_facts": data_facts(run_dir), "eda_facts": eda_facts(run_dir),
-            "model_facts": model_facts(run_dir), "anomaly_facts": anomaly_facts(run_dir)}
+            "model_facts": model_facts(run_dir), "anomaly_facts": anomaly_facts(run_dir),
+            "similar_overall": similar_overall(run_dir)}
 
 
 def _variants(value: float) -> set[str]:
@@ -163,11 +219,16 @@ def _variants(value: float) -> set[str]:
 
 
 def allowed_numbers(run_dir: Path) -> set[str]:
-    """Every number in the run's summary files, in common formatting variants."""
+    """Every number in the run's summary files (and the cited knowledge base), in common
+    formatting variants."""
+    from foresight.rag.index import knowledge_files
+    from foresight.settings import load_settings
+
     allowed: set[str] = set()
     texts = [(run_dir / name).read_text(encoding="utf-8") for name in SOURCE_FILES
              if (run_dir / name).exists()]
     texts += list(all_facts(run_dir).values())
+    texts += [p.read_text(encoding="utf-8") for p in knowledge_files(load_settings())]
     for text in texts:
         for token in re.findall(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?", text):
             try:

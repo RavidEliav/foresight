@@ -161,8 +161,8 @@
     "Dropped exact duplicate runs (same features and timestamp).",
     "Sorted runs by timestamp for time-aware splits.",
     "Mapped labels -1 -> 0 (pass) and 1 -> 1 (fail).",
-    "Dropped 28 features with more than 50% missing values.",
-    "Dropped 116 constant features (one unique value).",
+    "Applied the Data Contract: kept its 446 features.",
+    "Dropped 28 features the contract marks as more than 50% missing and 116 it marks as constant.",
     "Kept remaining missing values; imputation is fitted on the training split inside the model pipeline."
   ]
 }

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -88,14 +89,23 @@ def traced(token: str, allowed: set[str]) -> bool:
 
 def numbered_items(text: str) -> list[str]:
     """Split a markdown section into its numbered list items or sub-headings (continuation
-    lines included)."""
+    lines included). A list item ends at a blank line followed by unindented text, as in
+    markdown; a sub-heading keeps its body."""
     items: list[str] = []
+    heading = blank = False
     for line in text.splitlines():
         if re.match(r"^\s*\d+[.)]\s", line) or re.match(r"^#{2,6}\s", line):
             items.append(line)
-        elif items and line.strip():
+            heading, blank = line.startswith("#"), False
+        elif not line.strip():
+            blank = True
+        elif items and (heading or not blank or line[:1].isspace()):
             items[-1] += " " + line.strip()
-    return items
+            blank = False
+        else:
+            items.append("")  # text outside the list closes the current item
+            blank = False
+    return [item for item in items if item]
 
 
 def confidence_problems(hypotheses: list[str]) -> list[str]:
@@ -119,7 +129,8 @@ def confidence_problems(hypotheses: list[str]) -> list[str]:
 
 
 def check_output(name: str, text: str, run_dir: Path, known_sensors: set[str],
-                 allowed: set[str]) -> list[Check]:
+                 allowed: set[str],
+                 knowledge: dict[str, set[str]] | None = None) -> list[Check]:
     present = headings(text)
     missing = [s for s in REQUIRED_SECTIONS.get(name, [])
                if not any(h.startswith(s.lower()) for h in present)]
@@ -146,13 +157,20 @@ def check_output(name: str, text: str, run_dir: Path, known_sensors: set[str],
         + (f"; not found: {', '.join(untraced[:5])}" if untraced else "")))
 
     if name == "investigation.md":
-        facts = [line for line in section(text, "Facts").splitlines()
+        facts_text = section(text, "Facts")
+        facts = [line for line in facts_text.splitlines()
                  if line.strip().startswith(("-", "*"))]
         cited = [line for line in facts if "[source:" in line.lower()]
         checks.append(Check(
             name=f"{name}: cited facts",
             status=GateStatus.PASS if facts and len(cited) == len(facts) else GateStatus.WARNING,
             message=f"{len(cited)} of {len(facts)} facts cite a source file"))
+        if (run_dir / "similar_runs.json").exists():
+            problem = similar_evidence_problem(facts_text, run_dir)
+            checks.append(Check(
+                name=f"{name}: similar-run evidence",
+                status=GateStatus.WARNING if problem else GateStatus.PASS,
+                message=problem or "Facts report the overall similar-run comparison"))
 
     if name in ("investigation.md", "engineering_report.md"):
         hypotheses = numbered_items(section(text, "Hypotheses"))
@@ -163,7 +181,110 @@ def check_output(name: str, text: str, run_dir: Path, known_sensors: set[str],
             message="no numbered hypotheses found" if not hypotheses
             else "; ".join(problems) if problems
             else f"all {len(hypotheses)} hypotheses follow the confidence rubric"))
+        checks.append(background_check(name, text, knowledge))
     return checks
+
+
+def similar_evidence_problem(facts_text: str, run_dir: Path) -> str | None:
+    """The Facts must report the overall similar-run comparison (both neighbour fail shares),
+    not only anecdotes about single runs."""
+    summary = json.loads((run_dir / "similar_runs.json").read_text(encoding="utf-8"))
+    shares = [summary.get("neighbour_fail_share_for_failing_test_runs"),
+              summary.get("neighbour_fail_share_for_passing_test_runs")]
+    if "similar_runs.json" not in facts_text:
+        return "Facts do not report the similar-run evidence [source: similar_runs.json]"
+    if None in shares:
+        return None
+    wanted = [{f"{v * 100:.{d}f}%" for d in (1, 2)} | {f"{v:.{d}f}" for d in (3, 4)}
+              for v in shares]
+    found = set(re.findall(r"(?<![\d.])\d+(?:\.\d+)?%?", facts_text))
+    if not all(forms & found for forms in wanted):
+        return ("Facts must report the overall similar-run comparison: neighbours of failing "
+                f"test runs failed {shares[0]:.1%}, of passing test runs {shares[1]:.1%} "
+                "[source: similar_runs.json]")
+    rates = [*shares, summary.get("train_fail_rate") or 0, summary.get("explained_variance") or 0]
+    allowed = {f"{v * 100:.{d}f}%" for v in rates for d in (0, 1, 2)}
+    for line in facts_text.splitlines():
+        if "similar_runs.json" in line:
+            invented = set(re.findall(r"(?<![\d.])\d+(?:\.\d+)?%", line)) - allowed
+            if invented:
+                return (f"a run's few similar past runs are not a failure rate "
+                        f"({', '.join(sorted(invented))}); report counts such as '2 of 5'")
+    return None
+
+
+FAITHFUL_SIMILARITY = 0.45  # a Background sentence must be this close to the passage it cites
+
+
+def background_sentence(text: str, start: int) -> str:
+    """The claim a background citation starting at ``start`` supports: from the last
+    "Background:" (or the previous sentence end) up to the citation."""
+    before = text[:start].rstrip()
+    begin = before.lower().rfind("background:")
+    if begin < 0:
+        stops = [m.end() for m in re.finditer(r"[.!?]\s|\n", before[:-1])]
+        begin = stops[-1] if stops else 0
+    else:
+        begin += len("background:")
+    return before[begin:].strip(" .*")
+
+
+def unfaithful_backgrounds(text: str) -> list[str]:
+    """Background sentences that do not match the passage they cite (embedding similarity
+    below FAITHFUL_SIMILARITY; a heuristic, the same model as the knowledge search)."""
+    from foresight.rag.index import _embedder, knowledge_index
+    from foresight.rag.knowledge import BACKGROUND
+    from foresight.settings import load_settings
+
+    settings = load_settings()
+    index = knowledge_index(settings)
+    problems = []
+    for match in BACKGROUND.finditer(text):
+        file, sec = match.group(1).strip(), match.group(2).strip().lower()
+        rows = [i for i, c in enumerate(index.chunks)
+                if c.source == file and c.section.lower() == sec]
+        claim = background_sentence(text, match.start())
+        if not rows or not claim:
+            continue
+        vector = _embedder(settings).embed([claim])[0]
+        score = max(float(index.vectors[i] @ vector) for i in rows)
+        if score < FAITHFUL_SIMILARITY:
+            problems.append(f"\"{claim[:60]}...\" does not match {file} § {match.group(2)} "
+                            f"(similarity {score:.2f})")
+    return problems
+
+
+def background_check(name: str, text: str, knowledge: dict[str, set[str]] | None) -> Check:
+    """Background citations point at a real knowledge section and stay out of Facts; the
+    investigation must cite at least one (requirements §18.2)."""
+    from foresight.rag.knowledge import background_citations, known_sections
+    from foresight.settings import load_settings
+
+    knowledge = known_sections(load_settings()) if knowledge is None else knowledge
+    citations = background_citations(text)
+    unknown = [f"{f} § {s}" for f, s in citations
+               if s.lower() not in knowledge.get(f, set())]
+    in_facts = background_citations(section(text, "Facts"))
+    hypotheses = section(text, "Hypotheses")
+    in_items = sum(len(background_citations(item)) for item in numbered_items(hypotheses))
+    loose = len(background_citations(hypotheses)) - in_items
+    problems = []
+    if unknown:
+        problems.append(f"unknown background sources: {', '.join(unknown[:3])}")
+    if in_facts:
+        problems.append("background cited in Facts (background is never evidence)")
+    if loose > 0:
+        problems.append("background must support a numbered hypothesis, not stand on its own")
+    if not citations and name == "investigation.md":
+        problems.append("no hypothesis cites a Background source "
+                        "[background: <file> § <section>]")
+    if citations and not unknown:
+        problems += unfaithful_backgrounds(text)
+    return Check(name=f"{name}: background sources",
+                 status=GateStatus.WARNING if problems else GateStatus.PASS,
+                 message="; ".join(problems) if problems
+                 else f"{len(citations)} background citation(s), from the knowledge base and "
+                      "consistent with their sources" if citations else "no background cited")
 
 
 def known_sensor_names(run_dir: Path) -> set[str]:
@@ -174,8 +295,12 @@ def known_sensor_names(run_dir: Path) -> set[str]:
 
 
 def check_outputs(run_dir: Path, names: list[str]) -> ValidationSummary:
+    from foresight.rag.knowledge import known_sections
+    from foresight.settings import load_settings
+
     sensors = known_sensor_names(run_dir)
     allowed = allowed_numbers(run_dir)
+    knowledge = known_sections(load_settings())
     checks: list[Check] = []
     for name in names:
         path = run_dir / name
@@ -183,5 +308,6 @@ def check_outputs(run_dir: Path, names: list[str]) -> ValidationSummary:
             checks.append(Check(name=f"{name}: exists", status=GateStatus.ERROR,
                                 message="output file was not written"))
             continue
-        checks += check_output(name, path.read_text(encoding="utf-8"), run_dir, sensors, allowed)
+        checks += check_output(name, path.read_text(encoding="utf-8"), run_dir, sensors,
+                               allowed, knowledge)
     return ValidationSummary.from_checks(checks)

@@ -27,6 +27,8 @@ analytics:
   anomaly_quantile: 0.95              # IsolationForest flag: top 5% scores of training runs
   z_limit: 3.0                        # SPC: robust z-score limit per sensor
   top_features: 15
+  similar_components: 30              # similar-run search: PCA embedding fitted on training runs
+  similar_k: 5                        # nearest past (training) runs per query run
 
 app:
   run_timeout_s: 1200                 # timeout guard: a run is stopped after 20 minutes
@@ -34,9 +36,19 @@ app:
   heartbeat_s: 15                     # background run heartbeat (stale after 90 s = interrupted)
   keep_runs: 20                       # older finished runs are deleted (runs volume is 500 MB)
 
+rag:                                  # similar runs, knowledge base and "Ask Foresight" (§18)
+  embedding_model: all-MiniLM-L6-v2   # local ONNX model: fixed, free, no API key
+  chunk_chars: 800
+  overlap_chars: 120
+  top_k: 4
+  min_similarity: 0.25                # retrieval gate: below it the chat refuses with no LLM call
+  knowledge_k: 3
+
 paths:
   runs_dir: runs                      # new runs (Railway volume in production)
   logs_dir: logs
   reference_run_dir: artifacts/reference
   data_raw_dir: data/raw              # SECOM files, downloaded on first use
   contract_path: config/dataset_contract.json
+  knowledge_dir: knowledge            # background documents for the Investigation crew
+  models_dir: runs/.models            # embedding model and knowledge index cache

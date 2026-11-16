@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app.runs import no_run, read_json, show_figure
+from app.runs import no_run, read_json, run_label, show_figure, show_markdown_file
 
 
 def render(run_dir: Path | None) -> None:
@@ -17,7 +17,8 @@ def render(run_dir: Path | None) -> None:
         no_run("analysis")
         return
 
-    st.caption(f"Run `{run_dir.name}` · descriptive statistics over the whole dataset")
+    st.caption(f"{run_label(run_dir).capitalize()} · descriptive statistics over the whole "
+               "dataset")
     overview = eda["overview"]
     cols = st.columns(4)
     cols[0].metric("Runs", f"{overview['rows']:,}")
@@ -26,6 +27,10 @@ def render(run_dir: Path | None) -> None:
     cols[3].metric("Sensors differ (q<0.05)", eda["significant_features_q_below_0.05"],
                    help="Mann-Whitney U test, failing vs passing runs, "
                         "Benjamini-Hochberg corrected")
+
+    if (run_dir / "insights.md").exists():
+        with st.expander("Insights from the Data Analyst crew", expanded=True):
+            show_markdown_file(run_dir, "insights.md", "Download insights.md")
 
     st.subheader("Fail rate over time")
     months = ", ".join(f"{m}: {r:.1%}" for m, r in eda["monthly_fail_rate"].items())
@@ -55,5 +60,3 @@ def render(run_dir: Path | None) -> None:
     if report.exists():
         st.download_button("Download eda_report.html", report.read_bytes(),
                            file_name="eda_report.html", mime="text/html")
-    st.info("Business insights written by the Data Analyst crew are added in Phase 3.",
-            icon=":material/construction:")

@@ -32,6 +32,9 @@ def _metrics(y: np.ndarray, score: np.ndarray, budget: float) -> dict[str, float
         "pr_auc": float(average_precision_score(y, score)) if y.sum() else float("nan"),
         "recall_at_budget": float(recall_score(y, flags, zero_division=0)),
         "precision_at_budget": float(precision_score(y, flags, zero_division=0)),
+        "alarms": int(flags.sum()),
+        "fails_found": int((flags & y).sum()),
+        "fails_total": int(y.sum()),
     }
 
 
@@ -62,7 +65,8 @@ def rank_risk(run_dir: Path, cfg: AnalyticsSettings, seed: int) -> dict:
 
     y_test = test["label"].to_numpy()
     test_scores = _scores(test)
-    test_metrics = {name: {k: round(v, 4) for k, v in _metrics(y_test, s, budget).items()}
+    test_metrics = {name: {k: round(v, 4) if isinstance(v, float) else v
+                           for k, v in _metrics(y_test, s, budget).items()}
                     for name, s in test_scores.items()}
     chosen = test_scores[recommended]
     ci = bootstrap_ci(y_test, chosen, {"type": "budget", "value": budget},

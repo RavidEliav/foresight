@@ -16,10 +16,13 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
-testpaths = ["tests/unit", "tests/data", "tests/analytics", "tests/integration", "tests/app"]
+testpaths = ["tests/unit", "tests/data", "tests/analytics", "tests/crews", "tests/integration", "tests/app"]
 markers = [
     "smoke: health checks against a running app (BASE_URL)",
     "e2e: Playwright browser tests against a running app (BASE_URL)",
     "deployed: read-only tests that are safe to run against Railway dev/main",
 ]
 addopts = "-ra"
+filterwarnings = [
+    "ignore::DeprecationWarning:crewai.*",
+]

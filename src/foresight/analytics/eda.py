@@ -148,7 +148,7 @@ def build_eda(cleaned: pd.DataFrame, out_dir: Path, top_n: int = 15) -> dict:
         "significant_features_q_below_0.05": int((tests["q_value"] < 0.05).sum())
         if not tests.empty else 0,
         "top_discriminating_features": [
-            {k: (round(v, 6) if isinstance(v, float) else v) for k, v in row.items()}
+            {k: (float(f"{v:.4g}") if isinstance(v, float) else v) for k, v in row.items()}
             for row in top.to_dict(orient="records")
         ],
         "method_notes": [

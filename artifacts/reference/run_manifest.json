@@ -1,0 +1,142 @@
+{
+  "run_id": "20261116T101718597912Z",
+  "created_at": "2026-11-16T10:20:57.941422+00:00",
+  "git_commit": "3edfb115cfea33331444bc014c97af8c794603c6",
+  "environment": "local",
+  "python": "3.11.7",
+  "packages": {
+    "crewai": "1.15.41",
+    "pandas": "3.1.1",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.4.6",
+    "streamlit": "1.67.0"
+  },
+  "seed": 42,
+  "llm": {
+    "model": "gpt-4o-mini",
+    "temperature": 0.0,
+    "mock": false
+  },
+  "status": "success",
+  "stages_completed": [
+    "ingest",
+    "analyze",
+    "model",
+    "investigate",
+    "report"
+  ],
+  "gates": [
+    {
+      "gate": "data_contract",
+      "status": "PASS",
+      "messages": [
+        "all 16 checks passed"
+      ]
+    },
+    {
+      "gate": "features_present",
+      "status": "PASS",
+      "messages": [
+        "all 3 checks passed"
+      ]
+    },
+    {
+      "gate": "evidence_present",
+      "status": "PASS",
+      "messages": [
+        "all 5 checks passed"
+      ]
+    }
+  ],
+  "durations_s": {
+    "ingest": 0.9054,
+    "analyze": 31.0097,
+    "model": 108.536,
+    "investigate": 52.3813,
+    "report": 26.4915
+  },
+  "crew_usage": {
+    "analyst": {
+      "seconds": 24.43,
+      "total_tokens": 4536,
+      "prompt_tokens": 3116,
+      "cached_prompt_tokens": 0,
+      "completion_tokens": 1420,
+      "reasoning_tokens": 0,
+      "cache_creation_tokens": 0,
+      "successful_requests": 4,
+      "mock": false,
+      "revisions": 0
+    },
+    "scientist": {
+      "seconds": 28.06,
+      "total_tokens": 4355,
+      "prompt_tokens": 2871,
+      "cached_prompt_tokens": 0,
+      "completion_tokens": 1484,
+      "reasoning_tokens": 0,
+      "cache_creation_tokens": 0,
+      "successful_requests": 3,
+      "mock": false,
+      "revisions": 0
+    },
+    "investigation": {
+      "seconds": 37.73,
+      "total_tokens": 5636,
+      "prompt_tokens": 3647,
+      "cached_prompt_tokens": 1280,
+      "completion_tokens": 1989,
+      "reasoning_tokens": 0,
+      "cache_creation_tokens": 0,
+      "successful_requests": 3,
+      "mock": false,
+      "revisions": 0
+    },
+    "report": {
+      "seconds": 25.12,
+      "total_tokens": 7921,
+      "prompt_tokens": 5804,
+      "cached_prompt_tokens": 0,
+      "completion_tokens": 2117,
+      "reasoning_tokens": 0,
+      "cache_creation_tokens": 0,
+      "successful_requests": 2,
+      "mock": false,
+      "revisions": 0
+    }
+  },
+  "report_checks": {
+    "PASS": 15,
+    "WARNING": 0,
+    "ERROR": 0
+  },
+  "data_sha256": {
+    "secom.data": "20f0e7ee434f7dcbae0eea9ffff009a2b57f42d6b0dc9a5bd4f00782c0a3374c",
+    "secom_labels.data": "126884cf453705c9e61a903fe906f0665a3b45ce3639e621edc5c93c89627e03"
+  },
+  "artifacts": [
+    "anomalies.csv",
+    "anomaly_summary.json",
+    "clean_data.csv",
+    "cleaning_report.json",
+    "data_profile.json",
+    "dataset_contract.json",
+    "eda_report.html",
+    "eda_summary.json",
+    "engineering_report.md",
+    "evaluation_report.md",
+    "feature_spec.json",
+    "features.csv",
+    "insights.md",
+    "investigation.md",
+    "model.joblib",
+    "model_card.md",
+    "model_metrics.json",
+    "oof_predictions.csv",
+    "predictions.csv",
+    "report_checks.json",
+    "risk_scores.csv",
+    "risk_summary.json",
+    "validation_summary.json"
+  ]
+}

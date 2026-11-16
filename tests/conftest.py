@@ -10,6 +10,19 @@ ENV_VARS = ("LLM_MODEL", "OPENAI_API_KEY", "RUN_PASSCODE", "RAILWAY_ENVIRONMENT_
             "RAILWAY_GIT_COMMIT_SHA")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def no_paid_calls():
+    """Session-wide guard (also covers module-scoped fixtures): no LLM calls, no downloads,
+    no .env secrets."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("MOCK_LLM", "true")
+        patch.setenv("FORESIGHT_SKIP_DOTENV", "true")
+        patch.setenv("FORESIGHT_OFFLINE", "true")
+        patch.setenv("CREWAI_TRACING_ENABLED", "false")
+        patch.delenv("OPENAI_API_KEY", raising=False)
+        yield
+
+
 @pytest.fixture(autouse=True)
 def isolated_env(monkeypatch, tmp_path):
     """No .env, no LLM, no downloads; runs, logs, data and contract live in a temp folder."""
@@ -24,6 +37,7 @@ def isolated_env(monkeypatch, tmp_path):
     monkeypatch.setenv("FORESIGHT_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("FORESIGHT_CONTRACT_PATH", str(tmp_path / "dataset_contract.json"))
     monkeypatch.setenv("CREWAI_DISABLE_TELEMETRY", "true")
+    monkeypatch.setenv("CREWAI_TRACING_ENABLED", "false")
     monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
 
 

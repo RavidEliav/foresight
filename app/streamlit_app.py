@@ -55,32 +55,35 @@ def _runs_dir() -> Path:
     return settings.resolve(settings.paths.runs_dir)
 
 
-def data_quality_page() -> None:
-    from app import data_quality
+def _latest(required: str) -> Path | None:
     from app.runs import latest_run_dir
 
-    data_quality.render(latest_run_dir(_runs_dir()))
+    return latest_run_dir(_runs_dir(), required,
+                          settings.resolve(settings.paths.reference_run_dir))
+
+
+def data_quality_page() -> None:
+    from app import data_quality
+
+    data_quality.render(_latest("validation_summary.json"))
 
 
 def eda_page() -> None:
     from app import eda_page as page
-    from app.runs import latest_run_dir
 
-    page.render(latest_run_dir(_runs_dir(), "eda_summary.json"))
+    page.render(_latest("eda_summary.json"))
 
 
 def model_page() -> None:
     from app import model_page as page
-    from app.runs import latest_run_dir
 
-    page.render(latest_run_dir(_runs_dir(), "model_metrics.json"))
+    page.render(_latest("model_metrics.json"))
 
 
 def report_page() -> None:
     from app import report_page as page
-    from app.runs import latest_run_dir
 
-    page.render(latest_run_dir(_runs_dir(), "anomaly_summary.json"))
+    page.render(_latest("anomaly_summary.json"))
 
 
 st.sidebar.title("Foresight")

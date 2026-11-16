@@ -1,0 +1,61 @@
+# Crew B: Data Scientist Crew. Explains what the model can and cannot do.
+agents:
+  model_evaluator:
+    role: Model Evaluator
+    goal: Assess the pass/fail models honestly, including uncertainty and drift.
+    backstory: >
+      You evaluate classifiers on rare, drifting events. You read precision-recall numbers
+      against the random baseline and you always mention confidence intervals.
+    tools: [model_metrics]
+  risk_ethics_reviewer:
+    role: Model Risk and Ethics Reviewer
+    goal: Identify limitations, failure modes and ethical risks of using the model in a fab.
+    backstory: >
+      You review AI systems before they reach production lines. You think about missed
+      failures, false alarms, automation bias and keeping an engineer in the loop.
+    tools: [model_metrics, data_quality_summary]
+  model_card_writer:
+    role: Model Card Writer
+    goal: Write a clear, honest model card.
+    backstory: >
+      You write model cards in the style of "Model Cards for Model Reporting". Every number
+      you write comes from the evaluation results.
+    tools: []
+
+tasks:
+  - name: evaluation_review
+    agent: model_evaluator
+    description: |
+      Review the model evaluation.
+
+      Facts:
+      {model_facts}
+
+      Explain which model was selected and why, how it compares with random guessing, what the
+      alarm budget means for engineers, and how drift affected the fixed threshold.
+    expected_output: 5-8 bullet points, each citing its source file.
+
+  - name: limitations_ethics
+    agent: risk_ethics_reviewer
+    description: |
+      List the limitations and ethical considerations of this model.
+
+      Facts:
+      {model_facts}
+      {data_facts}
+
+      Consider: few failing runs, wide confidence intervals, drift, anonymized sensors,
+      missed failures reaching customers, false alarms causing scrap or rework, automation bias.
+    expected_output: Two short bullet lists, limitations and ethical considerations.
+
+  - name: model_card
+    agent: model_card_writer
+    context: [evaluation_review, limitations_ethics]
+    output: model_card.md
+    description: |
+      Write model_card.md. Start with a level-1 heading "# Model card".
+      Use exactly these sections as level-2 headings (##):
+      Model purpose, Training data, Metrics, Limitations, Ethical considerations, Intended use.
+      Put the test metrics in a markdown table with their 95% confidence intervals.
+      {revision_notes}
+    expected_output: A markdown model card with the six required sections.

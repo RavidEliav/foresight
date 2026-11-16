@@ -5,6 +5,7 @@ seed: 42
 llm:
   model: gpt-4o-mini
   temperature: 0
+  crew_revisions: 1                   # a crew revises its output this many times if its checks warn
 
 data:
   max_missing_ratio: 0.5              # drop features missing in more than 50% of runs

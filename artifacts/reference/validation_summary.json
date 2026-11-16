@@ -1,0 +1,90 @@
+{
+  "status": "PASS",
+  "counts": {
+    "PASS": 16,
+    "WARNING": 0,
+    "ERROR": 0
+  },
+  "checks": [
+    {
+      "name": "raw_feature_count",
+      "status": "PASS",
+      "message": "590 feature columns"
+    },
+    {
+      "name": "raw_feature_dtypes",
+      "status": "PASS",
+      "message": "all features are numeric"
+    },
+    {
+      "name": "raw_label_values",
+      "status": "PASS",
+      "message": "labels are -1 (pass) or 1 (fail)"
+    },
+    {
+      "name": "raw_timestamps",
+      "status": "PASS",
+      "message": "all timestamps parsed"
+    },
+    {
+      "name": "raw_row_count",
+      "status": "PASS",
+      "message": "1567 rows"
+    },
+    {
+      "name": "required_columns",
+      "status": "PASS",
+      "message": "all 449 required columns present"
+    },
+    {
+      "name": "unexpected_columns",
+      "status": "PASS",
+      "message": "no unexpected feature columns"
+    },
+    {
+      "name": "feature_dtypes",
+      "status": "PASS",
+      "message": "all contract features are numeric"
+    },
+    {
+      "name": "label_values",
+      "status": "PASS",
+      "message": "labels within [0, 1]"
+    },
+    {
+      "name": "fail_rate",
+      "status": "PASS",
+      "message": "fail rate 6.6% within expected 2%-20%"
+    },
+    {
+      "name": "timestamps",
+      "status": "PASS",
+      "message": "no missing timestamps"
+    },
+    {
+      "name": "unique_ids",
+      "status": "PASS",
+      "message": "run_id values are unique"
+    },
+    {
+      "name": "row_count",
+      "status": "PASS",
+      "message": "1567 rows (minimum 100)"
+    },
+    {
+      "name": "feature_missing",
+      "status": "PASS",
+      "message": "no feature above 50% missing"
+    },
+    {
+      "name": "value_ranges",
+      "status": "PASS",
+      "message": "all values within contract ranges"
+    },
+    {
+      "name": "data_checksums",
+      "status": "PASS",
+      "message": "raw files match the contract checksums"
+    }
+  ]
+}

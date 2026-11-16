@@ -1,0 +1,15 @@
+{
+  "rows": 1567,
+  "features": 446,
+  "label_counts": {
+    "0": 1463,
+    "1": 104
+  },
+  "fail_rate": 0.066369,
+  "time_range": [
+    "2008-07-19 11:55:00",
+    "2008-10-17 06:07:00"
+  ],
+  "missing_cells_ratio": 0.015551,
+  "features_with_missing": 394
+}

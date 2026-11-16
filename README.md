@@ -4,7 +4,7 @@
 
 Author: **Ravid Eliav** · AI Developers Course, Final Project
 
-> **Status:** Phase 2 (deterministic analytics) done: data validation, EDA, features, models, anomalies and CrewAI tools. The crews that interpret these results arrive in Phase 3.
+> **Status:** Phase 3 (CrewAI crews) done: four crews interpret the deterministic results and write the insights, the model card, the investigation and the engineering report; every crew output is checked automatically. Next: Phase 4 (full app: background runs, persistent run storage, end-to-end tests).
 
 | Environment | Branch | URL |
 |---|---|---|
@@ -14,8 +14,9 @@ Author: **Ravid Eliav** · AI Developers Course, Final Project
 ## Architecture
 
 ```
-SECOM -> [Data Contract gate] -> Data Analyst Crew -> Data Scientist Crew -> [Features gate]
-      -> Investigation Crew -> [Evidence gate] -> Engineering Report Crew -> engineering_report.md
+SECOM -> ingest -> [Data Contract gate] -> analyze + Data Analyst Crew -> [Features gate]
+      -> model + Data Scientist Crew -> investigate + Investigation Crew -> [Evidence gate]
+      -> Engineering Report Crew -> output checks -> engineering_report.md
 ```
 
 Python tools compute every number; LLM agents interpret the results. Any ERROR at a gate stops the run and writes `failure_report.md`.
@@ -39,7 +40,7 @@ Run outputs: `clean_data.csv`, `cleaning_report.json`, `data_profile.json`, `dat
 
 ## Analytics
 
-All numbers are computed by deterministic Python; the crews (Phase 3) only interpret them, through read-only tools in `src/foresight/tools/run_tools.py`.
+All numbers are computed by deterministic Python; the crews only interpret them, through read-only tools in `src/foresight/tools/run_tools.py`.
 
 | Stage | What it does | Outputs |
 |---|---|---|
@@ -52,6 +53,31 @@ All numbers are computed by deterministic Python; the crews (Phase 3) only inter
 Charts are written to `figures/`.
 
 **Results on the real data.** SECOM is hard and drifts over time. The fixed threshold tuned on older runs raises no alarms in the test period; the alarm budget keeps working. The recommended ranking (model + anomaly score) flags 40 of 392 test-period runs and finds 5 of the 24 failing runs (21%, 95% CI 4–35%) with 12.5% precision, about twice the base fail rate. All choices were made with cross-validation on the training period; the test period was scored once.
+
+## Crews
+
+Each crew runs right after the deterministic work of its stage. Agents, tasks and prompts live in YAML (`src/foresight/crews/config/`). Every task receives **fact sheets** built from the run's JSON files (each fact tagged `[source: <file>]`) plus shared rules: use only numbers from the facts or tools, cite sources, label assumptions and hypotheses, say "is associated with" and never "causes".
+
+| Crew | Stage | Agents | Tools | Output |
+|---|---|---|---|---|
+| Data Analyst | analyze | Data Quality Engineer, Exploratory Data Analyst, Business Insights Writer | `data_quality_summary`, `eda_summary`, `sensor_stats` | `insights.md` |
+| Data Scientist | model | Model Evaluator, Model Risk and Ethics Reviewer, Model Card Writer | `model_metrics`, `data_quality_summary` | `model_card.md` |
+| Investigation | investigate | Anomaly Analyst, Signal Investigator, Hypothesis Generator | `anomaly_summary`, `risk_ranking`, `run_details`, `eda_summary`, `sensor_stats`, `model_metrics` | `investigation.md` (Facts / Assumptions / Hypotheses / Suggested verification) |
+| Engineering Report | report | Technical Report Writer, Engineering Review and Safety Editor | none (works from the three documents above) | `engineering_report.md` |
+
+**Automatic output checks** (`src/foresight/crews/checks.py`, results in `report_checks.json` and on the Engineering Report page):
+
+- the required sections are present;
+- every sensor name mentioned exists in the data;
+- at least 90% of the numbers can be traced to the run's files;
+- every fact in the investigation cites a source file;
+- every hypothesis states a confidence level, and "high" requires a quoted q < 0.001 (the rubric also asks for a second, independent signal).
+
+If a crew's own output fails a check, the crew gets the findings and revises it once (`llm.crew_revisions` in `config/settings.yaml`). Revisions are listed in `crew_revisions.json` and in the report checks.
+
+**Mock or real LLM.** With `MOCK_LLM=true`, a deterministic mock LLM writes the outputs from the same facts and goes through the same CrewAI agents, tasks and checks. Tests and CI use it, and a session guard makes any paid call fail a test. With the real model (`gpt-4o-mini`, temperature 0), a full run takes about 3.5 minutes and about 23,000 tokens (under 1 US cent). CrewAI's cloud tracing and telemetry are turned off: they added about 15 seconds per crew, and Foresight keeps its own logs and run manifest.
+
+**Reference run.** [`artifacts/reference/`](artifacts/reference) holds a complete real run (gpt-4o-mini, all gates and all 15 report checks PASS). The app shows it until a newer run exists.
 
 ## Quick start
 
@@ -71,7 +97,7 @@ Set `MOCK_LLM=true` in `.env` to work without any LLM calls.
 
 | Layer | Command |
 |---|---|
-| Unit, data, integration, Streamlit AppTest (synthetic SECOM, offline) | `pytest` |
+| Unit, data, crews (mock LLM), integration, Streamlit AppTest (synthetic SECOM, offline) | `pytest` |
 | Smoke + Playwright E2E (app must be running) | `python -m playwright install chromium` then `pytest tests/smoke tests/e2e` |
 
 `BASE_URL` points the smoke and E2E tests at another app (default `http://localhost:8501`).

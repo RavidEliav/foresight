@@ -21,6 +21,7 @@ analytics:
   permutation_repeats: 2
   min_fails_train: 2
   min_fails_test: 1
+  alarm_budget: 0.10
   anomaly_quantile: 0.95
   z_limit: 3.0
   top_features: 5

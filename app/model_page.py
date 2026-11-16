@@ -28,9 +28,9 @@ def render(run_dir: Path | None) -> None:
     st.caption(f"Run `{run_dir.name}` · trained on {split['train']['runs']} runs "
                f"({split['train']['fails']} fails), tested on the next {split['test']['runs']} "
                f"runs ({split['test']['fails']} fails) from {metrics['test_start'][:10]}")
-    st.markdown(f"**Selected model:** `{metrics['selected_model']}` · "
-                f"threshold {metrics['threshold']:.3f} · random-guessing PR-AUC "
-                f"{metrics['baseline_pr_auc']:.3f}")
+    op = metrics["operating_point"]
+    st.markdown(f"**Selected model:** `{metrics['selected_model']}` · operating point: "
+                f"{op['rule']} · random-guessing PR-AUC {metrics['baseline_pr_auc']:.3f}")
 
     cols = st.columns(len(METRICS))
     for col, (key, label) in zip(cols, METRICS, strict=True):
@@ -38,8 +38,13 @@ def render(run_dir: Path | None) -> None:
         col.metric(label, _fmt(metrics["test_metrics"][key]),
                    help=f"95% bootstrap CI: {_fmt(low)} – {_fmt(high)}")
     cm = metrics["confusion_matrix"]
-    st.markdown(f"On the test period: **{cm['tp']}** failing runs caught, **{cm['fn']}** "
-                f"missed, **{cm['fp']}** false alarms.")
+    fixed = metrics["test_metrics_fixed_threshold"]
+    st.markdown(f"On the test period the alarm budget raised **{op['alarms_in_test']}** alarms: "
+                f"**{cm['tp']}** failing runs caught, **{cm['fn']}** missed, **{cm['fp']}** false "
+                f"alarms. For comparison, the fixed threshold ({metrics['threshold']:.3f}, tuned "
+                f"on older runs) caught {fixed['recall_fail']:.0%} of failing runs.")
+    show_figure(run_dir, metrics["figures"].get("scores_over_time"),
+                "Risk scores over the test period: drift moves scores, the alarm budget adapts")
 
     st.subheader("Model comparison")
     rows = [{"model": name, "time CV PR-AUC": c["cv_pr_auc_mean"],
@@ -47,7 +52,7 @@ def render(run_dir: Path | None) -> None:
              "test PR-AUC": c["test_pr_auc"], "test ROC-AUC": c["test_roc_auc"],
              "description": c["description"]} for name, c in metrics["comparison"].items()]
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
-    rules = (metrics["selection_rule"], metrics["threshold_rule"])
+    rules = (metrics["selection_rule"], op["rule"])
     st.caption(" ".join(f"{rule[:1].upper()}{rule[1:]}." for rule in rules))
 
     left, right = st.columns(2)

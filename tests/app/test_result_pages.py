@@ -57,12 +57,14 @@ def test_model_page_shows_metrics_with_confidence_intervals(run_dir):
                                             "Balanced accuracy"]
     assert "95% bootstrap CI" in at.metric[0].help
     comparison = at.dataframe[0].value
-    assert set(comparison["model"]) == {"logreg_l1", "random_forest", "rf_select_k",
-                                        "baseline_always_pass"}
+    assert set(comparison["model"]) == {"logreg_l1", "random_forest", "rf_regularized",
+                                        "rf_select_k", "baseline_always_pass"}
 
 
 def test_report_page_shows_anomalies(run_dir):
     at = _render("app.report_page", run_dir)
     assert not at.exception
     assert at.metric[0].label == "Runs flagged"
+    assert [h.value for h in at.subheader] == ["Risk ranking", "Anomalies"]
+    assert any("Recommended ranking" in md.value for md in at.markdown)
     assert any("Most anomalous runs" in md.value for md in at.markdown)

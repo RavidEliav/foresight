@@ -4,8 +4,9 @@ Stage order: ingest -> [data contract gate] -> analyze -> [features gate] -> mod
 -> investigate -> [evidence gate] -> report. Any ERROR, or an exception inside a stage,
 routes to handle_failure, which writes a failure report instead of crashing.
 
-Phases 1-2: ingest, analyze, model and investigate run deterministic Python tools.
-The CrewAI crews (Phase 3) interpret their outputs; report is a placeholder until then.
+Deterministic Python tools compute every number; each stage then runs a CrewAI crew that
+interprets them (analyze: Data Analyst, model: Data Scientist, investigate: Investigation,
+report: Engineering Report). Crew outputs are checked deterministically (report_checks.json).
 """
 
 from __future__ import annotations
@@ -19,7 +20,13 @@ from pathlib import Path
 from crewai.flow.flow import Flow, listen, or_, router, start
 from pydantic import BaseModel, Field
 
-from foresight.analytics.stages import StageResult, run_analyze, run_investigate, run_model
+from foresight.analytics.stages import (
+    StageResult,
+    run_analyze,
+    run_investigate,
+    run_model,
+    run_report,
+)
 from foresight.data.ingest import run_ingest
 from foresight.settings import Settings, load_settings
 from foresight.utils.logging import get_logger, setup_logging
@@ -51,6 +58,8 @@ class ForesightState(BaseModel):
     validation: dict | None = None
     feature_checks: dict | None = None
     evidence_checks: dict | None = None
+    report_checks: dict | None = None
+    crew_usage: dict[str, dict] = Field(default_factory=dict)
     stage_error: str | None = None
     artifacts: dict[str, str] = Field(default_factory=dict)
     data_checksums: dict[str, str] = Field(default_factory=dict)
@@ -72,6 +81,7 @@ class ForesightFlow(Flow[ForesightState]):
             else:
                 result = work()
                 self.state.artifacts.update(result.artifacts)
+                self.state.crew_usage.update(result.crew_usage)
                 if checks_attr and result.checks is not None:
                     setattr(self.state, checks_attr, result.checks.model_dump(mode="json"))
         except Exception as exc:  # fail gracefully: report it, never crash the app
@@ -150,7 +160,17 @@ class ForesightFlow(Flow[ForesightState]):
 
     @listen("evidence_ok")
     def report(self):
-        self._stage("report")
+        self._stage("report", lambda: run_report(self.settings, self._run_dir), "report_checks")
+
+    @router(report)
+    def report_done(self):
+        if self.state.stage_error:
+            self.state.failure_reason = self.state.stage_error
+            return FAILED
+        return "reported"
+
+    @listen("reported")
+    def finalize(self):
         self.state.status = "success"
         self._write_manifest()
 
@@ -174,6 +194,8 @@ class ForesightFlow(Flow[ForesightState]):
             stages_completed=self.state.stages_completed,
             gates=[g.model_dump() for g in self.state.gates],
             durations_s=self.state.durations,
+            crew_usage=self.state.crew_usage,
+            report_checks=(self.state.report_checks or {}).get("counts"),
             data_sha256=self.state.data_checksums,
             artifacts=sorted(Path(p).name for p in self.state.artifacts.values()),
         )

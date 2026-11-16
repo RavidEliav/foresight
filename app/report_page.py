@@ -1,5 +1,5 @@
-"""Investigation & Report page. Phase 2: anomaly detection results; Phase 3 adds the
-investigation and the engineering report written by the crews."""
+"""Investigation & Report page: the engineering report and its safety checks, the
+investigation, the risk ranking and the anomaly detection results."""
 
 from __future__ import annotations
 
@@ -8,7 +8,10 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app.runs import no_run, read_json, show_figure
+from app.runs import no_run, read_json, run_label, show_figure, show_markdown_file
+
+STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:",
+               "ERROR": ":material/cancel:"}
 
 
 def render(run_dir: Path | None) -> None:
@@ -18,7 +21,9 @@ def render(run_dir: Path | None) -> None:
         no_run("investigation")
         return
 
-    st.caption(f"Run `{run_dir.name}`")
+    st.caption(run_label(run_dir).capitalize())
+    _render_report(run_dir)
+
     risk = read_json(run_dir, "risk_summary.json")
     if risk:
         _render_risk(risk)
@@ -43,8 +48,31 @@ def render(run_dir: Path | None) -> None:
         for name, text in summary["method"].items():
             st.markdown(f"- **{name}:** {text}")
 
-    st.info("Hypotheses and the engineering report from the Investigation and Report crews "
-            "are added in Phase 3.", icon=":material/construction:")
+
+
+def _render_report(run_dir: Path) -> None:
+    checks = read_json(run_dir, "report_checks.json")
+    if checks:
+        status, counts = checks["status"], checks["counts"]
+        message = (f"Report safety checks: **{status}** · {counts['PASS']} passed, "
+                   f"{counts['WARNING']} warnings, {counts['ERROR']} errors")
+        {"PASS": st.success, "WARNING": st.warning, "ERROR": st.error}[status](
+            message, icon=STATUS_ICON[status])
+        with st.expander("What the safety checks verify"):
+            st.markdown("Required sections are present, every sensor mentioned exists in the "
+                        "data, numbers can be traced to the run files, every fact in the "
+                        "investigation cites its source file, and every hypothesis follows the "
+                        "confidence rubric (\"high\" needs q < 0.001). A crew whose output "
+                        "fails a check revises it once; any revisions are listed below.")
+            st.dataframe(pd.DataFrame(checks["checks"])[["status", "name", "message"]],
+                         hide_index=True, width="stretch")
+    if (run_dir / "engineering_report.md").exists():
+        st.subheader("Engineering report")
+        with st.container(border=True):
+            show_markdown_file(run_dir, "engineering_report.md", "Download engineering_report.md")
+    if (run_dir / "investigation.md").exists():
+        with st.expander("Investigation: facts, assumptions and hypotheses"):
+            show_markdown_file(run_dir, "investigation.md", "Download investigation.md")
 
 
 def _render_risk(risk: dict) -> None:

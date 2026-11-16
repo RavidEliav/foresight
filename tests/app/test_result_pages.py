@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from foresight.analytics.stages import run_analyze, run_investigate, run_model
+from foresight.analytics.stages import run_analyze, run_investigate, run_model, run_report
 from foresight.data.ingest import run_ingest
 from foresight.settings import load_settings
 from tests.conftest import write_synthetic_secom
@@ -18,7 +18,7 @@ def run_dir(tmp_path_factory):
     write_synthetic_secom(settings.paths.data_raw_dir)
     run = base / "run"
     run.mkdir()
-    for stage in (run_ingest, run_analyze, run_model, run_investigate):
+    for stage in (run_ingest, run_analyze, run_model, run_investigate, run_report):
         stage(settings, run)
     return run
 
@@ -48,6 +48,7 @@ def test_eda_page_shows_overview_and_top_sensor(run_dir):
     assert at.dataframe[0].value.iloc[0]["feature"] == "f_020"
     assert [h.value for h in at.subheader] == [
         "Fail rate over time", "Sensors that differ between failing and passing runs"]
+    assert any("## Summary" in md.value for md in at.markdown)
 
 
 def test_model_page_shows_metrics_with_confidence_intervals(run_dir):
@@ -65,6 +66,25 @@ def test_report_page_shows_anomalies(run_dir):
     at = _render("app.report_page", run_dir)
     assert not at.exception
     assert at.metric[0].label == "Runs flagged"
-    assert [h.value for h in at.subheader] == ["Risk ranking", "Anomalies"]
+    assert [h.value for h in at.subheader] == ["Engineering report", "Risk ranking", "Anomalies"]
+    assert "Report safety checks: **PASS**" in at.success[0].value
+    assert any("## What was detected" in md.value for md in at.markdown)
+    assert not any(md.value.startswith("# Engineering report") for md in at.markdown)
     assert any("Recommended ranking" in md.value for md in at.markdown)
     assert any("Most anomalous runs" in md.value for md in at.markdown)
+
+
+def test_model_page_shows_the_model_card(run_dir):
+    at = _render("app.model_page", run_dir)
+    assert any("## Model purpose" in md.value for md in at.markdown)
+
+
+def test_pages_fall_back_to_the_reference_run(tmp_path, run_dir):
+    from app.runs import latest_run_dir
+
+    reference = tmp_path / "reference"
+    reference.mkdir()
+    (reference / "eda_summary.json").write_text("{}")
+    assert latest_run_dir(tmp_path / "no-runs", "eda_summary.json", reference) == reference
+    assert latest_run_dir(run_dir.parent, "eda_summary.json", reference) == run_dir
+    assert latest_run_dir(tmp_path / "no-runs", "model_metrics.json", reference) is None

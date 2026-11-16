@@ -1,0 +1,204 @@
+{
+  "method": "percentile rank of model fail probability and anomaly score within the scored batch, averaged; recommended only if it beats the model alone in time-ordered CV on the training split",
+  "alarm_budget": 0.1,
+  "random_recall_at_budget": 0.1,
+  "cv_mean_per_fold": {
+    "model": {
+      "pr_auc": 0.1589,
+      "recall_at_budget": 0.3153,
+      "precision_at_budget": 0.13
+    },
+    "anomaly": {
+      "pr_auc": 0.1578,
+      "recall_at_budget": 0.308,
+      "precision_at_budget": 0.07
+    },
+    "combined": {
+      "pr_auc": 0.1826,
+      "recall_at_budget": 0.2604,
+      "precision_at_budget": 0.08
+    }
+  },
+  "recommended_ranking": "combined",
+  "test": {
+    "model": {
+      "pr_auc": 0.085,
+      "recall_at_budget": 0.125,
+      "precision_at_budget": 0.075,
+      "alarms": 40,
+      "fails_found": 3,
+      "fails_total": 24
+    },
+    "anomaly": {
+      "pr_auc": 0.06,
+      "recall_at_budget": 0.0,
+      "precision_at_budget": 0.0,
+      "alarms": 40,
+      "fails_found": 0,
+      "fails_total": 24
+    },
+    "combined": {
+      "pr_auc": 0.0825,
+      "recall_at_budget": 0.2083,
+      "precision_at_budget": 0.125,
+      "alarms": 40,
+      "fails_found": 5,
+      "fails_total": 24
+    }
+  },
+  "test_recommended_ci95": {
+    "pr_auc": [
+      0.0511,
+      0.1552
+    ],
+    "recall_fail": [
+      0.0435,
+      0.3529
+    ],
+    "precision_fail": [
+      0.025,
+      0.225
+    ]
+  },
+  "top_risk_runs": [
+    {
+      "run_id": 1458,
+      "timestamp": "2008-10-11T07:39:00",
+      "label": 0,
+      "risk_score": 0.9962,
+      "fail_probability": 0.23915,
+      "anomaly_score": 0.49519,
+      "top_signals": "f_204:+115475.1; f_067:+7324.4; f_338:+220.5"
+    },
+    {
+      "run_id": 1397,
+      "timestamp": "2008-10-07T11:16:00",
+      "label": 0,
+      "risk_score": 0.9949,
+      "fail_probability": 0.27571,
+      "anomaly_score": 0.46126,
+      "top_signals": "f_198:+38.5; f_338:+38.3; f_205:+35.0"
+    },
+    {
+      "run_id": 1489,
+      "timestamp": "2008-10-13T20:53:00",
+      "label": 0,
+      "risk_score": 0.9923,
+      "fail_probability": 0.2168,
+      "anomaly_score": 0.47849,
+      "top_signals": "f_338:+36.8; f_202:+31.6; f_332:+25.1"
+    },
+    {
+      "run_id": 1257,
+      "timestamp": "2008-10-02T22:33:00",
+      "label": 0,
+      "risk_score": 0.9847,
+      "fail_probability": 0.20251,
+      "anomaly_score": 0.45679,
+      "top_signals": "f_135:+14.8; f_171:+8.8; f_139:+8.3"
+    },
+    {
+      "run_id": 1456,
+      "timestamp": "2008-10-11T06:56:00",
+      "label": 0,
+      "risk_score": 0.9707,
+      "fail_probability": 0.20934,
+      "anomaly_score": 0.44577,
+      "top_signals": "f_275:+54954.8; f_140:+51008.9; f_004:+3422.3"
+    },
+    {
+      "run_id": 1230,
+      "timestamp": "2008-10-02T04:23:00",
+      "label": 0,
+      "risk_score": 0.963,
+      "fail_probability": 0.1724,
+      "anomaly_score": 0.46316,
+      "top_signals": "f_318:+15.9; f_224:+15.8; f_182:+13.5"
+    },
+    {
+      "run_id": 1307,
+      "timestamp": "2008-10-05T04:20:00",
+      "label": 0,
+      "risk_score": 0.9617,
+      "fail_probability": 0.18344,
+      "anomaly_score": 0.4486,
+      "top_signals": "f_155:+75.3; f_290:+64.1; f_019:-45.8"
+    },
+    {
+      "run_id": 1427,
+      "timestamp": "2008-10-08T17:14:00",
+      "label": 0,
+      "risk_score": 0.9477,
+      "fail_probability": 0.16444,
+      "anomaly_score": 0.45147,
+      "top_signals": "f_205:+24.1; f_200:+17.3; f_207:+16.2"
+    },
+    {
+      "run_id": 1254,
+      "timestamp": "2008-10-02T21:32:00",
+      "label": 1,
+      "risk_score": 0.9362,
+      "fail_probability": 0.19631,
+      "anomaly_score": 0.4369,
+      "top_signals": "f_116:-42.9; f_040:-22.7; f_251:+10.1"
+    },
+    {
+      "run_id": 1289,
+      "timestamp": "2008-10-04T04:12:00",
+      "label": 0,
+      "risk_score": 0.9349,
+      "fail_probability": 0.17839,
+      "anomaly_score": 0.43925,
+      "top_signals": "f_224:+8.8; f_496:+8.2; f_159:+6.0"
+    },
+    {
+      "run_id": 1333,
+      "timestamp": "2008-10-05T20:30:00",
+      "label": 0,
+      "risk_score": 0.9337,
+      "fail_probability": 0.19746,
+      "anomaly_score": 0.4358,
+      "top_signals": "f_367:+14.2; f_227:+14.2; f_365:+11.5"
+    },
+    {
+      "run_id": 1374,
+      "timestamp": "2008-10-06T18:55:00",
+      "label": 0,
+      "risk_score": 0.9311,
+      "fail_probability": 0.22916,
+      "anomaly_score": 0.4348,
+      "top_signals": "f_155:+75.3; f_290:+64.1; f_019:-45.8"
+    },
+    {
+      "run_id": 1539,
+      "timestamp": "2008-10-15T19:24:00",
+      "label": 0,
+      "risk_score": 0.9235,
+      "fail_probability": 0.15732,
+      "anomaly_score": 0.44871,
+      "top_signals": "f_572:+226.5; f_040:-22.5; f_570:+13.6"
+    },
+    {
+      "run_id": 1503,
+      "timestamp": "2008-10-14T14:43:00",
+      "label": 0,
+      "risk_score": 0.9133,
+      "fail_probability": 0.18572,
+      "anomaly_score": 0.43454,
+      "top_signals": "f_026:-37.0; f_025:-17.2; f_558:+14.3"
+    },
+    {
+      "run_id": 1190,
+      "timestamp": "2008-09-30T04:01:00",
+      "label": 0,
+      "risk_score": 0.9107,
+      "fail_probability": 0.17519,
+      "anomaly_score": 0.43534,
+      "top_signals": "f_040:-24.1; f_139:+6.5; f_485:+6.1"
+    }
+  ],
+  "note": "Random flagging of 10% of runs finds about 10% of failing runs; recall at budget above that means the ranking adds value.",
+  "excluded_models": [
+    "baseline_always_pass"
+  ]
+}

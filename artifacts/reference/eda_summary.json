@@ -1,0 +1,265 @@
+{
+  "overview": {
+    "rows": 1567,
+    "features": 446,
+    "label_counts": {
+      "0": 1463,
+      "1": 104
+    },
+    "fail_rate": 0.066369,
+    "time_range": [
+      "2008-07-19 11:55:00",
+      "2008-10-17 06:07:00"
+    ],
+    "missing_cells_ratio": 0.015551,
+    "features_with_missing": 394
+  },
+  "weekly_fail_rate": [
+    {
+      "week": "2008-07-20",
+      "runs": 13,
+      "fails": 3,
+      "fail_rate": 0.2308
+    },
+    {
+      "week": "2008-07-27",
+      "runs": 21,
+      "fails": 2,
+      "fail_rate": 0.0952
+    },
+    {
+      "week": "2008-08-03",
+      "runs": 48,
+      "fails": 10,
+      "fail_rate": 0.2083
+    },
+    {
+      "week": "2008-08-10",
+      "runs": 108,
+      "fails": 14,
+      "fail_rate": 0.1296
+    },
+    {
+      "week": "2008-08-17",
+      "runs": 51,
+      "fails": 7,
+      "fail_rate": 0.1373
+    },
+    {
+      "week": "2008-08-24",
+      "runs": 208,
+      "fails": 22,
+      "fail_rate": 0.1058
+    },
+    {
+      "week": "2008-08-31",
+      "runs": 169,
+      "fails": 7,
+      "fail_rate": 0.0414
+    },
+    {
+      "week": "2008-09-07",
+      "runs": 133,
+      "fails": 2,
+      "fail_rate": 0.015
+    },
+    {
+      "week": "2008-09-14",
+      "runs": 95,
+      "fails": 4,
+      "fail_rate": 0.0421
+    },
+    {
+      "week": "2008-09-21",
+      "runs": 154,
+      "fails": 5,
+      "fail_rate": 0.0325
+    },
+    {
+      "week": "2008-09-28",
+      "runs": 166,
+      "fails": 4,
+      "fail_rate": 0.0241
+    },
+    {
+      "week": "2008-10-05",
+      "runs": 169,
+      "fails": 15,
+      "fail_rate": 0.0888
+    },
+    {
+      "week": "2008-10-12",
+      "runs": 138,
+      "fails": 8,
+      "fail_rate": 0.058
+    },
+    {
+      "week": "2008-10-19",
+      "runs": 94,
+      "fails": 1,
+      "fail_rate": 0.0106
+    }
+  ],
+  "monthly_fail_rate": {
+    "2008-07": 0.2222,
+    "2008-08": 0.0919,
+    "2008-09": 0.0288,
+    "2008-10": 0.0613
+  },
+  "missingness": {
+    "features_with_missing": 394,
+    "mean_missing_per_run": 6.936,
+    "mean_missing_per_run_fail": 5.856,
+    "mean_missing_per_run_pass": 7.012
+  },
+  "redundant_feature_pairs_over_0.95": 272,
+  "significant_features_q_below_0.05": 20,
+  "top_discriminating_features": [
+    {
+      "feature": "f_059",
+      "p_value": 5.679e-11,
+      "effect": 0.3841,
+      "median_fail": 5.522,
+      "median_pass": 0.7223,
+      "direction": "higher in fails",
+      "q_value": 2.533e-08
+    },
+    {
+      "feature": "f_103",
+      "p_value": 9.55e-09,
+      "effect": 0.3363,
+      "median_fail": -0.0082,
+      "median_pass": -0.0102,
+      "direction": "higher in fails",
+      "q_value": 2.13e-06
+    },
+    {
+      "feature": "f_247",
+      "p_value": 1.072e-06,
+      "effect": 0.3493,
+      "median_fail": 0.0421,
+      "median_pass": 0.0262,
+      "direction": "higher in fails",
+      "q_value": 0.000133
+    },
+    {
+      "feature": "f_519",
+      "p_value": 1.193e-06,
+      "effect": 0.3478,
+      "median_fail": 9.052,
+      "median_pass": 5.633,
+      "direction": "higher in fails",
+      "q_value": 0.000133
+    },
+    {
+      "feature": "f_510",
+      "p_value": 3.453e-06,
+      "effect": 0.2721,
+      "median_fail": 58.23,
+      "median_pass": 46.38,
+      "direction": "higher in fails",
+      "q_value": 0.000308
+    },
+    {
+      "feature": "f_477",
+      "p_value": 3.5e-05,
+      "effect": 0.2426,
+      "median_fail": 6.12,
+      "median_pass": 5.191,
+      "direction": "higher in fails",
+      "q_value": 0.002602
+    },
+    {
+      "feature": "f_205",
+      "p_value": 4.717e-05,
+      "effect": 0.2385,
+      "median_fail": 9.16,
+      "median_pass": 7.66,
+      "direction": "higher in fails",
+      "q_value": 0.002694
+    },
+    {
+      "feature": "f_129",
+      "p_value": 4.832e-05,
+      "effect": 0.238,
+      "median_fail": 0.0,
+      "median_pass": -0.1419,
+      "direction": "higher in fails",
+      "q_value": 0.002694
+    },
+    {
+      "feature": "f_028",
+      "p_value": 6.956e-05,
+      "effect": -0.2342,
+      "median_fail": 68.16,
+      "median_pass": 69.24,
+      "direction": "lower in fails",
+      "q_value": 0.003447
+    },
+    {
+      "feature": "f_033",
+      "p_value": 0.0001614,
+      "effect": 0.2211,
+      "median_fail": 8.894,
+      "median_pass": 8.766,
+      "direction": "higher in fails",
+      "q_value": 0.006579
+    },
+    {
+      "feature": "f_341",
+      "p_value": 0.0001869,
+      "effect": 0.219,
+      "median_fail": 2.721,
+      "median_pass": 2.36,
+      "direction": "higher in fails",
+      "q_value": 0.006579
+    },
+    {
+      "feature": "f_316",
+      "p_value": 0.0001907,
+      "effect": -0.2187,
+      "median_fail": 5.531,
+      "median_pass": 5.862,
+      "direction": "lower in fails",
+      "q_value": 0.006579
+    },
+    {
+      "feature": "f_385",
+      "p_value": 0.0001918,
+      "effect": 0.2671,
+      "median_fail": 0.0089,
+      "median_pass": 0.0066,
+      "direction": "higher in fails",
+      "q_value": 0.006579
+    },
+    {
+      "feature": "f_021",
+      "p_value": 0.0004461,
+      "effect": 0.2067,
+      "median_fail": -5447.0,
+      "median_pass": -5529.0,
+      "direction": "higher in fails",
+      "q_value": 0.01421
+    },
+    {
+      "feature": "f_124",
+      "p_value": 0.0004928,
+      "effect": 0.2041,
+      "median_fail": 15.82,
+      "median_pass": 15.77,
+      "direction": "higher in fails",
+      "q_value": 0.01465
+    }
+  ],
+  "method_notes": [
+    "Descriptive statistics over the whole dataset; models learn from the training split only.",
+    "Pass vs fail per sensor: Mann-Whitney U test, Benjamini-Hochberg correction (q-value); effect is the rank-biserial correlation.",
+    "A difference between failing and passing runs is a correlation, not a cause."
+  ],
+  "figures": {
+    "fail_rate_over_time": "figures\\fail_rate_over_time.png",
+    "missingness": "figures\\missingness.png",
+    "top_features": "figures\\top_features.png",
+    "correlation": "figures\\correlation.png"
+  }
+}

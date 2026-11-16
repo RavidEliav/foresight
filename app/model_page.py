@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app.runs import no_run, read_json, show_figure
+from app.runs import no_run, read_json, run_label, show_figure, show_markdown_file
 
 METRICS = [("pr_auc", "PR-AUC"), ("recall_fail", "Fail recall"),
            ("precision_fail", "Precision"), ("balanced_accuracy", "Balanced accuracy")]
@@ -25,7 +25,7 @@ def render(run_dir: Path | None) -> None:
         return
 
     split = metrics["split"]
-    st.caption(f"Run `{run_dir.name}` · trained on {split['train']['runs']} runs "
+    st.caption(f"{run_label(run_dir).capitalize()} · trained on {split['train']['runs']} runs "
                f"({split['train']['fails']} fails), tested on the next {split['test']['runs']} "
                f"runs ({split['test']['fails']} fails) from {metrics['test_start'][:10]}")
     op = metrics["operating_point"]
@@ -70,5 +70,6 @@ def render(run_dir: Path | None) -> None:
             st.markdown(report.read_text(encoding="utf-8"))
         st.download_button("Download evaluation_report.md", report.read_bytes(),
                            file_name="evaluation_report.md", mime="text/markdown")
-    st.info("The model card written by the Data Scientist crew is added in Phase 3.",
-            icon=":material/construction:")
+    if (run_dir / "model_card.md").exists():
+        with st.expander("Model card (Data Scientist crew)"):
+            show_markdown_file(run_dir, "model_card.md", "Download model_card.md")

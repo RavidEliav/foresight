@@ -1,0 +1,85 @@
+{
+  "status": "PASS",
+  "counts": {
+    "PASS": 15,
+    "WARNING": 0,
+    "ERROR": 0
+  },
+  "checks": [
+    {
+      "name": "insights.md: sections",
+      "status": "PASS",
+      "message": "all 5 required sections present"
+    },
+    {
+      "name": "insights.md: sensor names",
+      "status": "PASS",
+      "message": "every sensor mentioned exists in the data"
+    },
+    {
+      "name": "insights.md: traceable numbers",
+      "status": "PASS",
+      "message": "100% of 27 numbers found in the run files"
+    },
+    {
+      "name": "model_card.md: sections",
+      "status": "PASS",
+      "message": "all 6 required sections present"
+    },
+    {
+      "name": "model_card.md: sensor names",
+      "status": "PASS",
+      "message": "every sensor mentioned exists in the data"
+    },
+    {
+      "name": "model_card.md: traceable numbers",
+      "status": "PASS",
+      "message": "100% of 20 numbers found in the run files"
+    },
+    {
+      "name": "investigation.md: sections",
+      "status": "PASS",
+      "message": "all 4 required sections present"
+    },
+    {
+      "name": "investigation.md: sensor names",
+      "status": "PASS",
+      "message": "every sensor mentioned exists in the data"
+    },
+    {
+      "name": "investigation.md: traceable numbers",
+      "status": "PASS",
+      "message": "100% of 36 numbers found in the run files"
+    },
+    {
+      "name": "investigation.md: cited facts",
+      "status": "PASS",
+      "message": "12 of 12 facts cite a source file"
+    },
+    {
+      "name": "investigation.md: confidence rubric",
+      "status": "PASS",
+      "message": "all 4 hypotheses follow the confidence rubric"
+    },
+    {
+      "name": "engineering_report.md: sections",
+      "status": "PASS",
+      "message": "all 6 required sections present"
+    },
+    {
+      "name": "engineering_report.md: sensor names",
+      "status": "PASS",
+      "message": "every sensor mentioned exists in the data"
+    },
+    {
+      "name": "engineering_report.md: traceable numbers",
+      "status": "PASS",
+      "message": "100% of 28 numbers found in the run files"
+    },
+    {
+      "name": "engineering_report.md: confidence rubric",
+      "status": "PASS",
+      "message": "all 4 hypotheses follow the confidence rubric"
+    }
+  ]
+}

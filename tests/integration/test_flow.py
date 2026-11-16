@@ -14,7 +14,8 @@ RUN_ARTIFACTS = {
     "validation_summary.json", "eda_report.html", "eda_summary.json", "features.csv",
     "feature_spec.json", "model.joblib", "model_metrics.json", "evaluation_report.md",
     "predictions.csv", "oof_predictions.csv", "anomalies.csv", "anomaly_summary.json",
-    "risk_scores.csv", "risk_summary.json", "run_manifest.json",
+    "risk_scores.csv", "risk_summary.json", "run_manifest.json", "insights.md",
+    "model_card.md", "investigation.md", "engineering_report.md", "report_checks.json",
 }
 ALL_STAGES = ["ingest", "analyze", "model", "investigate", "report"]
 
@@ -38,6 +39,9 @@ def test_successful_run_produces_all_artifacts_through_all_stages():
     assert manifest["status"] == "success"
     assert set(manifest["data_sha256"]) == {"secom.data", "secom_labels.data"}
     assert "model.joblib" in manifest["artifacts"]
+    assert set(manifest["crew_usage"]) == {"analyst", "scientist", "investigation", "report"}
+    assert all(usage["mock"] for usage in manifest["crew_usage"].values())
+    assert state.report_checks["status"] == "PASS"
 
 
 def test_invalid_raw_labels_stop_the_run_at_the_contract_gate(secom_env):
@@ -127,3 +131,16 @@ def test_exception_inside_a_stage_fails_gracefully(monkeypatch):
     assert state.stages_completed == ["ingest", "analyze"]
     assert state.failure_reason == "model stage error: disk full"
     assert "disk full" in (Path(state.run_dir) / "failure_report.md").read_text()
+
+
+def test_report_crew_failure_fails_the_run_gracefully(monkeypatch):
+    import foresight.flow as flow_module
+
+    def broken(*_args):
+        raise RuntimeError("LLM provider unavailable")
+
+    monkeypatch.setattr(flow_module, "run_report", broken)
+    state = run_pipeline()
+    assert state.status == "failed"
+    assert state.stages_completed == ["ingest", "analyze", "model", "investigate"]
+    assert state.failure_reason == "report stage error: LLM provider unavailable"

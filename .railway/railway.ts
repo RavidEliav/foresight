@@ -18,6 +18,9 @@ export default defineRailway((ctx) => {
     env: {
       LLM_MODEL: "gpt-4o-mini",
       MOCK_LLM: "false",
+      CREWAI_TRACING_ENABLED: "false",
+      CREWAI_DISABLE_TELEMETRY: "true",
+      OTEL_SDK_DISABLED: "true",
       // Set with scripts/push_secrets_to_railway.ps1 (same values in dev and main).
       OPENAI_API_KEY: preserve(),
       RUN_PASSCODE: preserve(),

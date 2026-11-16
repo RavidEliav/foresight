@@ -1,0 +1,73 @@
+# Crew C: Investigation Crew. Separates measured facts from AI-generated hypotheses.
+agents:
+  anomaly_analyst:
+    role: Anomaly Analyst
+    goal: Explain which runs look abnormal and how that relates to failures.
+    backstory: >
+      You read anomaly scores and statistical process control results. You know that sensors
+      which barely vary in training can produce huge z-scores from small changes.
+    tools: [anomaly_summary, risk_ranking, run_details]
+  signal_investigator:
+    role: Signal Investigator
+    goal: Find the sensors and patterns most associated with failing runs.
+    backstory: >
+      You compare failing and passing runs sensor by sensor and combine statistical tests,
+      model importance and out-of-limit rates. Sensor names are anonymized.
+    tools: [eda_summary, sensor_stats, model_metrics]
+  hypothesis_generator:
+    role: Hypothesis Generator
+    goal: Propose ranked, testable hypotheses without overstating causality.
+    backstory: >
+      You are a careful process-engineering analyst. You label every statement as a fact, an
+      assumption or a hypothesis, and you give each hypothesis a way to verify it.
+    tools: [sensor_stats]
+
+tasks:
+  - name: anomaly_review
+    agent: anomaly_analyst
+    description: |
+      Review the anomalies and the risk ranking.
+
+      Facts:
+      {anomaly_facts}
+
+      Use run_details for one or two of the riskiest runs if useful.
+    expected_output: 4-6 bullet points, each citing its source file.
+
+  - name: signal_review
+    agent: signal_investigator
+    description: |
+      Review which sensors are most associated with failing runs.
+
+      Facts:
+      {eda_facts}
+      {model_facts}
+
+      Note where the statistical tests, the model importance and the out-of-limit rates agree.
+    expected_output: 4-6 bullet points, each citing its source file.
+
+  - name: investigation
+    agent: hypothesis_generator
+    context: [anomaly_review, signal_review]
+    output: investigation.md
+    description: |
+      Write investigation.md. Start with a level-1 heading "# Investigation".
+      Use exactly these sections as level-2 headings (##):
+      Facts, Assumptions, Hypotheses, Suggested verification.
+      - Facts: bullet points of measured results only; end every bullet with [source: <file>].
+      - Assumptions: what the analysis assumes.
+      - Hypotheses: 3-5 numbered hypotheses about the production process (sensors, process
+        conditions, equipment, drift over time). Do not write hypotheses about the model, the
+        risk ranking or the analysis method; their limits belong in the facts. Each states the
+        supporting evidence, is clearly marked as a hypothesis and ends with
+        "Confidence: <high|medium|low> (<reason>)". Confidence rubric:
+        high = q < 0.001 AND supported by a second independent signal (out-of-limit rate,
+        model importance or anomaly flags); quote the q-value in the hypothesis;
+        medium = one strong statistical signal;
+        low = weak or indirect evidence (for example a few individual runs or risk scores).
+      - Suggested verification: how an engineer could test each hypothesis (for example
+        equipment logs, recipe changes, maintenance records, controlled experiments).
+      The model is weak (see its PR-AUC and confidence intervals): describe its performance
+      as modest and never as "effective" or "accurate".
+      {revision_notes}
+    expected_output: A markdown investigation with the four required sections.

@@ -16,6 +16,7 @@ DEFAULT_CONFIG = PROJECT_ROOT / "config" / "settings.yaml"
 class LLMSettings(BaseModel):
     model: str = "gpt-4o-mini"
     temperature: float = 0.0
+    crew_revisions: int = 1
 
 
 class PathSettings(BaseModel):

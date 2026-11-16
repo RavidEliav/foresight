@@ -1,0 +1,274 @@
+{
+  "selected_model": "rf_regularized",
+  "selection_rule": "highest mean PR-AUC in time-ordered CV on the training split",
+  "operating_point": {
+    "rule": "alarm budget: flag the riskiest 10% of the runs scored",
+    "alarm_budget": 0.1,
+    "alarms_in_test": 40,
+    "cutoff_probability_in_test": 0.1624
+  },
+  "threshold": 0.2472,
+  "threshold_rule": "maximizes F2 (recall weighted 2x) on out-of-fold CV predictions",
+  "operating_point_cv": {
+    "alarm_budget": {
+      "recall_fail": 0.3153,
+      "precision_fail": 0.13
+    },
+    "fixed_threshold": {
+      "recall_fail": 0.4458,
+      "precision_fail": 0.0957
+    }
+  },
+  "split": {
+    "train": {
+      "runs": 1175,
+      "fails": 80
+    },
+    "test": {
+      "runs": 392,
+      "fails": 24
+    }
+  },
+  "test_start": "2008-09-29 11:53:00",
+  "baseline_pr_auc": 0.0612,
+  "test_metrics": {
+    "pr_auc": 0.085,
+    "roc_auc": 0.5825,
+    "recall_fail": 0.125,
+    "precision_fail": 0.075,
+    "f1_fail": 0.0938,
+    "balanced_accuracy": 0.5122
+  },
+  "test_metrics_ci95": {
+    "pr_auc": [
+      0.054,
+      0.1508
+    ],
+    "roc_auc": [
+      0.4598,
+      0.7081
+    ],
+    "recall_fail": [
+      0.0,
+      0.3126
+    ],
+    "precision_fail": [
+      0.0,
+      0.175
+    ],
+    "f1_fail": [
+      0.0,
+      0.2265
+    ],
+    "balanced_accuracy": [
+      0.4455,
+      0.6102
+    ]
+  },
+  "test_metrics_fixed_threshold": {
+    "pr_auc": 0.085,
+    "roc_auc": 0.5825,
+    "recall_fail": 0.0,
+    "precision_fail": 0.0,
+    "f1_fail": 0.0,
+    "balanced_accuracy": 0.4959
+  },
+  "confusion_matrix": {
+    "tn": 331,
+    "fp": 37,
+    "fn": 21,
+    "tp": 3
+  },
+  "comparison": {
+    "logreg_l1": {
+      "description": "L1 logistic regression (balanced classes, sparse and interpretable)",
+      "cv_pr_auc_mean": 0.1297,
+      "cv_pr_auc_std": 0.0889,
+      "cv_folds_used": 5,
+      "stratified_cv_pr_auc_mean": 0.1775,
+      "test_pr_auc": 0.0932,
+      "test_roc_auc": 0.5662
+    },
+    "random_forest": {
+      "description": "Random forest on all features (balanced subsamples)",
+      "cv_pr_auc_mean": 0.1155,
+      "cv_pr_auc_std": 0.0672,
+      "cv_folds_used": 5,
+      "stratified_cv_pr_auc_mean": 0.2024,
+      "test_pr_auc": 0.0686,
+      "test_roc_auc": 0.5203
+    },
+    "rf_regularized": {
+      "description": "Regularized random forest (min 10 runs per leaf, 10% of features per split)",
+      "cv_pr_auc_mean": 0.1589,
+      "cv_pr_auc_std": 0.0607,
+      "cv_folds_used": 5,
+      "stratified_cv_pr_auc_mean": 0.1943,
+      "test_pr_auc": 0.085,
+      "test_roc_auc": 0.5825
+    },
+    "rf_select_k": {
+      "description": "Random forest on the top 40 features (ANOVA F-test, chosen inside each training fold)",
+      "cv_pr_auc_mean": 0.1107,
+      "cv_pr_auc_std": 0.0615,
+      "cv_folds_used": 5,
+      "stratified_cv_pr_auc_mean": 0.1985,
+      "test_pr_auc": 0.0711,
+      "test_roc_auc": 0.5305
+    },
+    "baseline_always_pass": {
+      "description": "Always predicts pass (reference)",
+      "cv_pr_auc_mean": 0.0523,
+      "cv_pr_auc_std": 0.0396,
+      "cv_folds_used": 5,
+      "stratified_cv_pr_auc_mean": null,
+      "test_pr_auc": 0.0612,
+      "test_roc_auc": 0.5
+    }
+  },
+  "top_features_native": [
+    {
+      "feature": "f_059",
+      "importance": 0.091187
+    },
+    {
+      "feature": "f_247",
+      "importance": 0.020937
+    },
+    {
+      "feature": "f_033",
+      "importance": 0.014851
+    },
+    {
+      "feature": "f_064",
+      "importance": 0.014508
+    },
+    {
+      "feature": "f_129",
+      "importance": 0.014123
+    },
+    {
+      "feature": "f_103",
+      "importance": 0.013865
+    },
+    {
+      "feature": "f_460",
+      "importance": 0.013736
+    },
+    {
+      "feature": "f_205",
+      "importance": 0.012765
+    },
+    {
+      "feature": "f_468",
+      "importance": 0.011646
+    },
+    {
+      "feature": "f_000",
+      "importance": 0.01098
+    },
+    {
+      "feature": "f_290",
+      "importance": 0.010329
+    },
+    {
+      "feature": "f_385",
+      "importance": 0.008921
+    },
+    {
+      "feature": "f_065",
+      "importance": 0.008546
+    },
+    {
+      "feature": "f_028",
+      "importance": 0.008493
+    },
+    {
+      "feature": "f_213",
+      "importance": 0.008243
+    }
+  ],
+  "top_features_permutation": [
+    {
+      "feature": "f_103",
+      "importance_mean": 0.012762,
+      "importance_std": 0.001333
+    },
+    {
+      "feature": "f_205",
+      "importance_mean": 0.006734,
+      "importance_std": 0.002873
+    },
+    {
+      "feature": "f_460",
+      "importance_mean": 0.005166,
+      "importance_std": 0.003242
+    },
+    {
+      "feature": "f_130",
+      "importance_mean": 0.002972,
+      "importance_std": 0.00218
+    },
+    {
+      "feature": "f_153",
+      "importance_mean": 0.002342,
+      "importance_std": 0.001551
+    },
+    {
+      "feature": "f_033",
+      "importance_mean": 0.00232,
+      "importance_std": 0.003136
+    },
+    {
+      "feature": "f_468",
+      "importance_mean": 0.001917,
+      "importance_std": 0.001853
+    },
+    {
+      "feature": "f_028",
+      "importance_mean": 0.00184,
+      "importance_std": 0.00175
+    },
+    {
+      "feature": "f_129",
+      "importance_mean": 0.001669,
+      "importance_std": 0.002399
+    },
+    {
+      "feature": "f_290",
+      "importance_mean": 0.000983,
+      "importance_std": 0.001541
+    },
+    {
+      "feature": "f_021",
+      "importance_mean": 0.000612,
+      "importance_std": 0.001686
+    },
+    {
+      "feature": "f_079",
+      "importance_mean": 0.000569,
+      "importance_std": 0.001106
+    },
+    {
+      "feature": "f_377",
+      "importance_mean": 0.000204,
+      "importance_std": 0.001678
+    },
+    {
+      "feature": "f_064",
+      "importance_mean": 0.000173,
+      "importance_std": 0.0051
+    },
+    {
+      "feature": "f_065",
+      "importance_mean": 0.00014,
+      "importance_std": 0.001462
+    }
+  ],
+  "figures": {
+    "pr_curve": "figures\\pr_curve.png",
+    "confusion_matrix": "figures\\confusion_matrix.png",
+    "scores_over_time": "figures\\scores_over_time.png",
+    "feature_importance": "figures\\feature_importance.png"
+  }
+}

@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app.runs import read_json
+from app.runs import read_json, run_label
 
 STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:",
                "ERROR": ":material/cancel:"}
@@ -21,7 +21,7 @@ def render(run_dir: Path | None) -> None:
         return
 
     summary = read_json(run_dir, "validation_summary.json")
-    st.caption(f"Run `{run_dir.name}`")
+    st.caption(run_label(run_dir).capitalize())
     status = summary["status"]
     counts = summary["counts"]
     message = (f"Data Contract validation: **{status}** · {counts['PASS']} passed, "

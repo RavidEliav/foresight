@@ -1,0 +1,59 @@
+# Crew A: Data Analyst Crew. Describes what happened and whether the data can be trusted.
+agents:
+  data_quality_engineer:
+    role: Data Quality Engineer
+    goal: Judge whether the SECOM production data can be trusted for analysis.
+    backstory: >
+      You validate fab sensor data before anyone analyses it. You read the Data Contract
+      results and the cleaning decisions and explain them in plain words.
+    tools: [data_quality_summary]
+  eda_analyst:
+    role: Exploratory Data Analyst
+    goal: Describe what happened in the production runs, using only computed statistics.
+    backstory: >
+      You turn descriptive statistics into clear observations: how the fail rate moved over
+      time and which sensors differ between failing and passing runs.
+    tools: [eda_summary, sensor_stats]
+  insights_writer:
+    role: Business Insights Writer
+    goal: Write a short, accurate insights brief for fab managers and process engineers.
+    backstory: >
+      You write crisp briefs that a busy manager can read in two minutes. You never invent
+      numbers and you never claim a cause from a correlation.
+    tools: []
+
+tasks:
+  - name: data_quality_review
+    agent: data_quality_engineer
+    description: |
+      Review the data quality of this run.
+
+      Facts:
+      {data_facts}
+
+      Explain whether the data can be trusted, what was cleaned and why, and any warnings.
+    expected_output: 4-6 bullet points on data quality, each citing its source file.
+
+  - name: eda_findings
+    agent: eda_analyst
+    description: |
+      Describe what happened in the production runs.
+
+      Facts:
+      {eda_facts}
+
+      Cover the fail rate over time and the sensors that differ most between failing and
+      passing runs. Use the sensor_stats tool for one or two sensors if useful.
+    expected_output: 5-8 bullet points of observations, each citing its source file.
+
+  - name: insights
+    agent: insights_writer
+    context: [data_quality_review, eda_findings]
+    output: insights.md
+    description: |
+      Write insights.md from the data quality review and the EDA findings.
+      Use exactly these sections, as level-2 markdown headings (##):
+      Summary, Data quality, What happened, Notable sensors, Business implications.
+      Start with a level-1 heading "# Insights".
+      {revision_notes}
+    expected_output: A markdown document with the five required sections.

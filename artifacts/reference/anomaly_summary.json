@@ -1,0 +1,231 @@
+{
+  "method": {
+    "isolation_forest": "200 trees, fitted on training runs; flag = score above the 95% quantile of training scores",
+    "spc": "robust z-score per sensor (training median and MAD); out of limit = |z| > 3.0"
+  },
+  "score_limit": 0.44159,
+  "runs_flagged": 81,
+  "flag_rate_fail": 0.0865,
+  "flag_rate_pass": 0.0492,
+  "flag_lift": 1.758,
+  "flag_rate_test_fail": 0.0,
+  "mean_out_of_limit_fail": 14.058,
+  "mean_out_of_limit_pass": 12.202,
+  "sensors_more_often_out_of_limit_in_fails": [
+    {
+      "feature": "f_059",
+      "out_of_limit_rate_fail": 0.25,
+      "out_of_limit_rate_pass": 0.0991,
+      "difference": 0.1509
+    },
+    {
+      "feature": "f_040",
+      "out_of_limit_rate_fail": 0.3365,
+      "out_of_limit_rate_pass": 0.2078,
+      "difference": 0.1287
+    },
+    {
+      "feature": "f_247",
+      "out_of_limit_rate_fail": 0.2019,
+      "out_of_limit_rate_pass": 0.08,
+      "difference": 0.122
+    },
+    {
+      "feature": "f_038",
+      "out_of_limit_rate_fail": 0.1635,
+      "out_of_limit_rate_pass": 0.0554,
+      "difference": 0.1081
+    },
+    {
+      "feature": "f_064",
+      "out_of_limit_rate_fail": 0.125,
+      "out_of_limit_rate_pass": 0.0226,
+      "difference": 0.1024
+    },
+    {
+      "feature": "f_385",
+      "out_of_limit_rate_fail": 0.1827,
+      "out_of_limit_rate_pass": 0.0807,
+      "difference": 0.102
+    },
+    {
+      "feature": "f_510",
+      "out_of_limit_rate_fail": 0.1346,
+      "out_of_limit_rate_pass": 0.0403,
+      "difference": 0.0943
+    },
+    {
+      "feature": "f_065",
+      "out_of_limit_rate_fail": 0.1058,
+      "out_of_limit_rate_pass": 0.0232,
+      "difference": 0.0825
+    },
+    {
+      "feature": "f_160",
+      "out_of_limit_rate_fail": 0.1154,
+      "out_of_limit_rate_pass": 0.039,
+      "difference": 0.0764
+    },
+    {
+      "feature": "f_431",
+      "out_of_limit_rate_fail": 0.1154,
+      "out_of_limit_rate_pass": 0.0424,
+      "difference": 0.073
+    },
+    {
+      "feature": "f_071",
+      "out_of_limit_rate_fail": 0.125,
+      "out_of_limit_rate_pass": 0.056,
+      "difference": 0.069
+    },
+    {
+      "feature": "f_205",
+      "out_of_limit_rate_fail": 0.0962,
+      "out_of_limit_rate_pass": 0.0273,
+      "difference": 0.0688
+    },
+    {
+      "feature": "f_041",
+      "out_of_limit_rate_fail": 0.1538,
+      "out_of_limit_rate_pass": 0.0861,
+      "difference": 0.0677
+    },
+    {
+      "feature": "f_210",
+      "out_of_limit_rate_fail": 0.1058,
+      "out_of_limit_rate_pass": 0.041,
+      "difference": 0.0648
+    },
+    {
+      "feature": "f_430",
+      "out_of_limit_rate_fail": 0.1442,
+      "out_of_limit_rate_pass": 0.08,
+      "difference": 0.0643
+    }
+  ],
+  "most_anomalous_runs": [
+    {
+      "run_id": 634,
+      "timestamp": "2008-09-01 19:54:00",
+      "label": 1,
+      "anomaly_score": 0.51788,
+      "n_out_of_limit": 48,
+      "top_signals": "f_204:+115466.8; f_067:+51274.1; f_196:+101.1"
+    },
+    {
+      "run_id": 457,
+      "timestamp": "2008-08-27 22:58:00",
+      "label": 0,
+      "anomaly_score": 0.50044,
+      "n_out_of_limit": 40,
+      "top_signals": "f_204:+115464.8; f_067:+58599.5; f_251:+1871.5"
+    },
+    {
+      "run_id": 1458,
+      "timestamp": "2008-10-11 07:39:00",
+      "label": 0,
+      "anomaly_score": 0.49519,
+      "n_out_of_limit": 34,
+      "top_signals": "f_204:+115475.1; f_067:+7324.4; f_338:+220.5"
+    },
+    {
+      "run_id": 57,
+      "timestamp": "2008-07-30 12:29:00",
+      "label": 1,
+      "anomaly_score": 0.49083,
+      "n_out_of_limit": 42,
+      "top_signals": "f_434:+103.3; f_430:+58.0; f_164:+54.0"
+    },
+    {
+      "run_id": 1489,
+      "timestamp": "2008-10-13 20:53:00",
+      "label": 0,
+      "anomaly_score": 0.47849,
+      "n_out_of_limit": 40,
+      "top_signals": "f_338:+36.8; f_202:+31.6; f_332:+25.1"
+    },
+    {
+      "run_id": 275,
+      "timestamp": "2008-08-18 17:37:00",
+      "label": 0,
+      "anomaly_score": 0.47209,
+      "n_out_of_limit": 40,
+      "top_signals": "f_204:+115468.4; f_067:+51273.0; f_572:+139.1"
+    },
+    {
+      "run_id": 61,
+      "timestamp": "2008-07-31 17:07:00",
+      "label": 0,
+      "anomaly_score": 0.47059,
+      "n_out_of_limit": 32,
+      "top_signals": "f_164:+54.9; f_434:+51.6; f_165:+34.7"
+    },
+    {
+      "run_id": 99,
+      "timestamp": "2008-08-04 23:33:00",
+      "label": 0,
+      "anomaly_score": 0.46802,
+      "n_out_of_limit": 32,
+      "top_signals": "f_434:+103.3; f_430:+58.0; f_164:+53.3"
+    },
+    {
+      "run_id": 759,
+      "timestamp": "2008-09-08 07:41:00",
+      "label": 0,
+      "anomaly_score": 0.46781,
+      "n_out_of_limit": 27,
+      "top_signals": "f_318:+15.1; f_456:+14.1; f_182:+13.2"
+    },
+    {
+      "run_id": 856,
+      "timestamp": "2008-09-15 22:54:00",
+      "label": 0,
+      "anomaly_score": 0.46726,
+      "n_out_of_limit": 30,
+      "top_signals": "f_035:+47.0; f_033:+45.8; f_034:+42.6"
+    },
+    {
+      "run_id": 51,
+      "timestamp": "2008-07-29 21:07:00",
+      "label": 0,
+      "anomaly_score": 0.46601,
+      "n_out_of_limit": 23,
+      "top_signals": "f_164:+54.8; f_434:+51.3; f_165:+35.3"
+    },
+    {
+      "run_id": 385,
+      "timestamp": "2008-08-21 23:08:00",
+      "label": 0,
+      "anomaly_score": 0.46552,
+      "n_out_of_limit": 28,
+      "top_signals": "f_116:-59.8; f_041:+54.2; f_251:+36.2"
+    },
+    {
+      "run_id": 84,
+      "timestamp": "2008-08-04 03:49:00",
+      "label": 0,
+      "anomaly_score": 0.46459,
+      "n_out_of_limit": 28,
+      "top_signals": "f_164:+54.6; f_116:-52.4; f_165:+34.8"
+    },
+    {
+      "run_id": 10,
+      "timestamp": "2008-07-19 21:57:00",
+      "label": 1,
+      "anomaly_score": 0.46443,
+      "n_out_of_limit": 23,
+      "top_signals": "f_195:+101.2; f_164:+54.3; f_434:+50.9"
+    },
+    {
+      "run_id": 163,
+      "timestamp": "2008-08-08 22:25:00",
+      "label": 0,
+      "anomaly_score": 0.46319,
+      "n_out_of_limit": 26,
+      "top_signals": "f_572:+225.0; f_195:+106.4; f_164:+54.3"
+    }
+  ],
+  "figures": {
+    "anomaly_scores": "figures\\anomaly_scores.png"
+  }
+}

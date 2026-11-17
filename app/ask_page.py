@@ -17,7 +17,7 @@ UNLOCKED = "chat_unlocked"
 
 
 def render(run_dir: Path | None, settings: Settings) -> None:
-    st.title("Ask Foresight")
+    ui.page_header("Ask Foresight")
     if run_dir is None:
         no_run("report to ask about")
         return

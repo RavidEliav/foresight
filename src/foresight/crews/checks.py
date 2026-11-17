@@ -5,6 +5,7 @@
 - numbers can be traced to the run's summary files (or were derived from them)
 - facts in the investigation cite a source file
 - hypotheses follow the confidence rubric ("high" needs q < 0.001 and a second signal)
+- the investigation's structured summary matches it (same hypotheses and confidence levels)
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from pathlib import Path
 import pandas as pd
 
 from foresight.crews.facts import allowed_numbers
+from foresight.crews.summary import SUMMARY_FILE
 from foresight.validation.contract import Check, ValidationSummary
 from foresight.validation.gates import GateStatus
 
@@ -43,6 +45,33 @@ Q_VALUE = re.compile(r"\bq(?:[-_ ]?value)?\s*(?:of|=|:|<|≤|≈)?\s*(\d+(?:\.\d
 SECOND_SIGNAL = re.compile(r"out[- ]of[- ](?:control[- ])?limits?|importance|anomal",
                            re.IGNORECASE)
 HIGH_CONFIDENCE_Q = 0.001
+# Causal claims the rules forbid ("is associated with" is the allowed wording). Negations such
+# as "not a proven cause" or "rather than causes", and "leads to verify" (leads as a noun), do
+# not count.
+CAUSAL_TERMS = (r"(?:contribut(?:es|ed|ing)\s+to|contributing\s+factor|caused\s+by|causes|"
+                r"causing|leads?\s+to|leading\s+to|drives|driving)")
+CAUSAL = re.compile(rf"\b{CAUSAL_TERMS}\b(?!\s+(?:verify|check|investigate|follow))",
+                    re.IGNORECASE)
+NEGATED_CAUSAL = re.compile(rf"\b(?:not|never|no|cannot|rather\s+than)\s+(?:[\w'-]+\s+){{0,3}}?"
+                            rf"(?:{CAUSAL_TERMS}|causes?)\b|\broot\s+causes?\b", re.IGNORECASE)
+
+
+def causal_problems(text: str) -> list[str]:
+    """Causal wording outside Background sentences (those restate general knowledge) and
+    outside negations."""
+    claims = re.sub(r"Background:.*?\[background:[^\]]*\]", "", text,
+                    flags=re.IGNORECASE | re.DOTALL)
+    claims = NEGATED_CAUSAL.sub("", claims)
+    return sorted({m.group(0).lower() for m in CAUSAL.finditer(claims)})
+
+
+def causal_check(name: str, text: str) -> Check:
+    found = causal_problems(text)
+    return Check(name=f"{name}: no causal claims",
+                 status=GateStatus.WARNING if found else GateStatus.PASS,
+                 message=f"causal wording in hypotheses: {', '.join(found)} (write \"is "
+                         "associated with\")" if found
+                 else "hypotheses state associations, not causes")
 
 
 def headings(text: str) -> list[str]:
@@ -128,9 +157,52 @@ def confidence_problems(hypotheses: list[str]) -> list[str]:
     return problems
 
 
+def _sensor_check(name: str, text: str, known_sensors: set[str]) -> Check:
+    unknown = sorted(set(SENSOR.findall(text)) - known_sensors)
+    return Check(
+        name=f"{name}: sensor names",
+        status=GateStatus.WARNING if unknown else GateStatus.PASS,
+        message=f"unknown sensors mentioned: {', '.join(unknown[:5])}" if unknown
+        else "every sensor mentioned exists in the data")
+
+
+def _number_check(name: str, text: str, allowed: set[str]) -> Check:
+    numbers = checkable_numbers(text)
+    untraced = [n for n in numbers if not traced(n, allowed)]
+    share = 1 - len(untraced) / len(numbers) if numbers else 1.0
+    return Check(
+        name=f"{name}: traceable numbers",
+        status=GateStatus.PASS if share >= TRACEABLE_SHARE else GateStatus.WARNING,
+        message=f"{share:.0%} of {len(numbers)} numbers found in the run files"
+        + (f"; not found: {', '.join(untraced[:5])}" if untraced else ""))
+
+
+def check_summary_output(text: str, run_dir: Path, known_sensors: set[str],
+                         allowed: set[str]) -> list[Check]:
+    """investigation_summary.json: valid, consistent with investigation.md, known sensors and
+    traceable numbers in its prose."""
+    from foresight.crews.summary import InvestigationSummary, check_summary, summary_text
+
+    path = run_dir / "investigation.md"
+    hypotheses = (numbered_items(section(path.read_text(encoding="utf-8"), "Hypotheses"))
+                  if path.exists() else [])
+    checks = check_summary(text, run_dir, hypotheses)
+    if checks[0].status == GateStatus.PASS:
+        summary = InvestigationSummary.model_validate_json(text)
+        prose = summary_text(summary)
+        claims = "\n".join([summary.headline, *(f"{h.title} {h.evidence}"
+                                                for h in summary.hypotheses)])
+        checks += [_sensor_check(SUMMARY_FILE, prose, known_sensors),
+                   _number_check(SUMMARY_FILE, prose, allowed),
+                   causal_check(SUMMARY_FILE, claims)]
+    return checks
+
+
 def check_output(name: str, text: str, run_dir: Path, known_sensors: set[str],
                  allowed: set[str],
                  knowledge: dict[str, set[str]] | None = None) -> list[Check]:
+    if name == SUMMARY_FILE:
+        return check_summary_output(text, run_dir, known_sensors, allowed)
     present = headings(text)
     missing = [s for s in REQUIRED_SECTIONS.get(name, [])
                if not any(h.startswith(s.lower()) for h in present)]
@@ -139,22 +211,8 @@ def check_output(name: str, text: str, run_dir: Path, known_sensors: set[str],
         status=GateStatus.WARNING if missing else GateStatus.PASS,
         message=f"missing sections: {', '.join(missing)}" if missing
         else f"all {len(REQUIRED_SECTIONS.get(name, []))} required sections present")]
-
-    unknown = sorted(set(SENSOR.findall(text)) - known_sensors)
-    checks.append(Check(
-        name=f"{name}: sensor names",
-        status=GateStatus.WARNING if unknown else GateStatus.PASS,
-        message=f"unknown sensors mentioned: {', '.join(unknown[:5])}" if unknown
-        else "every sensor mentioned exists in the data"))
-
-    numbers = checkable_numbers(text)
-    untraced = [n for n in numbers if not traced(n, allowed)]
-    share = 1 - len(untraced) / len(numbers) if numbers else 1.0
-    checks.append(Check(
-        name=f"{name}: traceable numbers",
-        status=GateStatus.PASS if share >= TRACEABLE_SHARE else GateStatus.WARNING,
-        message=f"{share:.0%} of {len(numbers)} numbers found in the run files"
-        + (f"; not found: {', '.join(untraced[:5])}" if untraced else "")))
+    checks.append(_sensor_check(name, text, known_sensors))
+    checks.append(_number_check(name, text, allowed))
 
     if name == "investigation.md":
         facts_text = section(text, "Facts")
@@ -181,6 +239,7 @@ def check_output(name: str, text: str, run_dir: Path, known_sensors: set[str],
             message="no numbered hypotheses found" if not hypotheses
             else "; ".join(problems) if problems
             else f"all {len(hypotheses)} hypotheses follow the confidence rubric"))
+        checks.append(causal_check(name, section(text, "Hypotheses")))
         checks.append(background_check(name, text, knowledge))
     return checks
 

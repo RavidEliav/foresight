@@ -14,33 +14,33 @@
       "engineering_report.md",
       "validation_summary.json"
     ],
-    "chunks": 38
+    "chunks": 41
   },
   "chunks": [
     {
       "source": "insights.md",
       "section": "Summary",
-      "text": "The data quality review indicates a high level of confidence in the integrity of the dataset, with successful validation and low missing values. However, a 6.6% fail rate in production runs warrants monitoring for potential underlying issues."
+      "text": "The data quality review indicates a high level of confidence in the integrity of the dataset, with successful validation checks and a low missing cells ratio. However, the analysis of production runs reveals a fail rate of 6.6%, with notable variations in monthly failure rates and significant differences in sensor readings between failing and passing runs."
     },
     {
       "source": "insights.md",
       "section": "Data quality",
-      "text": "The data contract validation passed with 16 checks, confirming that the data meets required standards without warnings or errors [source: validation_summary.json]. The remaining missing cell ratio is 1.56%, suggesting that most data is complete and usable for analysis [source: data_profile.json]. The cleaning process involved dropping 28 features due to over 50% missing values and 116 constant features, resulting in 446 features retained from an initial 590 [source: cleaning_report.json]. Additional cleaning steps included removing exact duplicate runs and sorting by timestamp, enhancing the dataset's usability [source: cleaning_report.json]."
+      "text": "The data contract validation passed with 16 checks, indicating that the data meets the required standards without any warnings or errors [source: validation_summary.json]. The remaining missing cells ratio after cleaning is 1.56%, suggesting that most of the data is complete and usable for analysis [source: data_profile.json]. The cleaning process involved dropping 28 features with more than 50% missing values and 116 constant features, resulting in 446 features retained from an initial 590 [source: cleaning_report.json]. Additionally, exact duplicate runs were removed, and the runs were sorted by timestamp to maintain chronological order [source: cleaning_report.json]."
     },
     {
       "source": "insights.md",
       "section": "What happened",
-      "text": "Between July 19, 2008, and October 17, 2008, there were 1567 production runs recorded, with a fail rate of 6.6%, translating to 104 failing runs [source: data_profile.json]. The monthly fail rate showed a decline from 22.2% in July to 2.9% in September, followed by a slight increase to 6.1% in October [source: eda_summary.json]. A total of 20 sensors were identified as significantly differing between failing and passing runs, with a q-value of less than 0.05 [source: eda_summary.json]."
+      "text": "Between July 19, 2008, and October 17, 2008, there were 1567 production runs recorded, with a fail rate of 6.6%, corresponding to 104 failing runs [source: data_profile.json]. The monthly fail rate showed a significant decline from July (22.2%) to September (2.9%), before rising again to 6.1% in October [source: eda_summary.json]. A total of 20 sensors were identified as differing significantly between failing and passing runs, with a Mann-Whitney U test and Benjamini-Hochberg q-value of less than 0.05 [source: eda_summary.json]."
     },
     {
       "source": "insights.md",
       "section": "Notable sensors",
-      "text": "Sensor f_059 exhibited a median value of 0.7223 for passing runs and 5.522 for failing runs, with a strong association with failure indicated by an effect size of 0.38 and a q-value of 2.5e-08 [source: eda_summary.json]. Sensor f_103 showed a median of -0.0102 for passing runs compared to -0.0082 for failing runs, with an effect size of 0.34 and a q-value of 2.1e-06 [source: eda_summary.json]. Sensor f_247 had a median of 0.0262 for passing runs and 0.0421 for failing runs, with an effect size of 0.35 and a q-value of 0.00013 [source: eda_summary.json]. Sensor f_519 had a median of 5.633 for passing runs and 9.052 for failing runs, also indicating an association with failure, with an effect size of 0.35 and a q-value of 0.00013 [source: eda_summary.json]."
+      "text": "Several sensors showed strong associations with failing runs. Sensor f_059 had a median value of 0.7223 for passing runs and 5.522 for failing runs, with an effect size of 0.38 and a q-value of 2.5e-08 [source: eda_summary.json]. Sensor f_103 showed a median of -0.0102 for passing runs compared to -0.0082 for failing runs, with an effect size of 0.34 and a q-value of 2.1e-06 [source: eda_summary.json]. Sensor f_247 had a median of 0.0262 for passing runs and 0.0421 for failing runs, with an effect size of 0.35 and a q-value of 0.00013 [source: eda_summary.json]. Lastly, sensor f_519 had a median of 5.633 for passing runs and 9.052 for failing runs, with an effect size of 0.35 and a q-value of 0.00013 [source: eda_summary.json]."
     },
     {
       "source": "insights.md",
       "section": "Business implications",
-      "text": "While the data can be trusted for analysis, the 6.6% fail rate should be monitored as it may be associated with underlying issues in the production process. The significant differences observed in specific sensors between failing and passing runs could provide insights for targeted improvements in production reliability."
+      "text": "The findings suggest that while the overall data quality is high, the observed fail rate and the significant differences in sensor readings between passing and failing runs warrant further investigation. The decline in monthly fail rates may indicate improvements in processes or conditions, but the rise in October suggests potential issues that need to be addressed. The notable sensors associated with failure could be targeted for closer monitoring or further analysis to enhance operational reliability."
     },
     {
       "source": "evaluation_report.md",
@@ -70,17 +70,17 @@
     {
       "source": "model_card.md",
       "section": "Model purpose",
-      "text": "The rf_regularized model is designed to identify the riskiest 10% of runs scored, aiming to flag critical failures during operational periods. It is intended to enhance safety and reliability by detecting potential failures before they reach customers [source: model_metrics.json]."
+      "text": "The rf_regularized model is designed to identify failing runs in a system by predicting potential failures based on sensor data. Its primary goal is to flag the riskiest 10% of runs for further investigation, thereby assisting engineers in maintaining system reliability [source: model_metrics.json]."
     },
     {
       "source": "model_card.md",
       "section": "Training data",
-      "text": "The model was trained on historical data, utilizing time-ordered cross-validation to evaluate its performance. The training data included various sensor readings, although specific details about the dataset are not provided [source: model_metrics.json]."
+      "text": "The model was trained on historical data, utilizing time-ordered cross-validation to ensure that the training and testing phases reflect real-world scenarios. The training data included various sensor readings, although specific details about the dataset are not disclosed [source: model_metrics.json]."
     },
     {
       "source": "model_card.md",
       "section": "Metrics",
-      "text": "The performance metrics for the rf_regularized model are summarized in the table below: | Metric | Value | 95% Confidence Interval | |--------------|---------|-------------------------| | PR-AUC | 0.085 | 0.054 - 0.151 | | Recall | 0.125 | 0.000 - 0.313 | | Precision | 0.075 | N/A | | False Alarms | 37 | N/A | These metrics indicate that while the model performs better than random guessing, its overall effectiveness in detecting failures is limited [source: model_metrics.json]."
+      "text": "The performance of the rf_regularized model is summarized in the following table: | Metric | Value | 95% Confidence Interval | |--------------|---------|-------------------------| | PR-AUC | 0.085 | 0.054 - 0.151 | | Recall | 0.125 | 0.000 - 0.313 | | Precision | 0.075 | N/A | | False Alarms | 37 | N/A | | Fails Caught | 3 | N/A | | Missed Fails | 21 | N/A | The model achieved a mean PR-AUC of 0.1589 during training, which is significantly better than the random guessing baseline PR-AUC of 0.061 [source: model_metrics.json]."
     },
     {
       "source": "model_card.md",
@@ -90,27 +90,32 @@
     {
       "source": "model_card.md",
       "section": "Limitations",
-      "text": "- The model generated 37 false alarms, which could lead to unnecessary scrap or rework [source: model_metrics.json]. - The confidence intervals for the performance metrics are wide, indicating uncertainty in the model's reliability [source: model_metrics.json]. - The model relies on a limited number of important sensors (f_103, f_205, f_460, f_130, f_153, f_033, f_468, f_028), which may not capture all relevant information [source: model_metrics.json]."
+      "text": "- The model generated 37 false alarms, which could lead to unnecessary scrap or rework [source: model_metrics.json]. - The model relies on a limited number of important sensors (f_103, f_205, f_460, f_130, f_153, f_033, f_468, f_028), which may not capture the full complexity of the system [source: model_metrics.json]."
     },
     {
       "source": "model_card.md",
       "section": "Ethical considerations",
-      "text": "- The potential for missed failures reaching customers raises concerns about product safety and reliability [source: model_metrics.json]. - The high rate of false alarms could lead to automation bias, where operators may become desensitized to alarms, potentially ignoring critical warnings [source: model_metrics.json]. - The model's reliance on anonymized sensors limits transparency and accountability in understanding its decision-making process [source: model_metrics.json]. - The presence of drift in the model's performance suggests that it may not adapt well to changing conditions, which could lead to ethical implications in operational contexts [source: model_metrics.json]."
+      "text": "- The high rate of missed failures (21 out of 24) poses a risk of failing runs reaching customers, potentially leading to safety issues or product failures [source: model_metrics.json]. - The presence of false alarms may lead to automation bias, where operators may overly rely on the model's predictions, potentially ignoring critical manual checks [source: model_metrics.json]. - The wide confidence intervals associated with the model's performance metrics indicate uncertainty, which could mislead stakeholders about the reliability of the model [source: model_metrics.json]. - The model's performance may be affected by drift, raising concerns about its long-term applicability and the need for continuous monitoring and retraining [source: model_metrics.json]."
+    },
+    {
+      "source": "model_card.md",
+      "section": "Ethical considerations",
+      "text": "- The anonymization of sensor data limits the ability to understand the physical implications of the model's predictions, which could hinder accountability and transparency in decision-making [source: model_metrics.json]."
     },
     {
       "source": "model_card.md",
       "section": "Intended use",
-      "text": "The rf_regularized model is intended for use in operational settings where identifying critical failures is essential. It is specifically designed to assist engineers in flagging the riskiest runs, although users should be aware of its limitations and the potential consequences of missed detections and false alarms [source: model_metrics.json]."
+      "text": "The rf_regularized model is intended for use by engineers and analysts in identifying potentially failing runs within a system. It is designed to assist in prioritizing cases for further investigation, but users should be aware of its limitations, particularly regarding recall and precision. Continuous monitoring and potential retraining are recommended to maintain its effectiveness over time [source: model_metrics.json]."
     },
     {
       "source": "investigation.md",
       "section": "Facts",
-      "text": "- A total of 81 runs were flagged as anomalous, with a flag rate of 8.6% for failing runs compared to 4.9% for passing runs, resulting in a lift of 1.758 [source: anomaly_summary.json]. - Failing runs had an average of 14.058 sensors out of control limits, while passing runs had 12.202 sensors out of limits [source: anomaly_summary.json]. - Specific sensors showed significant discrepancies in out-of-control limits between failing and passing runs: f_040 was out of limits in 33.7% of failing runs versus 20.8% of passing runs, and f_059 was out of limits in 25.0% of failing runs compared to 9.9% of passing runs [source: anomaly_summary.json]."
+      "text": "- A total of 81 runs were flagged as anomalous, with a flag rate of 8.6% for failing runs compared to 4.9% for passing runs, resulting in a lift of 1.758 [source: anomaly_summary.json]. - Failing runs had an average of 14.058 sensors out of control limits, while passing runs had 12.202 sensors out of limits [source: anomaly_summary.json]. - Specific sensors showed significant discrepancies between failing and passing runs: f_040 was out of limits in 33.7% of failing runs versus 20.8% of passing runs, and f_059 was out of limits in 25.0% of failing runs compared to 9.9% of passing runs [source: anomaly_summary.json]."
     },
     {
       "source": "investigation.md",
       "section": "Facts",
-      "text": "- The recommended risk ranking method, which combines model predictions with anomaly scores, identified the riskiest 10% of test runs (40 alarms) and found 5 of 24 failing runs, yielding a precision of 12.5% [source: risk_summary.json]. - Among the 5 most similar past runs to the test runs, the failure rate was 5.8% for failing test runs and 4.7% for passing test runs, indicating a training failure rate of 6.8%. This suggests that the similarity evidence is relatively weak [source: similar_runs.json]. - Run 1458, which is a passing run, had a risk score of 0.996 with the strongest signals being f_204:+115475.1, f_067:+7324.4, and f_338:+220.5 [source: risk_summary.json]."
+      "text": "- The recommended risk ranking is a combined approach, which, when flagging the riskiest 10% of test runs (40 alarms), identifies 5 out of 24 failing runs, yielding a precision of 12.5% [source: risk_summary.json]. - Among the 5 most similar past runs to the test runs, the failure rate was 5.8% for failing test runs and 4.7% for passing test runs, indicating a weak association with the training failure rate of 6.8% [source: similar_runs.json]. - The strongest signals for the riskiest run (1458, labeled as pass) included f_204 with a signal of +115475.1, which should be treated with caution due to the potential for large z-scores from small changes in sensors that barely varied during training [source: risk_summary.json]."
     },
     {
       "source": "investigation.md",
@@ -120,7 +125,7 @@
     {
       "source": "investigation.md",
       "section": "Facts",
-      "text": "- The sensor f_205 has a median of 7.66 for passing runs and 9.16 for failing runs, with an effect size of 0.24 and a q-value of 0.0027, indicating it is associated with failing runs [source: eda_summary.json]. - Among the most important sensors identified by permutation importance in the model, f_103 and f_205 are included, reinforcing their relevance in predicting failing runs [source: model_metrics.json]. - The overall monthly fail rates show a significant decline from 22.2% in July 2008 to 2.9% in September 2008, suggesting that while some sensors are consistently associated with failures, the overall trend indicates improvements in performance over time [source: eda_summary.json]."
+      "text": "- The sensor f_205 has a median of 7.66 for passing runs and 9.16 for failing runs, with an effect size of 0.24 and a q-value of 0.0027, indicating it is associated with failing runs [source: eda_summary.json]. - Among the most important sensors identified by permutation importance in the model, f_103 and f_205 are included, reinforcing their relevance in predicting failing runs [source: model_metrics.json]. - The model's test PR-AUC of 0.085 indicates limited predictive power, but the inclusion of sensors like f_103 and f_205, which show significant differences in failing versus passing runs, suggests they may still hold importance in identifying risks [source: model_metrics.json]."
     },
     {
       "source": "investigation.md",
@@ -130,72 +135,82 @@
     {
       "source": "investigation.md",
       "section": "Assumptions",
-      "text": "- The analysis assumes that the sensors' performance is consistent across different runs and that the observed differences in sensor readings are indicative of underlying issues affecting run outcomes. - It is assumed that the flagged anomalous runs are representative of the overall production process and that the failure rates observed in the test runs reflect true operational performance."
+      "text": "- The analysis assumes that the sensors' readings are reliable indicators of the process conditions and that the differences observed between failing and passing runs are meaningful. - It is assumed that the flagged anomalous runs are indicative of underlying issues in the production process. - The analysis assumes that the historical data used for comparison is representative of the current production conditions."
     },
     {
       "source": "investigation.md",
       "section": "Hypotheses",
-      "text": "1. The sensor f_059 is associated with failing runs, as evidenced by its significant difference in median values (0.7223 for passing runs vs 5.522 for failing runs) and a strong q-value of 2.5e-08. Confidence: high (q < 0.001 and supported by the out-of-limit rate of 25.0% for failing runs vs 9.9% for passing runs). 2. The sensor f_103 is associated with failing runs, indicated by its median values (-0.0102 for passing runs vs -0.0082 for failing runs) and a q-value of 2.1e-06. Confidence: high (q < 0.001 and supported by its importance in the model). 3. The sensor f_040's higher out-of-limit rate in failing runs (33.7%) compared to passing runs (20.8%) suggests it may be a contributing factor to failures. Confidence: medium (strong statistical signal). 4."
+      "text": "1. The sensor f_059 is associated with failing runs, as it shows a significant difference in out-of-limit rates (25.0% for failing runs vs 9.9% for passing runs) and has a strong statistical significance with a q-value of 2.5e-08. Confidence: high (q < 0.001 and supported by the out-of-limit rate). Background: A significant difference between failing and passing runs shows an association. The sensor could reflect the cause, be affected by the same underlying condition, or differ for an unrelated reason such as the time period in which most failures happened. [background: nonparametric_tests.md \u00a7 Association, not cause] 2."
     },
     {
       "source": "investigation.md",
       "section": "Hypotheses",
-      "text": "Confidence: medium (strong statistical signal). 4. The overall decline in monthly fail rates from 22.2% to 2.9% indicates that improvements in the production process may be reducing the impact of certain sensors over time. Confidence: low (indirect evidence from historical trends). Background: Preventive maintenance resets many slow drifts, so runs just after maintenance can behave differently from runs just before it, suggesting that failures may cluster in parts of the maintenance cycle [background: process_drift_and_maintenance.md \u00a7 Maintenance cycles]. 5. The low precision of the risk ranking method (12.5%) indicates that while some sensors are associated with failures, the model's ability to predict failures is modest and may require further refinement."
+      "text": "[background: nonparametric_tests.md \u00a7 Association, not cause] 2. The sensor f_103 is associated with failing runs, as it has a median of -0.0102 for passing runs compared to -0.0082 for failing runs, with a q-value of 2.1e-06 indicating strong statistical significance. Confidence: high (q < 0.001 and supported by the model importance). Background: A significant difference between failing and passing runs shows an association. The sensor could reflect the cause, be affected by the same underlying condition, or differ for an unrelated reason such as the time period in which most failures happened. [background: nonparametric_tests.md \u00a7 Association, not cause] 3."
     },
     {
       "source": "investigation.md",
       "section": "Hypotheses",
-      "text": "Confidence: low (weak evidence from model performance)."
+      "text": "[background: nonparametric_tests.md \u00a7 Association, not cause] 3. The sensor f_247 is associated with failing runs, as it has a median of 0.0421 for failing runs compared to 0.0262 for passing runs, with a q-value of 0.00013 indicating strong statistical significance. Confidence: high (q < 0.001 and supported by the model importance). Background: A significant difference between failing and passing runs shows an association. The sensor could reflect the cause, be affected by the same underlying condition, or differ for an unrelated reason such as the time period in which most failures happened. [background: nonparametric_tests.md \u00a7 Association, not cause] 4."
+    },
+    {
+      "source": "investigation.md",
+      "section": "Hypotheses",
+      "text": "[background: nonparametric_tests.md \u00a7 Association, not cause] 4. The average number of sensors out of control limits is associated with failing runs, as failing runs had an average of 14.058 sensors out of limits compared to 12.202 for passing runs. Confidence: medium (strong statistical signal). Background: A significant difference between failing and passing runs shows an association. The sensor could reflect the cause, be affected by the same underlying condition, or differ for an unrelated reason such as the time period in which most failures happened. [background: nonparametric_tests.md \u00a7 Association, not cause]"
     },
     {
       "source": "investigation.md",
       "section": "Suggested verification",
-      "text": "- To verify hypothesis 1, engineers could analyze the operational logs for sensor f_059 during both failing and passing runs to identify any patterns or anomalies. - For hypothesis 2, a controlled experiment could be conducted to isolate the effects of sensor f_103 on run outcomes by manipulating its readings and observing the results. - To test hypothesis 3, a detailed review of the maintenance records and the timing of failures related to sensor f_040 could provide insights into its role in the production process. - For hypothesis 4, a longitudinal study comparing sensor performance and failure rates over time could help confirm the impact of improvements in the production process."
+      "text": "- Engineers could review equipment logs and maintenance records to identify any correlations between sensor readings and maintenance events, particularly focusing on the timing of failures relative to maintenance cycles. - Controlled experiments could be conducted to isolate the effects of specific sensors, such as f_059 and f_103, on the production process to confirm their associations with failures. - Further analysis of the flagged anomalous runs could be performed to determine if there are common patterns or conditions that lead to failures, including examining the environmental conditions during those runs."
     },
     {
       "source": "investigation.md",
       "section": "Suggested verification",
-      "text": "- To address hypothesis 5, engineers could refine the risk ranking method by incorporating additional features or adjusting the model parameters to enhance its predictive capability."
+      "text": "- A deeper investigation into the historical performance of sensors, particularly f_059, f_103, and f_247, could provide insights into their reliability and any potential drift over time."
     },
     {
       "source": "engineering_report.md",
       "section": "What was detected",
-      "text": "A total of 1567 production runs were recorded between July 19, 2008, and October 17, 2008, with a fail rate of 6.6%, translating to 104 failing runs [source: data_profile.json]. Notably, 81 runs were flagged as anomalous, resulting in a flag rate of 8.6% for failing runs compared to 4.9% for passing runs [source: anomaly_summary.json]."
+      "text": "The analysis of production runs from July 19, 2008, to October 17, 2008, revealed a fail rate of 6.6%, corresponding to 104 failing runs out of 1567 recorded runs [source: data_profile.json]. Notably, there were significant variations in monthly failure rates, with a decline from 22.2% in July to 2.9% in September, followed by an increase to 6.1% in October [source: eda_summary.json]. Additionally, 20 sensors exhibited significant differences in readings between failing and passing runs, indicating potential areas for further investigation [source: eda_summary.json]."
     },
     {
       "source": "engineering_report.md",
       "section": "Supporting statistical evidence",
-      "text": "The data quality review indicates a high level of confidence in the dataset's integrity, with successful validation and a low missing value ratio of 1.56% [source: validation_summary.json]. Significant differences were observed in specific sensors between failing and passing runs, with sensor f_059 showing a median of 5.522 for failing runs compared to 0.7223 for passing runs, and a strong q-value of 2.5e-08 [source: eda_summary.json]. Sensor f_103 also exhibited notable differences, with a median of -0.0102 for passing runs versus -0.0082 for failing runs, and a q-value of 2.1e-06 [source: eda_summary.json]."
+      "text": "The data quality review confirmed a high level of confidence in the dataset, with successful validation checks and a low missing cells ratio of 1.56% after cleaning [source: validation_summary.json]. The Mann-Whitney U test indicated that several sensors, including f_059, f_103, and f_247, had strong statistical significance in differentiating between failing and passing runs, with q-values less than 0.001 [source: eda_summary.json]. Specifically, sensor f_059 had a median of 5.522 for failing runs compared to 0.7223 for passing runs, while f_103 and f_247 also showed notable differences in their median values [source: eda_summary.json]."
     },
     {
       "source": "engineering_report.md",
       "section": "Important abnormal parameters",
-      "text": "The average number of sensors out of control limits was 14.058 for failing runs, compared to 12.202 for passing runs [source: anomaly_summary.json]. Specific sensors, such as f_040 and f_059, had higher out-of-limit rates in failing runs (33.7% and 25.0%, respectively) compared to passing runs (20.8% and 9.9%, respectively) [source: anomaly_summary.json]. The model's risk ranking method identified a precision of only 12.5% in predicting failures, indicating limitations in its modest performance [source: risk_summary.json]."
+      "text": "The investigation flagged 81 runs as anomalous, with a flag rate of 8.6% for failing runs compared to 4.9% for passing runs [source: anomaly_summary.json]. Failing runs had an average of 14.058 sensors out of control limits, while passing runs had 12.202 sensors out of limits [source: anomaly_summary.json]. Specific sensors, such as f_040 and f_059, showed significant discrepancies in out-of-limit rates between failing and passing runs, further highlighting the need for targeted monitoring [source: anomaly_summary.json]."
     },
     {
       "source": "engineering_report.md",
       "section": "Hypotheses",
-      "text": "1. The sensor f_059 is associated with failing runs, as evidenced by its significant difference in median values (0.7223 for passing runs vs 5.522 for failing runs) and a strong q-value of 2.5e-08. Confidence: high (q < 0.001 and supported by the out-of-limit rate of 25.0% for failing runs vs 9.9% for passing runs). 2. The sensor f_103 is associated with failing runs, indicated by its median values (-0.0102 for passing runs vs -0.0082 for failing runs) and a q-value of 2.1e-06. Confidence: high (q < 0.001 and supported by its importance in the model). 3. The sensor f_040's higher out-of-limit rate in failing runs (33.7%) compared to passing runs (20.8%) suggests it may be associated with failures. Confidence: medium (strong statistical signal). 4."
+      "text": "1. The sensor f_059 is associated with failing runs, as it shows a significant difference in out-of-limit rates (25.0% for failing runs vs 9.9% for passing runs) and has a strong statistical significance with a q-value of 2.5e-08. Confidence: high (q < 0.001 and supported by the out-of-limit rate). Background: A significant difference between failing and passing runs shows an association. The sensor could reflect the cause, be affected by the same underlying condition, or differ for an unrelated reason such as the time period in which most failures happened. [background: nonparametric_tests.md \u00a7 Association, not cause] 2."
     },
     {
       "source": "engineering_report.md",
       "section": "Hypotheses",
-      "text": "Confidence: medium (strong statistical signal). 4. The overall decline in monthly fail rates from 22.2% to 2.9% indicates that improvements in the production process may be associated with reducing the impact of certain sensors over time. Confidence: low (indirect evidence from historical trends). Background: Preventive maintenance resets many slow drifts, so runs just after maintenance can behave differently from runs just before it, suggesting that failures may cluster in parts of the maintenance cycle [background: process_drift_and_maintenance.md \u00a7 Maintenance cycles]. 5. The low precision of the risk ranking method (12.5%) indicates that while some sensors are associated with failures, the model's ability to predict failures is modest and may require further refinement."
+      "text": "[background: nonparametric_tests.md \u00a7 Association, not cause] 2. The sensor f_103 is associated with failing runs, as it has a median of -0.0102 for passing runs compared to -0.0082 for failing runs, with a q-value of 2.1e-06 indicating strong statistical significance. Confidence: high (q < 0.001 and supported by the model importance). Background: A significant difference between failing and passing runs shows an association. The sensor could reflect the cause, be affected by the same underlying condition, or differ for an unrelated reason such as the time period in which most failures happened. [background: nonparametric_tests.md \u00a7 Association, not cause] 3."
     },
     {
       "source": "engineering_report.md",
       "section": "Hypotheses",
-      "text": "Confidence: low (weak evidence from model performance)."
+      "text": "[background: nonparametric_tests.md \u00a7 Association, not cause] 3. The sensor f_247 is associated with failing runs, as it has a median of 0.0421 for failing runs compared to 0.0262 for passing runs, with a q-value of 0.00013 indicating strong statistical significance. Confidence: high (q < 0.001 and supported by the model importance). Background: A significant difference between failing and passing runs shows an association. The sensor could reflect the cause, be affected by the same underlying condition, or differ for an unrelated reason such as the time period in which most failures happened. [background: nonparametric_tests.md \u00a7 Association, not cause] 4."
+    },
+    {
+      "source": "engineering_report.md",
+      "section": "Hypotheses",
+      "text": "[background: nonparametric_tests.md \u00a7 Association, not cause] 4. The average number of sensors out of control limits is associated with failing runs, as failing runs had an average of 14.058 sensors out of limits compared to 12.202 for passing runs. Confidence: medium (strong statistical signal). Background: A significant difference between failing and passing runs shows an association. The sensor could reflect the cause, be affected by the same underlying condition, or differ for an unrelated reason such as the time period in which most failures happened. [background: nonparametric_tests.md \u00a7 Association, not cause]"
     },
     {
       "source": "engineering_report.md",
       "section": "Recommended next steps",
-      "text": "To verify hypothesis 1, engineers should analyze operational logs for sensor f_059 during both failing and passing runs to identify patterns. For hypothesis 2, a controlled experiment isolating the effects of sensor f_103 on run outcomes should be conducted. To test hypothesis 3, a review of maintenance records related to sensor f_040 could provide insights into its role in failures. A longitudinal study comparing sensor performance and failure rates over time is recommended for hypothesis 4. Lastly, refining the risk ranking method by incorporating additional features or adjusting model parameters is suggested for hypothesis 5."
+      "text": "Engineers should review equipment logs and maintenance records to identify correlations between sensor readings and maintenance events, particularly focusing on the timing of failures relative to maintenance cycles. Controlled experiments could be conducted to isolate the effects of specific sensors, such as f_059 and f_103, on the production process. Further analysis of the flagged anomalous runs should be performed to determine common patterns or conditions leading to failures. Additionally, a deeper investigation into the historical performance of sensors f_059, f_103, and f_247 could provide insights into their reliability and any potential drift over time."
     },
     {
       "source": "engineering_report.md",
       "section": "Data quality and model limitations",
-      "text": "The data quality review indicates successful validation with low missing values, but the model's performance metrics reveal limitations, including a low PR-AUC of 0.085 and a recall of 0.125, suggesting modest performance in distinguishing between failing and non-failing runs [source: model_metrics.json]. The model generated 37 false alarms, which could lead to unnecessary scrap or rework [source: model_metrics.json]. Additionally, the reliance on a limited number of important sensors may not capture all relevant information, raising concerns about the model's reliability [source: model_metrics.json]."
+      "text": "The data quality review indicated a high level of integrity, but the model's test PR-AUC of 0.085 suggests limited predictive power in distinguishing between failing and non-failing runs [source: model_metrics.json]. The model generated 37 false alarms, which could lead to unnecessary scrap or rework [source: model_metrics.json]. Furthermore, the reliance on a limited number of important sensors may not capture the full complexity of the system, raising concerns about the model's long-term applicability and the need for continuous monitoring and retraining [source: model_metrics.json]."
     },
     {
       "source": "validation_summary.json",

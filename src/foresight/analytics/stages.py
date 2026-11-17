@@ -20,6 +20,7 @@ from foresight.analytics.similar import EMBEDDINGS_FILE, SIMILAR_CSV, SIMILAR_JS
 from foresight.crews.checks import check_outputs
 from foresight.crews.facts import background_passages
 from foresight.crews.runner import run_crew
+from foresight.crews.summary import SUMMARY_FILE
 from foresight.rag.index import CHUNKS_FILE, VECTORS_FILE, build_run_index
 from foresight.settings import Settings
 from foresight.utils.logging import get_logger
@@ -58,7 +59,7 @@ def ensure_similar_fact(run_dir: Path) -> None:
 
 
 REPORT_INPUTS = ("insights.md", "model_card.md", "investigation.md")
-CREW_OUTPUTS = [*REPORT_INPUTS, "engineering_report.md"]
+CREW_OUTPUTS = [*REPORT_INPUTS, SUMMARY_FILE, "engineering_report.md"]
 REVISIONS_FILE = "crew_revisions.json"
 
 

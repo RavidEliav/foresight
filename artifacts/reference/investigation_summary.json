@@ -1,0 +1,47 @@
+{
+  "headline": "The investigation indicates associations between specific sensors and failing runs, with modest predictive evidence from the model. Findings suggest that certain sensors may reflect underlying issues in the production process.",
+  "key_findings": [
+    {
+      "text": "81 runs were flagged as anomalous, with a flag rate of 8.6% for failing runs compared to 4.9% for passing runs, resulting in a lift of 1.758.",
+      "source": "anomaly_summary.json"
+    },
+    {
+      "text": "Failing runs had an average of 14.058 sensors out of control limits, while passing runs had 12.202 sensors out of limits.",
+      "source": "anomaly_summary.json"
+    },
+    {
+      "text": "The sensor f_059 showed significant discrepancies, being out of limits in 25.0% of failing runs versus 9.9% of passing runs.",
+      "source": "anomaly_summary.json"
+    }
+  ],
+  "hypotheses": [
+    {
+      "number": 1,
+      "title": "The sensor f_059 is associated with failing runs.",
+      "confidence": "high",
+      "evidence": "f_059 shows a significant difference in out-of-limit rates (25.0% for failing vs 9.9% for passing runs) with a q-value of 2.5e-08.",
+      "verify": "Review equipment logs and maintenance records to correlate f_059 readings with failure events."
+    },
+    {
+      "number": 2,
+      "title": "The sensor f_103 is associated with failing runs.",
+      "confidence": "high",
+      "evidence": "f_103 has a median of -0.0102 for passing runs compared to -0.0082 for failing runs, with a q-value of 2.1e-06.",
+      "verify": "Conduct controlled experiments to isolate the effects of f_103 on production outcomes."
+    },
+    {
+      "number": 3,
+      "title": "The sensor f_247 is associated with failing runs.",
+      "confidence": "high",
+      "evidence": "f_247 has a median of 0.0421 for failing runs compared to 0.0262 for passing runs, with a q-value of 0.00013.",
+      "verify": "Analyze historical performance data of f_247 to assess its reliability and drift over time."
+    },
+    {
+      "number": 4,
+      "title": "The average number of sensors out of control limits is associated with failing runs.",
+      "confidence": "medium",
+      "evidence": "Failing runs had an average of 14.058 sensors out of limits compared to 12.202 for passing runs.",
+      "verify": "Investigate flagged anomalous runs for common patterns or conditions leading to failures."
+    }
+  ]
+}

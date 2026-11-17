@@ -1,7 +1,7 @@
 {
-  "run_id": "20261116T230530460877Z",
-  "created_at": "2026-11-16T23:09:02.860029+00:00",
-  "git_commit": "419c0643a1028cf3f4598d70d6b9573e91ae42f7",
+  "run_id": "20261117T144953604456Z",
+  "created_at": "2026-11-17T14:53:29.736470+00:00",
+  "git_commit": "c29040b9b7efe92c4dba617b7a4d59919aec6273",
   "environment": "local",
   "python": "3.11.7",
   "packages": {
@@ -49,19 +49,19 @@
     }
   ],
   "durations_s": {
-    "ingest": 0.9237,
-    "analyze": 29.54,
-    "model": 104.6113,
-    "investigate": 47.6741,
-    "report": 29.5675
+    "ingest": 1.0324,
+    "analyze": 29.4521,
+    "model": 89.6244,
+    "investigate": 53.305,
+    "report": 39.9474
   },
   "crew_usage": {
     "analyst": {
-      "seconds": 24.46,
-      "total_tokens": 4552,
-      "prompt_tokens": 3178,
+      "seconds": 22.76,
+      "total_tokens": 4645,
+      "prompt_tokens": 3196,
       "cached_prompt_tokens": 0,
-      "completion_tokens": 1374,
+      "completion_tokens": 1449,
       "reasoning_tokens": 0,
       "cache_creation_tokens": 0,
       "successful_requests": 4,
@@ -69,11 +69,11 @@
       "revisions": 0
     },
     "scientist": {
-      "seconds": 22.17,
-      "total_tokens": 4376,
-      "prompt_tokens": 2888,
+      "seconds": 23.63,
+      "total_tokens": 4514,
+      "prompt_tokens": 2908,
       "cached_prompt_tokens": 0,
-      "completion_tokens": 1488,
+      "completion_tokens": 1606,
       "reasoning_tokens": 0,
       "cache_creation_tokens": 0,
       "successful_requests": 3,
@@ -81,23 +81,23 @@
       "revisions": 0
     },
     "investigation": {
-      "seconds": 29.45,
-      "total_tokens": 6736,
-      "prompt_tokens": 4624,
+      "seconds": 35.53,
+      "total_tokens": 9826,
+      "prompt_tokens": 6976,
       "cached_prompt_tokens": 1280,
-      "completion_tokens": 2112,
+      "completion_tokens": 2850,
       "reasoning_tokens": 0,
       "cache_creation_tokens": 0,
-      "successful_requests": 3,
+      "successful_requests": 4,
       "mock": false,
       "revisions": 0
     },
     "report": {
-      "seconds": 26.37,
-      "total_tokens": 7809,
-      "prompt_tokens": 5868,
+      "seconds": 36.2,
+      "total_tokens": 8419,
+      "prompt_tokens": 6294,
       "cached_prompt_tokens": 0,
-      "completion_tokens": 1941,
+      "completion_tokens": 2125,
       "reasoning_tokens": 0,
       "cache_creation_tokens": 0,
       "successful_requests": 2,
@@ -106,7 +106,7 @@
     }
   },
   "report_checks": {
-    "PASS": 18,
+    "PASS": 26,
     "WARNING": 0,
     "ERROR": 0
   },
@@ -125,7 +125,7 @@
       "engineering_report.md",
       "validation_summary.json"
     ],
-    "chunks": 38
+    "chunks": 41
   },
   "data_sha256": {
     "secom.data": "20f0e7ee434f7dcbae0eea9ffff009a2b57f42d6b0dc9a5bd4f00782c0a3374c",
@@ -146,6 +146,7 @@
     "features.csv",
     "insights.md",
     "investigation.md",
+    "investigation_summary.json",
     "model.joblib",
     "model_card.md",
     "model_metrics.json",

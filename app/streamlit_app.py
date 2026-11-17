@@ -15,7 +15,8 @@ import streamlit as st  # noqa: E402
 from app import ui  # noqa: E402
 from foresight.settings import load_settings  # noqa: E402
 
-st.set_page_config(page_title="Foresight", page_icon=":material/insights:", layout="wide")
+st.set_page_config(page_title="Foresight", page_icon=str(ui.LOGO), layout="wide")
+ui.apply_style()
 settings = load_settings()
 VIEW_KEY = "view_run"
 PINNED_KEY = "view_pinned"  # True once the user picks a run in the sidebar
@@ -46,7 +47,7 @@ def _runs_dir() -> Path:
 def _run_selector() -> Path | None:
     """Sidebar choice of the run shown on the result pages (newest successful run first)."""
     from app.run_page import NEW_RUN_KEY
-    from app.runs import describe_run, viewable_runs
+    from app.runs import describe_run, run_details, viewable_runs
 
     runs = viewable_runs(_runs_dir(), settings.resolve(settings.paths.reference_run_dir))
     if not runs:
@@ -59,7 +60,10 @@ def _run_selector() -> Path | None:
         st.session_state[VIEW_KEY] = options[0]  # follow the newest run until one is picked
     choice = st.sidebar.selectbox("Results shown", options, key=VIEW_KEY,
                                   format_func=lambda p: describe_run(Path(p)),
+                                  help="The run whose results the pages show. Times are in "
+                                       "your local time zone.",
                                   on_change=lambda: st.session_state.update({PINNED_KEY: True}))
+    st.sidebar.caption(run_details(Path(choice)))
     return Path(choice)
 
 

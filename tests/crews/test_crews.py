@@ -1,3 +1,4 @@
+import json
 import re
 import shutil
 from pathlib import Path
@@ -27,6 +28,7 @@ from foresight.crews.runner import (
     load_config,
     run_crew,
 )
+from foresight.crews.summary import SUMMARY_FILE, extract_json
 from foresight.data.ingest import run_ingest
 from foresight.settings import load_settings
 from foresight.tools.run_tools import build_tools
@@ -62,10 +64,13 @@ def test_crew_configs_are_consistent(crew):
         assert task["agent"] in config["agents"]
         assert set(task.get("context", [])) <= set(task_names[:i])  # only earlier tasks
     outputs = [t for t in config["tasks"] if "output" in t]
-    assert len(outputs) == 1 and outputs[0]["output"] in REQUIRED_SECTIONS
-    assert "{revision_notes}" in outputs[0]["description"]
+    markdown = [t for t in outputs if t["output"].endswith(".md")]
+    assert len(markdown) == 1 and markdown[0]["output"] in REQUIRED_SECTIONS
+    assert all("{revision_notes}" in t["description"] for t in outputs)
+    assert [t["output"] for t in outputs if t not in markdown] == (
+        [SUMMARY_FILE] if crew == "investigation" else [])
     descriptions = " ".join(t["description"] for t in config["tasks"])
-    for heading in REQUIRED_SECTIONS[outputs[0]["output"]]:
+    for heading in REQUIRED_SECTIONS[markdown[0]["output"]]:
         assert heading in descriptions
 
 
@@ -78,21 +83,95 @@ def test_build_crew_attaches_tools_and_rules(run_dir):
     llm = MockLLM(model="mock", run_dir=run_dir)
     crew, tasks, outputs = build_crew("investigation", run_dir, llm, all_facts(run_dir))
     assert len(crew.agents) == 3 and list(tasks) == ["anomaly_review", "signal_review",
-                                                     "investigation"]
-    assert outputs == {"investigation": "investigation.md"}
+                                                     "investigation", "investigation_summary"]
+    assert outputs == {"investigation": "investigation.md",
+                       "investigation_summary": SUMMARY_FILE}
     assert {t.name for t in crew.agents[0].tools} == {"anomaly_summary", "risk_ranking",
                                                       "run_details", "find_similar_runs"}
     assert {t.name for t in crew.agents[2].tools} == {"sensor_stats", "search_knowledge"}
     assert "Never claim a root cause" in tasks["investigation"].description
     assert "[source: anomaly_summary.json]" in tasks["anomaly_review"].description
+    summary_task = tasks["investigation_summary"].description
+    assert '{"headline": "...",' in summary_task  # JSON braces survive the prompt formatting
+    assert "Return only the JSON object" in summary_task and "[source: <file>]" not in summary_task
 
 
 def test_mocked_crews_write_outputs_that_pass_all_checks(run_dir):
-    for name in REQUIRED_SECTIONS:
+    for name in [*REQUIRED_SECTIONS, SUMMARY_FILE]:
         assert (run_dir / name).exists()
-    summary = check_outputs(run_dir, list(REQUIRED_SECTIONS))
+    summary = check_outputs(run_dir, [*REQUIRED_SECTIONS, SUMMARY_FILE])
     assert summary.status == GateStatus.PASS, [c for c in summary.checks if c.status != "PASS"]
     assert (run_dir / "report_checks.json").exists()
+    checked = json.loads((run_dir / "report_checks.json").read_text(encoding="utf-8"))
+    assert any(c["name"].startswith(SUMMARY_FILE) for c in checked["checks"])
+
+
+def _summary_with(run_dir, change) -> str:
+    data = json.loads((run_dir / SUMMARY_FILE).read_text(encoding="utf-8"))
+    change(data)
+    return json.dumps(data)
+
+
+@pytest.mark.parametrize(("change", "suffix", "expected"), [
+    (lambda d: d["hypotheses"][0].update(confidence="high"), "matches the investigation",
+     "says high"),
+    (lambda d: d["hypotheses"].pop(), "matches the investigation", "cards for"),
+    (lambda d: d["key_findings"][0].update(source="invented.json"), "finding sources",
+     "invented.json"),
+    (lambda d: d["key_findings"][0].update(source="spc_control_charts.md"), "finding sources",
+     "not files of this run"),
+    (lambda d: d["hypotheses"][0].update(title="x" * 200), "format", "hypotheses.0.title"),
+    (lambda d: d["hypotheses"][0].update(evidence="Sensor f_999 drifts upward over time."),
+     "sensor names", "f_999"),
+    (lambda d: d["hypotheses"][0].update(title="Sensor f_020 contributes to failing runs."),
+     "no causal claims", "contributes to"),
+])
+def test_summary_must_match_the_investigation(run_dir, context, change, suffix, expected):
+    checks = check_output(SUMMARY_FILE, _summary_with(run_dir, change), run_dir, *context)
+    flagged = next(c for c in checks if c.name.endswith(suffix))
+    assert flagged.status == GateStatus.WARNING and expected in flagged.message
+
+
+@pytest.mark.parametrize(("text", "flagged"), [
+    ("1. f_205 may be a contributing factor to failures. Confidence: medium", True),
+    ("1. Drift in f_059 leads to failing runs. Confidence: low", True),
+    ("1. f_059 is associated with failing runs. This is a correlation, not a proven cause. "
+     "Background: Chamber deposits cause slow drift "
+     "[background: process_drift_and_maintenance.md § Drift]. Confidence: medium", False),
+    ("1. f_059 is associated with failing runs; these are leads, not proven causes. "
+     "Confidence: medium", False),
+])
+def test_causal_wording_in_hypotheses_is_reported(run_dir, context, text, flagged):
+    base = (run_dir / "investigation.md").read_text(encoding="utf-8")
+    start = base.index("## Hypotheses")
+    end = base.index("## Suggested verification")
+    changed = base[:start] + f"## Hypotheses\n{text}\n\n" + base[end:]
+    checks = check_output("investigation.md", changed, run_dir, *context)
+    status = _status(checks, "no causal claims")
+    assert status == (GateStatus.WARNING if flagged else GateStatus.PASS)
+
+
+@pytest.mark.parametrize(("sentence", "found"), [
+    ("These are leads to verify, not proven causes.", []),
+    ("The findings are associations rather than causes.", []),
+    ("f_059 is not caused by drift.", []),
+    ("This does not lead to failures by itself.", []),
+    ("The data cannot establish causes.", []),
+    ("f_059 is the largest contributor to the model's PR-AUC.", []),
+    ("f_059 contributes to failing runs.", ["contributes to"]),
+    ("Drift in f_103 leads to failures.", ["leads to"]),
+])
+def test_causal_wording_ignores_negations_and_nouns(sentence, found):
+    from foresight.crews.checks import causal_problems
+
+    assert causal_problems(sentence) == found
+
+
+def test_summary_json_is_extracted_from_an_llm_answer():
+    assert json.loads(extract_json('```json\n{"headline": "ok"}\n```')) == {"headline": "ok"}
+    assert extract_json("no json here") == "no json here\n"
+    checks = check_output(SUMMARY_FILE, "no json here", Path("."), set(), set())
+    assert [c.status for c in checks] == [GateStatus.WARNING]
 
 
 def test_investigation_separates_facts_assumptions_hypotheses(run_dir):

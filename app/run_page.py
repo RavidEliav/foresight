@@ -20,33 +20,34 @@ STAGE_ICON = {"pending": ":material/radio_button_unchecked:", "running": ":mater
               "done": ":material/check_circle:", "failed": ":material/cancel:",
               "skipped": ":material/block:"}
 STATUS_TEXT = {"queued": "is starting", "running": "is running", "success": "completed",
-               "failed": "stopped", "timeout": "was stopped by the timeout guard",
-               "interrupted": "was interrupted (the app restarted)"}
+               "failed": "stopped", "timeout": "was stopped by the time limit",
+               "interrupted": "was interrupted"}
 NEW_RUN_KEY = "new_run"  # read by the sidebar run selector
 
 
 def render(settings: Settings, results_page=None) -> None:
-    st.title("Run Pipeline")
+    ui.page_header("Run Pipeline")
     st.caption("Validate the data, analyze it, investigate failures and write the report. "
                "Runs continue in the background: you can refresh or leave this page.")
     if not settings.run_passcode:
         st.info("Pipeline runs are disabled: RUN_PASSCODE is not configured.")
 
-    source = st.radio("Dataset", [SECOM, UPLOAD], key="source", horizontal=True)
-    upload = None
-    if source == UPLOAD:
-        upload = st.file_uploader("CSV file", type=["csv"], key="upload")
-        st.caption("Columns: `timestamp` (dd/mm/yyyy HH:MM:SS or ISO), `label` (-1 pass, 1 fail) "
-                   "and the 590 sensor columns in SECOM order. The file goes through the same "
-                   "Data Contract checks as the built-in data.")
-        template = _template(settings)
-        if template is not None:
-            st.download_button("Download a template (SECOM in this format)", template,
-                               file_name="secom_upload_format.csv", mime="text/csv")
-
-    entered = st.text_input("Passcode", type="password", key="passcode")
-    if st.button("Run pipeline", key="run", type="primary"):
-        _start(settings, entered, source, upload)
+    with st.container(key="card-launch"):
+        ui.label("Start a run")
+        source = st.radio("Dataset", [SECOM, UPLOAD], key="source", horizontal=True)
+        upload = None
+        if source == UPLOAD:
+            upload = st.file_uploader("CSV file", type=["csv"], key="upload")
+            st.caption("Columns: `timestamp` (dd/mm/yyyy HH:MM:SS or ISO), `label` (-1 pass, "
+                       "1 fail) and the 590 sensor columns in SECOM order. The file goes "
+                       "through the same Data Contract checks as the built-in data.")
+            template = _template(settings)
+            if template is not None:
+                st.download_button("Download a template (SECOM in this format)", template,
+                                   file_name="secom_upload_format.csv", mime="text/csv")
+        entered = st.text_input("Passcode", type="password", key="passcode", width=360)
+        if st.button("Run pipeline", key="run", type="primary"):
+            _start(settings, entered, source, upload)
 
     watched = st.session_state.get("watch_run")
     active = jobs.active_run(settings)
@@ -97,33 +98,59 @@ def _live(run_dir: str) -> None:
         st.rerun()
 
 
+GATE_NAMES = {"data_contract": "Data Contract", "features_present": "Features",
+              "evidence_present": "Evidence"}
+STAGE_COLORS = {"pending": "gray", "running": "blue", "done": "green", "failed": "red",
+                "skipped": "gray"}
+
+
 def _render_progress(progress: RunProgress, run_dir: Path, results_page=None) -> None:
+    from app.messages import explain_failure
+    from app.runs import local_time
+
     status = progress.effective_status()
-    message = f"Run {progress.run_id} {STATUS_TEXT.get(status, status)} · {progress.dataset}"
+    took = _minutes(progress)
+    message = (f"Run {STATUS_TEXT.get(status, status)} · {progress.dataset} · started "
+               f"{local_time(progress.started_at)}"
+               + (f" · {took} min" if took is not None and status not in ACTIVE else ""))
     if status in ACTIVE:
         current = progress.current
         st.info(message + (f" · now: {current.label}" if current else ""),
                 icon=":material/progress_activity:")
     elif status == "success":
         st.success(message, icon=":material/check_circle:")
-    elif status == "interrupted":
-        st.warning(message + ". Start a new run.", icon=":material/warning:")
     else:
-        ui.friendly_error(f"{message}: {progress.failure_reason}")
+        reasons, hint = explain_failure(progress, _test_fraction())
+        ui.friendly_error(f"{message}\n\n" + "\n".join(f"- {r}" for r in reasons))
+        if hint:
+            st.info(hint, icon=":material/lightbulb:")
 
-    for stage in progress.stages:
-        crew = f" + {stage.crew}" if stage.crew else ""
-        took = f" · {stage.seconds:.0f} s" if stage.seconds is not None else ""
-        st.markdown(f"{STAGE_ICON[stage.status]} **{stage.label}**{crew}{took}")
-    for gate in progress.gates:
-        st.markdown(f"Gate **{gate['gate']}**: {gate['status']}")
+    for column, stage in zip(st.columns(len(progress.stages)), progress.stages, strict=True):
+        with column, st.container(key=f"card-stage-{stage.name}", height="stretch"):
+            color = STAGE_COLORS.get(stage.status, "gray")
+            seconds = f" · {stage.seconds:.0f} s" if stage.seconds is not None else ""
+            st.markdown(f":{color}[{STAGE_ICON[stage.status]}] **{stage.label}**")
+            st.caption((stage.crew or "deterministic only") + seconds)
+    if progress.gates:
+        st.markdown("Gates: " + " ".join(
+            f":{ui.STATUS_COLORS.get(g['status'], 'gray')}-badge["
+            f"{GATE_NAMES.get(g['gate'], g['gate'])}: {g['status']}]" for g in progress.gates))
 
     if status == "success":
         if results_page is not None:
             st.page_link(results_page, label="See the results, starting with Data Quality",
                          icon=":material/verified:")
     elif status not in ACTIVE:
-        _show_failed_checks(run_dir)
+        with st.expander("Technical details"):
+            if progress.failure_reason:
+                st.code(progress.failure_reason, language=None, wrap_lines=True)
+            _show_failed_checks(run_dir)
+
+
+def _test_fraction() -> float:
+    from foresight.settings import load_settings
+
+    return load_settings().analytics.test_fraction
 
 
 def _show_failed_checks(run_dir: Path) -> None:
@@ -134,11 +161,13 @@ def _show_failed_checks(run_dir: Path) -> None:
     failed = [c for c in summary["checks"] if c["status"] != "PASS"]
     if failed:
         st.markdown("**Data checks that did not pass**")
-        st.dataframe(pd.DataFrame(failed)[["status", "name", "message"]], hide_index=True,
-                     width="stretch")
+        ui.table(pd.DataFrame(failed)[["status", "name", "message"]])
 
 
 def _history(settings: Settings) -> None:
+    from app.messages import explain_failure
+    from app.runs import local_time
+
     runs = jobs.list_runs(settings)
     if not runs:
         return
@@ -148,17 +177,19 @@ def _history(settings: Settings) -> None:
             manifest = _manifest(jobs.runs_dir(settings) / p.run_id)
             usage = manifest.get("crew_usage", {})
             checks = manifest.get("report_checks") or {}
+            status = p.effective_status()
+            reason = ("" if status in (*ACTIVE, "success")
+                      else " ".join(explain_failure(p, settings.analytics.test_fraction)[0]))
             rows.append({
-                "run": p.run_id,
-                "started (UTC)": p.started_at.replace("T", " ")[:16],
+                "started": local_time(p.started_at, "%d %b, %H:%M"),
                 "dataset": p.dataset,
-                "status": p.effective_status(),
+                "status": status,
                 "minutes": _minutes(p),
                 "tokens": sum(u.get("total_tokens", 0) for u in usage.values()) or None,
                 "report checks": f"{checks.get('PASS', 0)} PASS" if checks else "",
-                "reason": p.failure_reason or "",
+                "why it stopped": reason,
             })
-        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        ui.table(pd.DataFrame(rows), max_rows=30)
 
 
 def _manifest(run_dir: Path) -> dict:

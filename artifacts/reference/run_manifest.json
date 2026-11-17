@@ -1,7 +1,7 @@
 {
-  "run_id": "20261116T101718597912Z",
-  "created_at": "2026-11-16T10:20:57.941422+00:00",
-  "git_commit": "3edfb115cfea33331444bc014c97af8c794603c6",
+  "run_id": "20261116T230530460877Z",
+  "created_at": "2026-11-16T23:09:02.860029+00:00",
+  "git_commit": "419c0643a1028cf3f4598d70d6b9573e91ae42f7",
   "environment": "local",
   "python": "3.11.7",
   "packages": {
@@ -49,19 +49,19 @@
     }
   ],
   "durations_s": {
-    "ingest": 0.9054,
-    "analyze": 31.0097,
-    "model": 108.536,
-    "investigate": 52.3813,
-    "report": 26.4915
+    "ingest": 0.9237,
+    "analyze": 29.54,
+    "model": 104.6113,
+    "investigate": 47.6741,
+    "report": 29.5675
   },
   "crew_usage": {
     "analyst": {
-      "seconds": 24.43,
-      "total_tokens": 4536,
-      "prompt_tokens": 3116,
+      "seconds": 24.46,
+      "total_tokens": 4552,
+      "prompt_tokens": 3178,
       "cached_prompt_tokens": 0,
-      "completion_tokens": 1420,
+      "completion_tokens": 1374,
       "reasoning_tokens": 0,
       "cache_creation_tokens": 0,
       "successful_requests": 4,
@@ -69,11 +69,11 @@
       "revisions": 0
     },
     "scientist": {
-      "seconds": 28.06,
-      "total_tokens": 4355,
-      "prompt_tokens": 2871,
+      "seconds": 22.17,
+      "total_tokens": 4376,
+      "prompt_tokens": 2888,
       "cached_prompt_tokens": 0,
-      "completion_tokens": 1484,
+      "completion_tokens": 1488,
       "reasoning_tokens": 0,
       "cache_creation_tokens": 0,
       "successful_requests": 3,
@@ -81,11 +81,11 @@
       "revisions": 0
     },
     "investigation": {
-      "seconds": 37.73,
-      "total_tokens": 5636,
-      "prompt_tokens": 3647,
+      "seconds": 29.45,
+      "total_tokens": 6736,
+      "prompt_tokens": 4624,
       "cached_prompt_tokens": 1280,
-      "completion_tokens": 1989,
+      "completion_tokens": 2112,
       "reasoning_tokens": 0,
       "cache_creation_tokens": 0,
       "successful_requests": 3,
@@ -93,11 +93,11 @@
       "revisions": 0
     },
     "report": {
-      "seconds": 25.12,
-      "total_tokens": 7921,
-      "prompt_tokens": 5804,
+      "seconds": 26.37,
+      "total_tokens": 7809,
+      "prompt_tokens": 5868,
       "cached_prompt_tokens": 0,
-      "completion_tokens": 2117,
+      "completion_tokens": 1941,
       "reasoning_tokens": 0,
       "cache_creation_tokens": 0,
       "successful_requests": 2,
@@ -106,9 +106,26 @@
     }
   },
   "report_checks": {
-    "PASS": 15,
+    "PASS": 18,
     "WARNING": 0,
     "ERROR": 0
+  },
+  "rag_index": {
+    "embedding_model": "all-MiniLM-L6-v2",
+    "retrieval": "cosine + 0.3 x section-title keyword share",
+    "chunk_chars": 800,
+    "overlap_chars": 120,
+    "top_k": 4,
+    "min_similarity": 0.25,
+    "files": [
+      "insights.md",
+      "evaluation_report.md",
+      "model_card.md",
+      "investigation.md",
+      "engineering_report.md",
+      "validation_summary.json"
+    ],
+    "chunks": 38
   },
   "data_sha256": {
     "secom.data": "20f0e7ee434f7dcbae0eea9ffff009a2b57f42d6b0dc9a5bd4f00782c0a3374c",
@@ -134,9 +151,14 @@
     "model_metrics.json",
     "oof_predictions.csv",
     "predictions.csv",
+    "rag_chunks.json",
+    "rag_index.npz",
     "report_checks.json",
     "risk_scores.csv",
     "risk_summary.json",
+    "run_embeddings.csv",
+    "similar_runs.csv",
+    "similar_runs.json",
     "validation_summary.json"
   ]
 }

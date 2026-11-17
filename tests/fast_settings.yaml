@@ -32,3 +32,5 @@ paths:
   reference_run_dir: artifacts/reference
   data_raw_dir: data/raw
   contract_path: config/dataset_contract.json
+  knowledge_dir: knowledge
+  models_dir: runs/.models

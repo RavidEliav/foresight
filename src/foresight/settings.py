@@ -25,6 +25,17 @@ class PathSettings(BaseModel):
     reference_run_dir: Path = Path("artifacts/reference")
     data_raw_dir: Path = Path("data/raw")
     contract_path: Path = Path("config/dataset_contract.json")
+    knowledge_dir: Path = Path("knowledge")
+    models_dir: Path = Path("runs/.models")  # embedding model + knowledge index cache (volume)
+
+
+class RagSettings(BaseModel):
+    embedding_model: str = "all-MiniLM-L6-v2"  # local ONNX model, 384 dimensions, no API cost
+    chunk_chars: int = 800
+    overlap_chars: int = 120
+    top_k: int = 4
+    min_similarity: float = 0.25     # below this the chat refuses without calling the LLM
+    knowledge_k: int = 3
 
 
 class DataSettings(BaseModel):
@@ -48,6 +59,8 @@ class AnalyticsSettings(BaseModel):
     anomaly_quantile: float = 0.95
     z_limit: float = 3.0
     top_features: int = 15
+    similar_components: int = 30     # PCA run embedding (fitted on training runs)
+    similar_k: int = 5               # nearest past runs per query run
 
 
 class AppSettings(BaseModel):
@@ -64,6 +77,7 @@ class Settings(BaseModel):
     data: DataSettings = DataSettings()
     analytics: AnalyticsSettings = AnalyticsSettings()
     app: AppSettings = AppSettings()
+    rag: RagSettings = RagSettings()
     mock_llm: bool = False
     run_passcode: str = ""
     environment: str = "local"
@@ -90,6 +104,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
         "FORESIGHT_LOGS_DIR": "logs_dir",
         "FORESIGHT_DATA_DIR": "data_raw_dir",
         "FORESIGHT_CONTRACT_PATH": "contract_path",
+        "FORESIGHT_MODELS_DIR": "models_dir",
     }
     for env_name, field in path_overrides.items():
         if value := os.getenv(env_name):

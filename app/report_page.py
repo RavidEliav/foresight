@@ -27,6 +27,9 @@ def render(run_dir: Path | None) -> None:
     risk = read_json(run_dir, "risk_summary.json")
     if risk:
         _render_risk(risk)
+    similar = read_json(run_dir, "similar_runs.json")
+    if similar:
+        _render_similar(run_dir, similar)
 
     st.subheader("Anomalies")
     cols = st.columns(4)
@@ -104,6 +107,27 @@ def _render_investigation(path: Path) -> None:
     st.download_button("Download investigation.md", path.read_bytes(),
                        file_name="investigation.md", mime="text/markdown",
                        key="download-investigation.md")
+
+
+def _render_similar(run_dir: Path, similar: dict) -> None:
+    st.subheader("Similar past runs")
+    fail, ok = (similar["neighbour_fail_share_for_failing_test_runs"],
+                similar["neighbour_fail_share_for_passing_test_runs"])
+    if fail is not None and ok is not None:
+        st.markdown(f"Among the {similar['k']} most similar past runs, **{fail:.1%}** failed for "
+                    f"failing test runs and **{ok:.1%}** for passing ones (training fail rate "
+                    f"{similar['train_fail_rate']:.1%}). The closer these are, the less a run's "
+                    "overall sensor profile says about failure.")
+    rows = [{"run": q["run_id"], "why": q["reason"], "label": "fail" if q["label"] else "pass",
+             "similar past runs that failed": f"{q['neighbours_failed']} of {q['k']}",
+             "nearest distance": q["nearest_distance"],
+             "most similar runs": ", ".join(str(n["run_id"]) for n in q["neighbours"])}
+            for q in similar["queries"]]
+    if rows:
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    with st.expander("Run map and method"):
+        st.caption(similar["method"])
+        show_figure(run_dir, similar["figures"].get("run_map"))
 
 
 def _render_risk(risk: dict) -> None:

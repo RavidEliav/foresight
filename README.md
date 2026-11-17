@@ -4,7 +4,7 @@
 
 Author: **Ravid Eliav** · AI Developers Course, Final Project
 
-> **Status:** Phase 4 (full app) done: runs start in the background with live progress and a timeout guard, CSV uploads go through the same Data Contract, runs are kept on a Railway volume, and Playwright covers scenarios E1–E6. Next: Phase 5 (RAG stretch: "Ask Foresight").
+> **Status:** Phase 5 (RAG stretch) done: similar-run search, a cited knowledge base for the Investigation crew, and the "Ask Foresight" chat that answers only from a run's reports. Next: Phase 6 (UX and visual design).
 
 | Environment | Branch | URL |
 |---|---|---|
@@ -62,7 +62,7 @@ Each crew runs right after the deterministic work of its stage. Agents, tasks an
 |---|---|---|---|---|
 | Data Analyst | analyze | Data Quality Engineer, Exploratory Data Analyst, Business Insights Writer | `data_quality_summary`, `eda_summary`, `sensor_stats` | `insights.md` |
 | Data Scientist | model | Model Evaluator, Model Risk and Ethics Reviewer, Model Card Writer | `model_metrics`, `data_quality_summary` | `model_card.md` |
-| Investigation | investigate | Anomaly Analyst, Signal Investigator, Hypothesis Generator | `anomaly_summary`, `risk_ranking`, `run_details`, `eda_summary`, `sensor_stats`, `model_metrics` | `investigation.md` (Facts / Assumptions / Hypotheses / Suggested verification) |
+| Investigation | investigate | Anomaly Analyst, Signal Investigator, Hypothesis Generator | `anomaly_summary`, `risk_ranking`, `run_details`, `find_similar_runs`, `eda_summary`, `sensor_stats`, `model_metrics`, `search_knowledge` | `investigation.md` (Facts / Assumptions / Hypotheses / Suggested verification) |
 | Engineering Report | report | Technical Report Writer, Engineering Review and Safety Editor | none (works from the three documents above) | `engineering_report.md` |
 
 **Automatic output checks** (`src/foresight/crews/checks.py`, results in `report_checks.json` and on the Engineering Report page):
@@ -71,13 +71,27 @@ Each crew runs right after the deterministic work of its stage. Agents, tasks an
 - every sensor name mentioned exists in the data;
 - at least 90% of the numbers can be traced to the run's files;
 - every fact in the investigation cites a source file;
-- every hypothesis states a confidence level, and "high" requires a quoted q < 0.001 (the rubric also asks for a second, independent signal).
+- every hypothesis states a confidence level, and "high" requires a quoted q < 0.001 and a named second signal (out-of-limit rate, model importance or anomaly flags);
+- the investigation's Facts report the overall similar-run comparison, and a run's few similar past runs are never turned into a "failure rate";
+- Background citations point at a real knowledge-base section, sit inside a numbered hypothesis, stay out of Facts, and restate their passage (embedding similarity ≥ 0.45, a heuristic); the investigation cites at least one.
 
-If a crew's own output fails a check, the crew gets the findings and revises it once (`llm.crew_revisions` in `config/settings.yaml`). Revisions are listed in `crew_revisions.json` and in the report checks.
+If a crew's own output fails a check, the crew gets the findings and revises it once (`llm.crew_revisions` in `config/settings.yaml`). Revisions are listed in `crew_revisions.json` and in the report checks. A crew is skipped when its stage's own checks already have an ERROR, so a run that a gate will stop spends no tokens.
 
 **Mock or real LLM.** With `MOCK_LLM=true`, a deterministic mock LLM writes the outputs from the same facts and goes through the same CrewAI agents, tasks and checks. Tests and CI use it, and a session guard makes any paid call fail a test. With the real model (`gpt-4o-mini`, temperature 0), a full run takes about 3.5 minutes and about 23,000 tokens (under 1 US cent). CrewAI's cloud tracing and telemetry are turned off: they added about 15 seconds per crew, and Foresight keeps its own logs and run manifest.
 
-**Reference run.** [`artifacts/reference/`](artifacts/reference) holds a complete real run (gpt-4o-mini, all gates and all 15 report checks PASS). The app shows it until a newer run exists.
+**Reference run.** [`artifacts/reference/`](artifacts/reference) holds a complete real run (gpt-4o-mini, all gates and all 18 report checks PASS, with its chat index). The app shows it until a newer run exists.
+
+## RAG and embeddings
+
+Three extensions from requirements §18. Embeddings use a fixed local model (**all-MiniLM-L6-v2** through ONNX Runtime, 384 dimensions): free, no API key, downloaded once (about 80 MB) into `paths.models_dir`, which is on the runs volume on Railway.
+
+| Extension | What it does | Where |
+|---|---|---|
+| **Similar-run search** | Each run's sensor profile is embedded (median imputation, scaling and PCA with 30 components, all fitted on training runs). For the riskiest and the failing test runs, the 5 most similar *past* runs are retrieved with their labels and distances. The evidence is reported honestly: on SECOM the neighbours of failing test runs failed 5.8% of the time vs 4.7% for passing ones (training fail rate 6.8%), so a run's overall profile says little about failure | `similar_runs.json`/`.csv`, tool `find_similar_runs`, run map on the Report page |
+| **Knowledge base** | 12 short background documents written for this project from public sources ([`knowledge/SOURCES.md`](knowledge/SOURCES.md)): SPC, robust statistics, yield loss, drift and maintenance, FDC, SECOM, metrics, multiple testing, anomaly detection, missing data, verification practice. Passages are retrieved deterministically for the evidence types in the report and given to the Investigation crew with their exact citations; hypotheses cite them as `[background: file § section]`, labelled Background, never Evidence | `knowledge/`, tool `search_knowledge` |
+| **Ask Foresight** | A passcode-protected chat about the run shown in the sidebar. The run's reports are chunked by section (800 characters, 120 overlap) and indexed at the end of the run (`rag_index.npz`, `rag_chunks.json`; parameters in `run_manifest.json`). Retrieval is hybrid: cosine similarity plus a bonus when the question's words match a section title. Below similarity 0.25 the chat answers "Not found in this run's artifacts." without calling the LLM; otherwise gpt-4o-mini answers only from the retrieved excerpts, citing `[source: file § section]`, or refuses. An answer that cites no retrieved excerpt is withheld. Every question and answer is logged (`chat_logs/<run>.jsonl` in the runs folder); there is no question limit | page *Ask Foresight* |
+
+A question costs about 600–1,100 tokens (well under 0.1 cent).
 
 ## The app
 
@@ -87,7 +101,8 @@ If a crew's own output fails a check, the crew gets the findings and revises it 
 | Data Quality | Data Contract validation, cleaning decisions, the contract itself |
 | EDA & Insights | Fail rate over time, sensors that differ, the Data Analyst crew's insights |
 | Model | Metrics with 95% CIs, model comparison, model card |
-| Investigation & Report | Report safety checks, the engineering report (download), the investigation in colour-labelled blocks (Facts / Assumptions / Hypotheses / Suggested verification), risk ranking, anomalies |
+| Investigation & Report | Report safety checks, the engineering report (download), the investigation in colour-labelled blocks (Facts / Assumptions / Hypotheses / Suggested verification), risk ranking, similar past runs and the run map, anomalies |
+| Ask Foresight | Chat about the selected run, answered only from its reports, with sources and similarity scores |
 
 The sidebar's **Results shown** picks which successful run the result pages display; it follows the newest run until you choose another one, and the committed reference run is always available.
 
@@ -133,8 +148,9 @@ Set `MOCK_LLM=true` in `.env` to work without any LLM calls.
 | E4 | Wrong passcode is rejected, no run starts | CI, `dev`, `main` |
 | E5 | Broken CSV upload stops at the contract gate with a clear error | CI only (starts a run) |
 | E6 | Full run: live progress through all crews, then the new run's report | CI only (mock LLM) |
+| E7 | Ask Foresight: an answer with a citation; an off-topic question gets "Not found in this run's artifacts." | CI only (mock LLM) |
 
-E5 and E6 need the app's passcode in `RUN_PASSCODE` (or `E2E_PASSCODE`); start the app with `MOCK_LLM=true` and, for speed, `FORESIGHT_CONFIG=tests/fast_settings.yaml`. The deployed suite (`-m deployed`) is read-only and never spends LLM tokens.
+E5–E7 need the app's passcode in `RUN_PASSCODE` (or `E2E_PASSCODE`); start the app with `MOCK_LLM=true` and, for speed, `FORESIGHT_CONFIG=tests/fast_settings.yaml`. The deployed suite (`-m deployed`) is read-only and never spends LLM tokens.
 
 ## Release workflow
 
@@ -162,7 +178,8 @@ Code changes deploy automatically when a branch is merged (`dev` → dev environ
 ```
 app/            Streamlit app (entry point: app/streamlit_app.py)
 config/         settings.yaml (seed, LLM model, paths)
-src/foresight/  flow.py, jobs.py + cli.py (background runs), progress.py, data/, analytics/, crews/, tools/, validation/, utils/
+src/foresight/  flow.py, jobs.py + cli.py (background runs), progress.py, data/, analytics/, crews/, rag/, tools/, validation/, utils/
+knowledge/      background documents for the Investigation crew (+ SOURCES.md)
 tests/          unit/, integration/, app/, smoke/, e2e/
 scripts/        data download and helper scripts
 data/           raw/ and processed/ (not committed)

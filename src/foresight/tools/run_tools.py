@@ -180,7 +180,69 @@ class SensorStatsTool(_RunTool):
         }, ["eda_summary.json", "anomaly_summary.json", "model_metrics.json"])
 
 
+class SimilarRunsInput(BaseModel):
+    run_id: int = Field(description="Production run id (0-1566)")
+    k: int = Field(default=5, description="How many similar past runs to return (1-10)")
+
+
+class SimilarRunsTool(_RunTool):
+    name: str = "find_similar_runs"
+    description: str = ("The most similar past (training) runs to one production run, by its "
+                        "whole sensor profile (PCA embedding fitted on training runs), with "
+                        "their labels, timestamps and distances. Also how much similarity "
+                        "separates failing from passing runs overall.")
+    args_schema: type[BaseModel] = SimilarRunsInput
+
+    def _run(self, run_id: int, k: int = 5) -> str:
+        from foresight.analytics.similar import EMBEDDINGS_FILE, SIMILAR_JSON, neighbours
+
+        if error := self._missing(EMBEDDINGS_FILE, SIMILAR_JSON):
+            return error
+        embedded = pd.read_csv(self.run_dir / EMBEDDINGS_FILE)
+        found = neighbours(embedded, [run_id], max(1, min(int(k), 10)))
+        if found.empty:
+            return _dump({"error": f"run {run_id} not found"}, [EMBEDDINGS_FILE])
+        summary = _read(self.run_dir, SIMILAR_JSON)
+        return _dump({
+            "run_id": run_id, "label": int(found.iloc[0]["query_label"]),
+            "similar_past_runs": found.drop(columns=["query_run_id", "query_label"])
+            .to_dict(orient="records"),
+            "neighbours_failed": int(found["neighbour_label"].sum()),
+            "overall": {key: summary[key] for key in (
+                "method", "train_fail_rate", "neighbour_fail_share_for_failing_test_runs",
+                "neighbour_fail_share_for_passing_test_runs", "lift")},
+        }, [EMBEDDINGS_FILE, SIMILAR_JSON])
+
+
+class KnowledgeInput(BaseModel):
+    query: str = Field(description="What general background you need, in plain words, for "
+                                   "example 'process drift between maintenance events'")
+
+
+class KnowledgeSearchTool(_RunTool):
+    name: str = "search_knowledge"
+    description: str = ("General background knowledge (statistical process control, yield "
+                        "loss, drift and maintenance, fault detection, metrics for rare "
+                        "failures, how engineers verify hypotheses). Returns short passages "
+                        "with the exact citation to use: [background: <file> § <section>]. "
+                        "Background is general knowledge, never evidence about this run.")
+    args_schema: type[BaseModel] = KnowledgeInput
+
+    def _run(self, query: str) -> str:
+        from foresight.rag.knowledge import cite, search_knowledge
+        from foresight.settings import load_settings
+
+        hits = search_knowledge(query, load_settings())
+        if not hits:
+            return _dump({"passages": [], "note": "nothing relevant in the knowledge base"},
+                         ["knowledge/"])
+        return _dump({"passages": [{"citation": cite(h), "similarity": h.score,
+                                    "text": h.chunk.text} for h in hits]},
+                     sorted({f"knowledge/{h.chunk.source}" for h in hits}))
+
+
 def build_tools(run_dir: Path) -> dict[str, BaseTool]:
     tools = [DataQualityTool, EdaSummaryTool, ModelMetricsTool, AnomalySummaryTool,
-             RiskRankingTool, RunLookupTool, SensorStatsTool]
+             RiskRankingTool, RunLookupTool, SensorStatsTool, SimilarRunsTool,
+             KnowledgeSearchTool]
     return {tool.model_fields["name"].default: tool(run_dir=run_dir) for tool in tools}

@@ -1,7 +1,7 @@
 {
   "status": "PASS",
   "counts": {
-    "PASS": 15,
+    "PASS": 18,
     "WARNING": 0,
     "ERROR": 0
   },
@@ -34,7 +34,7 @@
     {
       "name": "model_card.md: traceable numbers",
       "status": "PASS",
-      "message": "100% of 26 numbers found in the run files"
+      "message": "100% of 24 numbers found in the run files"
     },
     {
       "name": "investigation.md: sections",
@@ -49,17 +49,27 @@
     {
       "name": "investigation.md: traceable numbers",
       "status": "PASS",
-      "message": "100% of 51 numbers found in the run files"
+      "message": "100% of 57 numbers found in the run files"
     },
     {
       "name": "investigation.md: cited facts",
       "status": "PASS",
-      "message": "12 of 12 facts cite a source file"
+      "message": "13 of 13 facts cite a source file"
+    },
+    {
+      "name": "investigation.md: similar-run evidence",
+      "status": "PASS",
+      "message": "Facts report the overall similar-run comparison"
     },
     {
       "name": "investigation.md: confidence rubric",
       "status": "PASS",
       "message": "all 5 hypotheses follow the confidence rubric"
+    },
+    {
+      "name": "investigation.md: background sources",
+      "status": "PASS",
+      "message": "1 background citation(s), from the knowledge base and consistent with their sources"
     },
     {
       "name": "engineering_report.md: sections",
@@ -74,12 +84,17 @@
     {
       "name": "engineering_report.md: traceable numbers",
       "status": "PASS",
-      "message": "100% of 37 numbers found in the run files"
+      "message": "100% of 38 numbers found in the run files"
     },
     {
       "name": "engineering_report.md: confidence rubric",
       "status": "PASS",
       "message": "all 5 hypotheses follow the confidence rubric"
+    },
+    {
+      "name": "engineering_report.md: background sources",
+      "status": "PASS",
+      "message": "1 background citation(s), from the knowledge base and consistent with their sources"
     }
   ]
 }

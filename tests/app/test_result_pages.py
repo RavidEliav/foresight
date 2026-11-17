@@ -69,7 +69,7 @@ def test_report_page_shows_anomalies(run_dir):
                                             "Flag rate: passing runs",
                                             "Sensors out of limits per run"]
     assert [h.value for h in at.subheader] == ["Engineering report", "Investigation",
-                                               "Risk ranking", "Anomalies"]
+                                               "Risk ranking", "Similar past runs", "Anomalies"]
     assert "Report safety checks: **PASS**" in at.success[0].value
     assert any("## What was detected" in md.value for md in at.markdown)
     assert not any(md.value.startswith("# Engineering report") for md in at.markdown)
@@ -102,6 +102,39 @@ def test_figures_saved_with_windows_paths_still_load(tmp_path):
     assert figure_path(tmp_path, "figures/chart.png") == expected
     assert figure_path(tmp_path, "figures/missing.png") is None
     assert figure_path(tmp_path, None) is None
+
+
+def _ask_page(run_dir: Path, passcode: str = "s3cret") -> AppTest:
+    def page(run_dir, passcode):
+        from pathlib import Path
+
+        from app import ask_page
+        from foresight.settings import load_settings
+
+        settings = load_settings()
+        settings.run_passcode = passcode
+        ask_page.render(Path(run_dir), settings)
+
+    return AppTest.from_function(page, args=(str(run_dir), passcode), default_timeout=60).run()
+
+
+def test_ask_page_needs_the_passcode_then_answers_with_citations(run_dir):
+    at = _ask_page(run_dir)
+    assert not at.exception and not at.chat_input
+    at.text_input(key="chat_passcode").input("wrong")
+    at.button[0].click().run()
+    assert any("Not authorized" in e.value for e in at.error)
+
+    at.text_input(key="chat_passcode").input("s3cret")
+    at.button[0].click().run()
+    at.chat_input[0].set_value("Which sensors differ between failing and passing runs?").run()
+    assert not at.exception
+    answers = [m for m in at.chat_message if m.name == "assistant"]
+    assert "[source: " in answers[-1].markdown[0].value
+
+    at.chat_input[0].set_value("What is the capital of France?").run()
+    answers = [m for m in at.chat_message if m.name == "assistant"]
+    assert answers[-1].markdown[0].value == "Not found in this run's artifacts."
 
 
 def test_viewable_runs_are_successful_runs_then_the_reference(tmp_path, run_dir):

@@ -21,6 +21,18 @@ VIEW_KEY = "view_run"
 PINNED_KEY = "view_pinned"  # True once the user picks a run in the sidebar
 
 
+@st.cache_resource(show_spinner=False)
+def _warm_embedding_model(models_dir: str) -> bool:
+    """Once per server process: get the chat's embedding model ready in the background."""
+    from foresight.rag.embedding import warm_up
+
+    warm_up(models_dir)
+    return True
+
+
+_warm_embedding_model(str(settings.resolve(settings.paths.models_dir)))
+
+
 def run_pipeline_page() -> None:
     from app import run_page
 
@@ -80,6 +92,12 @@ def report_page() -> None:
     page.render(_latest("anomaly_summary.json"))
 
 
+def ask_page() -> None:
+    from app import ask_page as page
+
+    page.render(_latest("engineering_report.md"), settings)
+
+
 st.sidebar.title("Foresight")
 st.sidebar.caption("Semiconductor yield intelligence")
 ui.environment_badge(settings)
@@ -96,6 +114,7 @@ navigation = st.navigation(
         st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),
         st.Page(report_page, title="Investigation & Report", icon=":material/description:",
                 url_path="report"),
+        st.Page(ask_page, title="Ask Foresight", icon=":material/forum:", url_path="ask"),
     ]
 )
 navigation.run()

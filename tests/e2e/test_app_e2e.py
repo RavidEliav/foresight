@@ -147,4 +147,4 @@ def test_e6_full_run_shows_progress_then_the_new_report(app_page: Page, e2e_pass
     caption = page.get_by_test_id("stMain").get_by_test_id("stCaptionContainer").first
     expect(caption).to_contain_text("Run ")
     expect(caption).not_to_contain_text("Reference")
-    expect(page.get_by_text("Report safety checks")).to_be_visible()
+    expect(page.get_by_text("Report safety checks").first).to_be_visible()

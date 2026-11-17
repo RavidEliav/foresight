@@ -21,6 +21,18 @@ VIEW_KEY = "view_run"
 PINNED_KEY = "view_pinned"  # True once the user picks a run in the sidebar
 
 
+@st.cache_resource(show_spinner=False)
+def _warm_embedding_model(models_dir: str) -> bool:
+    """Once per server process: get the chat's embedding model ready in the background."""
+    from foresight.rag.embedding import warm_up
+
+    warm_up(models_dir)
+    return True
+
+
+_warm_embedding_model(str(settings.resolve(settings.paths.models_dir)))
+
+
 def run_pipeline_page() -> None:
     from app import run_page
 

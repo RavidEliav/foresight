@@ -76,3 +76,19 @@ class Embedder:
 @lru_cache(maxsize=4)
 def get_embedder(models_dir: str) -> Embedder:
     return Embedder(Path(models_dir))
+
+
+def warm_up(models_dir: str) -> threading.Thread:
+    """Download (first time only) and load the model in the background, so no user request
+    has to wait for it; requests that arrive meanwhile wait on the lock."""
+
+    def work() -> None:
+        try:
+            get_embedder(models_dir).embed(["warm up"])
+            log.info("embedding model ready")
+        except Exception:  # the chat reports problems when it is used
+            log.exception("embedding model warm-up failed")
+
+    thread = threading.Thread(target=work, name="embedding-warm-up", daemon=True)
+    thread.start()
+    return thread

@@ -21,6 +21,14 @@ def _goto(page: Page, title: str) -> None:
     expect(page.get_by_role("heading", name=title, level=1)).to_be_visible(timeout=60_000)
 
 
+def _show_reference_run(page: Page) -> None:
+    """Deployed apps may hold older runs; the read-only checks look at the committed one."""
+    page.get_by_test_id("stSidebar").get_by_test_id("stSelectbox").click()
+    page.get_by_role("option", name="Reference run").click()
+    expect(page.get_by_test_id("stSidebar").get_by_text("Committed reference run")
+           ).to_be_visible(timeout=30_000)
+
+
 @deployed
 def test_e1_app_loads_and_shows_environment(app_page: Page, expected_env):
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
@@ -33,6 +41,7 @@ def test_e1_app_loads_and_shows_environment(app_page: Page, expected_env):
 
 @deployed
 def test_e2_every_result_page_shows_its_content(app_page: Page):
+    _show_reference_run(app_page)
     _goto(app_page, "Data Quality")
     expect(app_page.get_by_text("Data Contract validation")).to_be_visible()
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Failing runs")).to_be_visible()
@@ -53,6 +62,7 @@ def test_e2_every_result_page_shows_its_content(app_page: Page):
 
 @deployed
 def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
+    _show_reference_run(app_page)
     _goto(app_page, "Investigation & Report")
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Failing runs caught")
            ).to_be_visible()

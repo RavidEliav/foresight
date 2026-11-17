@@ -1,3 +1,4 @@
+import re
 import shutil
 from pathlib import Path
 
@@ -80,7 +81,8 @@ def test_build_crew_attaches_tools_and_rules(run_dir):
                                                      "investigation"]
     assert outputs == {"investigation": "investigation.md"}
     assert {t.name for t in crew.agents[0].tools} == {"anomaly_summary", "risk_ranking",
-                                                      "run_details"}
+                                                      "run_details", "find_similar_runs"}
+    assert {t.name for t in crew.agents[2].tools} == {"sensor_stats", "search_knowledge"}
     assert "Never claim a root cause" in tasks["investigation"].description
     assert "[source: anomaly_summary.json]" in tasks["anomaly_review"].description
 
@@ -160,6 +162,73 @@ def test_overstated_confidence_is_reported(run_dir, context):
     assert _status(checks, "confidence rubric") == GateStatus.WARNING
 
 
+def test_mock_investigation_has_similar_runs_and_a_real_background_source(run_dir, context):
+    text = (run_dir / "investigation.md").read_text(encoding="utf-8")
+    assert "[source: similar_runs.json]" in section(text, "Facts")
+    assert "[background: " in section(text, "Hypotheses")
+    checks = check_output("investigation.md", text, run_dir, *context)
+    background = next(c for c in checks if c.name.endswith("background sources"))
+    assert background.status == GateStatus.PASS, background.message
+    assert _status(checks, "similar-run evidence") == GateStatus.PASS
+
+
+def test_similar_run_anecdotes_without_the_overall_comparison_are_reported(run_dir, context):
+    text = (run_dir / "investigation.md").read_text(encoding="utf-8")
+    anecdote_only = "\n".join(
+        line for line in text.splitlines() if "similar_runs.json" not in line).replace(
+        "## Facts\n", "## Facts\n- Run 7: 2 of its 5 most similar past runs failed "
+        "[source: similar_runs.json]\n")
+    checks = check_output("investigation.md", anecdote_only, run_dir, *context)
+    found = next(c for c in checks if c.name.endswith("similar-run evidence"))
+    assert found.status == GateStatus.WARNING
+    assert "overall similar-run comparison" in found.message
+
+
+def test_missing_similar_run_fact_is_inserted_from_the_computed_summary(run_dir, tmp_path):
+    run = tmp_path / "run"
+    shutil.copytree(run_dir, run)
+    path = run / "investigation.md"
+    text = path.read_text(encoding="utf-8")
+    without = "\n".join(line for line in text.splitlines() if "similar_runs.json" not in line)
+    path.write_text(without, encoding="utf-8")
+    stages.ensure_similar_fact(run)
+    facts = section(path.read_text(encoding="utf-8"), "Facts")
+    assert facts.strip().splitlines()[0].startswith("- Similar-run search")
+    stages.ensure_similar_fact(run)  # idempotent
+    assert path.read_text(encoding="utf-8").count("- Similar-run search") == 1
+
+
+def test_a_few_similar_runs_are_not_reported_as_a_failure_rate(run_dir, context):
+    text = (run_dir / "investigation.md").read_text(encoding="utf-8").replace(
+        "## Facts\n", "## Facts\n- Run 7: 2 of its 5 most similar past runs failed, a failure "
+        "rate of 40% [source: similar_runs.json]\n")
+    checks = check_output("investigation.md", text, run_dir, *context)
+    found = next(c for c in checks if c.name.endswith("similar-run evidence"))
+    assert found.status == GateStatus.WARNING and "(40%)" in found.message
+
+
+@pytest.mark.parametrize(("change", "problem"), [
+    (lambda t: t.replace("[background: ", "[background: invented_paper.md § Results] ["),
+     "unknown background sources: invented_paper.md"),
+    (lambda t: re.sub(r"\[background: [^\]]+\]", "", t), "no hypothesis cites a Background"),
+    (lambda t: t.replace("## Facts\n", "## Facts\n- Drift is common "
+                         "[background: process_drift_and_maintenance.md § Drift]\n"),
+     "background cited in Facts"),
+    (lambda t: t.replace("## Suggested verification", "Background: Drift is a slow change in a "
+                         "process. [background: process_drift_and_maintenance.md § Drift]\n\n"
+                         "## Suggested verification"),
+     "background must support a numbered hypothesis"),
+    (lambda t: re.sub(r"Background: [^\[]*\[background", "Background: Pizza dough needs a very "
+                      "hot oven and good flour. [background", t),
+     "does not match process_drift_and_maintenance.md"),
+])
+def test_background_misuse_is_reported(run_dir, context, change, problem):
+    text = change((run_dir / "investigation.md").read_text(encoding="utf-8"))
+    checks = check_output("investigation.md", text, run_dir, *context)
+    found = next(c for c in checks if c.name.endswith("background sources"))
+    assert found.status == GateStatus.WARNING and problem in found.message
+
+
 def test_crew_revises_once_when_its_checks_warn(run_dir, tmp_path, monkeypatch):
     run = tmp_path / "run"
     shutil.copytree(run_dir, run)
@@ -216,6 +285,13 @@ def test_checkable_numbers_handle_separators_ranges_and_signs():
                                        "14.25", "35%"]
     assert traced("1,567", {"1567"}) and traced("6.6%", {"6.6"})
     assert not traced("-0.38", {"0.38"})
+
+
+def test_rubric_ignores_a_closing_paragraph_after_the_list():
+    text = ("1. Hypothesis: a. Confidence: low (weak).\n2. Hypothesis: b. Confidence: medium (q).\n"
+            "\nThese hypotheses are associations, not causes;\nthey need verification.\n")
+    assert len(numbered_items(text)) == 2
+    assert confidence_problems(numbered_items(text)) == []
 
 
 def test_rubric_reads_q_value_spellings_and_sub_headings():

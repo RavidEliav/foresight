@@ -8,6 +8,9 @@ import pytest
 
 ENV_VARS = ("LLM_MODEL", "OPENAI_API_KEY", "RUN_PASSCODE", "RAILWAY_ENVIRONMENT_NAME",
             "RAILWAY_GIT_COMMIT_SHA")
+# The embedding model (about 80 MB) is downloaded once into a stable cache, not per test folder
+MODELS_DIR = os.getenv("FORESIGHT_TEST_MODELS_DIR",
+                       str(Path.home() / ".cache" / "foresight" / "models"))
 # Read before isolated_env removes RUN_PASSCODE: E5/E6 type it into the app under test
 E2E_PASSCODE = os.getenv("E2E_PASSCODE") or os.getenv("RUN_PASSCODE")
 
@@ -21,6 +24,7 @@ def no_paid_calls():
         patch.setenv("FORESIGHT_SKIP_DOTENV", "true")
         patch.setenv("FORESIGHT_OFFLINE", "true")
         patch.setenv("CREWAI_TRACING_ENABLED", "false")
+        patch.setenv("FORESIGHT_MODELS_DIR", MODELS_DIR)
         patch.delenv("OPENAI_API_KEY", raising=False)
         yield
 
@@ -41,6 +45,7 @@ def isolated_env(monkeypatch, tmp_path):
     monkeypatch.setenv("CREWAI_DISABLE_TELEMETRY", "true")
     monkeypatch.setenv("CREWAI_TRACING_ENABLED", "false")
     monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
+    monkeypatch.setenv("FORESIGHT_MODELS_DIR", MODELS_DIR)
 
 
 def write_synthetic_secom(raw_dir: Path, n_rows: int = 150, fail_rate: float = 0.1,

@@ -1,7 +1,8 @@
 """Playwright E2E scenarios (requirements §9.2).
 
 E1-E4 are read-only and also run against the deployed apps (marker ``deployed``).
-E5 and E6 start pipeline runs, so they only run against a local app with MOCK_LLM=true.
+E5-E7 start pipeline runs or LLM questions, so they only run against a local app with
+MOCK_LLM=true.
 """
 
 import csv
@@ -67,6 +68,26 @@ def test_e4_wrong_passcode_is_rejected(app_page: Page):
     app_page.get_by_role("button", name="Run pipeline").click()
     expect(app_page.get_by_text("Not authorized")).to_be_visible(timeout=30_000)
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
+
+
+def test_e7_ask_foresight_cites_sources_and_refuses_off_topic(app_page: Page, e2e_passcode):
+    page = app_page
+    _goto(page, "Ask Foresight")
+    page.get_by_label("Passcode").fill(e2e_passcode)
+    page.get_by_role("button", name="Unlock the chat").click()
+    chat = page.get_by_test_id("stChatInputTextArea")
+    expect(chat).to_be_visible(timeout=30_000)
+
+    chat.fill("Which sensors differ between failing and passing runs?")
+    chat.press("Enter")
+    answers = page.get_by_test_id("stChatMessage").filter(has_text="[source:")
+    expect(answers.first).to_be_visible(timeout=120_000)
+
+    chat.fill("What is the capital of France?")
+    chat.press("Enter")
+    expect(page.get_by_test_id("stChatMessage").filter(
+        has_text="Not found in this run's artifacts.")).to_be_visible(timeout=120_000)
+    expect(page.get_by_test_id("stException")).to_have_count(0)
 
 
 def _broken_csv(path) -> None:

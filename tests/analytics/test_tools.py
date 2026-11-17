@@ -38,7 +38,30 @@ def call(tool, **kwargs):
 
 def test_all_tools_are_registered(tools):
     assert set(tools) == {"data_quality_summary", "eda_summary", "model_metrics",
-                          "anomaly_summary", "risk_ranking", "run_details", "sensor_stats"}
+                          "anomaly_summary", "risk_ranking", "run_details", "sensor_stats",
+                          "find_similar_runs", "search_knowledge"}
+
+
+def test_similar_runs_are_past_training_runs(tools, built):
+    import pandas as pd
+
+    embedded = pd.read_csv(built[1] / "run_embeddings.csv")
+    test_run = int(embedded.loc[embedded["split"] == "test", "run_id"].iloc[0])
+    payload = call(tools["find_similar_runs"], run_id=test_run, k=3)
+    neighbours = payload["similar_past_runs"]
+    assert len(neighbours) == 3
+    train_ids = set(embedded.loc[embedded["split"] == "train", "run_id"])
+    assert {n["neighbour_run_id"] for n in neighbours} <= train_ids
+    assert [n["distance"] for n in neighbours] == sorted(n["distance"] for n in neighbours)
+    assert "not found" in call(tools["find_similar_runs"], run_id=999_999)["error"]
+
+
+def test_knowledge_search_returns_citable_passages(tools):
+    payload = call(tools["search_knowledge"], query="slow drift between maintenance events")
+    first = payload["passages"][0]
+    assert first["citation"].startswith("[background: process_drift_and_maintenance.md § ")
+    assert payload["source_files"] == ["knowledge/process_drift_and_maintenance.md"] or \
+        "knowledge/process_drift_and_maintenance.md" in payload["source_files"]
 
 
 @pytest.mark.parametrize("name", ["data_quality_summary", "eda_summary", "model_metrics",

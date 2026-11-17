@@ -6,6 +6,7 @@ and pass the same output checks. Every document is marked as a mock draft.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from foresight.crews.facts import all_facts, pct, read
@@ -95,6 +96,18 @@ Decision support for process engineers, with an alarm budget and regular retrain
 """
 
 
+def _background(query: str) -> str:
+    """A cited Background sentence from the knowledge base (general knowledge, not evidence)."""
+    from foresight.rag.knowledge import cite, search_knowledge
+    from foresight.settings import load_settings
+
+    hits = search_knowledge(query, load_settings(), k=1)
+    if not hits:
+        return ""
+    first = re.split(r"(?<=[.!?])\s+", hits[0].chunk.text.strip())[0]
+    return f" Background: {first} {cite(hits[0])}"
+
+
 def investigation(run_dir: Path) -> str:
     f = all_facts(run_dir)
     sensors = _top_sensors(run_dir)
@@ -113,7 +126,8 @@ def investigation(run_dir: Path) -> str:
             f"limits on {names} accompany some failures.")
     hypotheses.append(
         f"{len(hypotheses) + 1}. **Hypothesis (medium confidence):** the change in fail rate "
-        "between months reflects a process or product-mix change over time (drift).")
+        "between months reflects a process or product-mix change over time (drift)."
+        + _background("process drift over time between maintenance events"))
     verification = "\n".join(
         f"- Hypothesis {i}: compare recent failing and passing runs on the named signal and "
         "check equipment and recipe logs for the same period."

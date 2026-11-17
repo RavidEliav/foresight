@@ -6,7 +6,7 @@ agents:
     backstory: >
       You read anomaly scores and statistical process control results. You know that sensors
       which barely vary in training can produce huge z-scores from small changes.
-    tools: [anomaly_summary, risk_ranking, run_details]
+    tools: [anomaly_summary, risk_ranking, run_details, find_similar_runs]
   signal_investigator:
     role: Signal Investigator
     goal: Find the sensors and patterns most associated with failing runs.
@@ -20,7 +20,7 @@ agents:
     backstory: >
       You are a careful process-engineering analyst. You label every statement as a fact, an
       assumption or a hypothesis, and you give each hypothesis a way to verify it.
-    tools: [sensor_stats]
+    tools: [sensor_stats, search_knowledge]
 
 tasks:
   - name: anomaly_review
@@ -31,7 +31,9 @@ tasks:
       Facts:
       {anomaly_facts}
 
-      Use run_details for one or two of the riskiest runs if useful.
+      Use run_details for one or two of the riskiest runs if useful. Report the similar-run
+      evidence (how often the most similar past runs failed) honestly, including when it is weak;
+      use find_similar_runs for one of the riskiest runs if useful.
     expected_output: 4-6 bullet points, each citing its source file.
 
   - name: signal_review
@@ -55,6 +57,9 @@ tasks:
       Use exactly these sections as level-2 headings (##):
       Facts, Assumptions, Hypotheses, Suggested verification.
       - Facts: bullet points of measured results only; end every bullet with [source: <file>].
+        Copy this similar-run comparison as one Facts bullet, unchanged:
+        {similar_overall}
+        The similar past runs of a single run are anecdotal: "2 of 5" is not a failure rate.
       - Assumptions: what the analysis assumes.
       - Hypotheses: 3-5 numbered hypotheses about the production process (sensors, process
         conditions, equipment, drift over time). Do not write hypotheses about the model, the
@@ -65,7 +70,19 @@ tasks:
         model importance or anomaly flags; effect size does not count, it comes from the same
         test); quote the q-value and name the second signal in the hypothesis;
         medium = one strong statistical signal;
-        low = weak or indirect evidence (for example a few individual runs or risk scores).
+        low = weak or indirect evidence (for example a few individual runs, their similar past
+        runs, or risk scores).
+        For at least one hypothesis, end it (on the same line, inside the numbered item) with
+        one sentence that starts with "Background:", restates in your own words one of the
+        background passages below that is relevant to that hypothesis, and ends with that
+        passage's citation copied exactly, for example
+        [background: spc_control_charts.md § Many charts at once].
+        Background passages (the only citations you may use):
+        {background_passages}
+        The Background sentence supports a hypothesis that already rests on this run's
+        evidence; it is never a hypothesis on its own. Background is general
+        knowledge, never evidence: it never appears in Facts, it never raises a confidence
+        level, and it never says what an anonymized sensor physically measures.
       - Suggested verification: how an engineer could test each hypothesis (for example
         equipment logs, recipe changes, maintenance records, controlled experiments).
       The model is weak (see its PR-AUC and confidence intervals): describe its performance

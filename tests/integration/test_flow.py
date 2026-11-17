@@ -146,6 +146,8 @@ def test_too_few_test_fails_stop_the_run_at_the_features_gate(secom_env):
     assert state.status == "failed"
     assert state.stages_completed == ["ingest", "analyze"]
     assert "test_fails" in state.failure_reason
+    assert "analyst" not in state.crew_usage  # no LLM spending on a run the gate stops
+    assert not (Path(state.run_dir) / "insights.md").exists()
 
 
 def test_exception_inside_a_stage_fails_gracefully(monkeypatch):

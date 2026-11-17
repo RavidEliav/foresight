@@ -24,6 +24,9 @@ jobs:
       CREWAI_DISABLE_TELEMETRY: "true"
       OTEL_SDK_DISABLED: "true"
       RUN_PASSCODE: ci-passcode
+      # One embedding-model cache for the tests and the app under test (RAG, §18)
+      FORESIGHT_MODELS_DIR: /home/runner/.cache/foresight/models
+      FORESIGHT_TEST_MODELS_DIR: /home/runner/.cache/foresight/models
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +38,13 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
+
+      - name: Cache the embedding model (all-MiniLM-L6-v2, ONNX)
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.cache/foresight/models
+          key: minilm-onnx-v1-${{ hashFiles('knowledge/*.md', 'config/settings.yaml') }}
+          restore-keys: minilm-onnx-v1-
 
       - name: Lint
         run: ruff check .
@@ -63,7 +73,7 @@ jobs:
           done
           echo "App did not become healthy" && exit 1
 
-      - name: Smoke and Playwright E2E tests (E1-E6)
+      - name: Smoke and Playwright E2E tests (E1-E7)
         env:
           BASE_URL: http://localhost:8501
         run: >

@@ -29,6 +29,7 @@ from foresight.analytics.stages import (
 )
 from foresight.data.ingest import run_ingest
 from foresight.progress import ProgressTracker
+from foresight.rag.index import CHUNKS_FILE
 from foresight.settings import Settings, load_settings
 from foresight.utils.logging import get_logger, setup_logging
 from foresight.utils.manifest import build_manifest, write_manifest
@@ -200,6 +201,9 @@ class ForesightFlow(Flow[ForesightState]):
         self.tracker.finish("failed", self.state.failure_reason)
 
     def _write_manifest(self) -> None:
+        chunks = Path(self.state.run_dir) / CHUNKS_FILE
+        rag = json.loads(chunks.read_text(encoding="utf-8"))["params"] if chunks.exists() \
+            else None
         manifest = build_manifest(
             self.state.run_id,
             self.settings,
@@ -209,6 +213,7 @@ class ForesightFlow(Flow[ForesightState]):
             durations_s=self.state.durations,
             crew_usage=self.state.crew_usage,
             report_checks=(self.state.report_checks or {}).get("counts"),
+            rag_index=rag,
             data_sha256=self.state.data_checksums,
             artifacts=sorted(Path(p).name for p in self.state.artifacts.values()),
         )

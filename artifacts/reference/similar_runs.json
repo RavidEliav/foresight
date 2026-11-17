@@ -1,0 +1,1174 @@
+{
+  "method": "median imputation + standard scaling + PCA (30 components, 47% of variance), fitted on training runs; 5 nearest training runs (Euclidean), all earlier in time than the test runs",
+  "k": 5,
+  "explained_variance": 0.468,
+  "train_fail_rate": 0.0681,
+  "neighbour_fail_share_for_failing_test_runs": 0.0583,
+  "neighbour_fail_share_for_passing_test_runs": 0.0473,
+  "lift": 1.234,
+  "queries": [
+    {
+      "run_id": 1458,
+      "reason": "high risk",
+      "label": 0,
+      "neighbours_failed": 2,
+      "k": 5,
+      "nearest_distance": 39.608,
+      "neighbours": [
+        {
+          "run_id": 634,
+          "label": 1,
+          "timestamp": "2008-09-01 19:54:00",
+          "distance": 39.608
+        },
+        {
+          "run_id": 275,
+          "label": 0,
+          "timestamp": "2008-08-18 17:37:00",
+          "distance": 41.127
+        },
+        {
+          "run_id": 457,
+          "label": 0,
+          "timestamp": "2008-08-27 22:58:00",
+          "distance": 69.163
+        },
+        {
+          "run_id": 466,
+          "label": 0,
+          "timestamp": "2008-08-28 05:00:00",
+          "distance": 69.37
+        },
+        {
+          "run_id": 709,
+          "label": 1,
+          "timestamp": "2008-09-03 01:15:00",
+          "distance": 78.625
+        }
+      ]
+    },
+    {
+      "run_id": 1397,
+      "reason": "high risk",
+      "label": 0,
+      "neighbours_failed": 2,
+      "k": 5,
+      "nearest_distance": 20.914,
+      "neighbours": [
+        {
+          "run_id": 709,
+          "label": 1,
+          "timestamp": "2008-09-03 01:15:00",
+          "distance": 20.914
+        },
+        {
+          "run_id": 797,
+          "label": 1,
+          "timestamp": "2008-09-11 23:48:00",
+          "distance": 22.932
+        },
+        {
+          "run_id": 778,
+          "label": 0,
+          "timestamp": "2008-09-10 23:43:00",
+          "distance": 23.263
+        },
+        {
+          "run_id": 870,
+          "label": 0,
+          "timestamp": "2008-09-17 02:01:00",
+          "distance": 23.684
+        },
+        {
+          "run_id": 683,
+          "label": 0,
+          "timestamp": "2008-09-02 12:30:00",
+          "distance": 23.721
+        }
+      ]
+    },
+    {
+      "run_id": 1489,
+      "reason": "high risk",
+      "label": 0,
+      "neighbours_failed": 2,
+      "k": 5,
+      "nearest_distance": 17.655,
+      "neighbours": [
+        {
+          "run_id": 778,
+          "label": 0,
+          "timestamp": "2008-09-10 23:43:00",
+          "distance": 17.655
+        },
+        {
+          "run_id": 798,
+          "label": 0,
+          "timestamp": "2008-09-12 05:11:00",
+          "distance": 17.746
+        },
+        {
+          "run_id": 709,
+          "label": 1,
+          "timestamp": "2008-09-03 01:15:00",
+          "distance": 17.898
+        },
+        {
+          "run_id": 795,
+          "label": 1,
+          "timestamp": "2008-09-11 22:07:00",
+          "distance": 17.995
+        },
+        {
+          "run_id": 810,
+          "label": 0,
+          "timestamp": "2008-09-12 16:23:00",
+          "distance": 18.589
+        }
+      ]
+    },
+    {
+      "run_id": 1257,
+      "reason": "high risk",
+      "label": 0,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 10.905,
+      "neighbours": [
+        {
+          "run_id": 1164,
+          "label": 0,
+          "timestamp": "2008-09-28 22:44:00",
+          "distance": 10.905
+        },
+        {
+          "run_id": 865,
+          "label": 0,
+          "timestamp": "2008-09-16 18:23:00",
+          "distance": 10.957
+        },
+        {
+          "run_id": 1166,
+          "label": 0,
+          "timestamp": "2008-09-29 02:06:00",
+          "distance": 11.048
+        },
+        {
+          "run_id": 1155,
+          "label": 0,
+          "timestamp": "2008-09-28 17:55:00",
+          "distance": 11.363
+        },
+        {
+          "run_id": 1162,
+          "label": 0,
+          "timestamp": "2008-09-28 21:08:00",
+          "distance": 11.401
+        }
+      ]
+    },
+    {
+      "run_id": 1456,
+      "reason": "high risk",
+      "label": 0,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 25102.003,
+      "neighbours": [
+        {
+          "run_id": 938,
+          "label": 0,
+          "timestamp": "2008-09-20 05:25:00",
+          "distance": 25102.003
+        },
+        {
+          "run_id": 935,
+          "label": 0,
+          "timestamp": "2008-09-20 04:13:00",
+          "distance": 25102.173
+        },
+        {
+          "run_id": 950,
+          "label": 0,
+          "timestamp": "2008-09-20 14:00:00",
+          "distance": 25102.457
+        },
+        {
+          "run_id": 946,
+          "label": 0,
+          "timestamp": "2008-09-20 12:26:00",
+          "distance": 25102.536
+        },
+        {
+          "run_id": 943,
+          "label": 0,
+          "timestamp": "2008-09-20 10:51:00",
+          "distance": 25102.992
+        }
+      ]
+    },
+    {
+      "run_id": 1185,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 6.061,
+      "neighbours": [
+        {
+          "run_id": 1109,
+          "label": 0,
+          "timestamp": "2008-09-26 17:59:00",
+          "distance": 6.061
+        },
+        {
+          "run_id": 1138,
+          "label": 0,
+          "timestamp": "2008-09-27 19:16:00",
+          "distance": 6.788
+        },
+        {
+          "run_id": 1096,
+          "label": 0,
+          "timestamp": "2008-09-26 03:12:00",
+          "distance": 6.803
+        },
+        {
+          "run_id": 1132,
+          "label": 0,
+          "timestamp": "2008-09-27 14:46:00",
+          "distance": 6.942
+        },
+        {
+          "run_id": 1087,
+          "label": 0,
+          "timestamp": "2008-09-25 17:28:00",
+          "distance": 6.96
+        }
+      ]
+    },
+    {
+      "run_id": 1189,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 8.185,
+      "neighbours": [
+        {
+          "run_id": 1071,
+          "label": 0,
+          "timestamp": "2008-09-25 06:21:00",
+          "distance": 8.185
+        },
+        {
+          "run_id": 1110,
+          "label": 0,
+          "timestamp": "2008-09-26 18:54:00",
+          "distance": 8.392
+        },
+        {
+          "run_id": 1129,
+          "label": 0,
+          "timestamp": "2008-09-27 13:19:00",
+          "distance": 8.714
+        },
+        {
+          "run_id": 1032,
+          "label": 0,
+          "timestamp": "2008-09-23 12:29:00",
+          "distance": 8.758
+        },
+        {
+          "run_id": 1149,
+          "label": 0,
+          "timestamp": "2008-09-28 08:40:00",
+          "distance": 8.783
+        }
+      ]
+    },
+    {
+      "run_id": 1211,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 6.481,
+      "neighbours": [
+        {
+          "run_id": 1088,
+          "label": 0,
+          "timestamp": "2008-09-25 17:29:00",
+          "distance": 6.481
+        },
+        {
+          "run_id": 1135,
+          "label": 0,
+          "timestamp": "2008-09-27 16:13:00",
+          "distance": 6.86
+        },
+        {
+          "run_id": 1025,
+          "label": 0,
+          "timestamp": "2008-09-23 06:52:00",
+          "distance": 6.978
+        },
+        {
+          "run_id": 1018,
+          "label": 0,
+          "timestamp": "2008-09-22 22:15:00",
+          "distance": 7.173
+        },
+        {
+          "run_id": 1037,
+          "label": 0,
+          "timestamp": "2008-09-23 15:33:00",
+          "distance": 7.645
+        }
+      ]
+    },
+    {
+      "run_id": 1227,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 8.429,
+      "neighbours": [
+        {
+          "run_id": 579,
+          "label": 0,
+          "timestamp": "2008-08-30 11:12:00",
+          "distance": 8.429
+        },
+        {
+          "run_id": 846,
+          "label": 0,
+          "timestamp": "2008-09-15 02:04:00",
+          "distance": 8.809
+        },
+        {
+          "run_id": 560,
+          "label": 0,
+          "timestamp": "2008-08-30 03:10:00",
+          "distance": 8.998
+        },
+        {
+          "run_id": 649,
+          "label": 0,
+          "timestamp": "2008-09-02 01:10:00",
+          "distance": 9.086
+        },
+        {
+          "run_id": 520,
+          "label": 0,
+          "timestamp": "2008-08-29 07:18:00",
+          "distance": 9.336
+        }
+      ]
+    },
+    {
+      "run_id": 1238,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 7.219,
+      "neighbours": [
+        {
+          "run_id": 1149,
+          "label": 0,
+          "timestamp": "2008-09-28 08:40:00",
+          "distance": 7.219
+        },
+        {
+          "run_id": 1093,
+          "label": 0,
+          "timestamp": "2008-09-26 00:19:00",
+          "distance": 8.53
+        },
+        {
+          "run_id": 1163,
+          "label": 0,
+          "timestamp": "2008-09-28 21:27:00",
+          "distance": 8.59
+        },
+        {
+          "run_id": 1070,
+          "label": 0,
+          "timestamp": "2008-09-25 02:03:00",
+          "distance": 8.66
+        },
+        {
+          "run_id": 1071,
+          "label": 0,
+          "timestamp": "2008-09-25 06:21:00",
+          "distance": 8.816
+        }
+      ]
+    },
+    {
+      "run_id": 1241,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 5.649,
+      "neighbours": [
+        {
+          "run_id": 1162,
+          "label": 0,
+          "timestamp": "2008-09-28 21:08:00",
+          "distance": 5.649
+        },
+        {
+          "run_id": 1156,
+          "label": 0,
+          "timestamp": "2008-09-28 18:34:00",
+          "distance": 6.25
+        },
+        {
+          "run_id": 1149,
+          "label": 0,
+          "timestamp": "2008-09-28 08:40:00",
+          "distance": 6.528
+        },
+        {
+          "run_id": 1166,
+          "label": 0,
+          "timestamp": "2008-09-29 02:06:00",
+          "distance": 6.739
+        },
+        {
+          "run_id": 1142,
+          "label": 0,
+          "timestamp": "2008-09-28 01:22:00",
+          "distance": 6.742
+        }
+      ]
+    },
+    {
+      "run_id": 1242,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 10.128,
+      "neighbours": [
+        {
+          "run_id": 868,
+          "label": 0,
+          "timestamp": "2008-09-16 21:21:00",
+          "distance": 10.128
+        },
+        {
+          "run_id": 872,
+          "label": 0,
+          "timestamp": "2008-09-17 07:14:00",
+          "distance": 10.133
+        },
+        {
+          "run_id": 637,
+          "label": 0,
+          "timestamp": "2008-09-01 23:05:00",
+          "distance": 10.315
+        },
+        {
+          "run_id": 977,
+          "label": 0,
+          "timestamp": "2008-09-21 07:55:00",
+          "distance": 10.516
+        },
+        {
+          "run_id": 957,
+          "label": 0,
+          "timestamp": "2008-09-20 15:37:00",
+          "distance": 10.531
+        }
+      ]
+    },
+    {
+      "run_id": 1254,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 8.89,
+      "neighbours": [
+        {
+          "run_id": 1133,
+          "label": 0,
+          "timestamp": "2008-09-27 15:09:00",
+          "distance": 8.89
+        },
+        {
+          "run_id": 1171,
+          "label": 0,
+          "timestamp": "2008-09-29 05:32:00",
+          "distance": 8.913
+        },
+        {
+          "run_id": 465,
+          "label": 0,
+          "timestamp": "2008-08-28 04:54:00",
+          "distance": 8.972
+        },
+        {
+          "run_id": 569,
+          "label": 0,
+          "timestamp": "2008-08-30 07:54:00",
+          "distance": 9.927
+        },
+        {
+          "run_id": 560,
+          "label": 0,
+          "timestamp": "2008-08-30 03:10:00",
+          "distance": 9.969
+        }
+      ]
+    },
+    {
+      "run_id": 1302,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 5.559,
+      "neighbours": [
+        {
+          "run_id": 560,
+          "label": 0,
+          "timestamp": "2008-08-30 03:10:00",
+          "distance": 5.559
+        },
+        {
+          "run_id": 567,
+          "label": 0,
+          "timestamp": "2008-08-30 05:51:00",
+          "distance": 8.665
+        },
+        {
+          "run_id": 579,
+          "label": 0,
+          "timestamp": "2008-08-30 11:12:00",
+          "distance": 8.672
+        },
+        {
+          "run_id": 845,
+          "label": 0,
+          "timestamp": "2008-09-14 23:00:00",
+          "distance": 8.821
+        },
+        {
+          "run_id": 1171,
+          "label": 0,
+          "timestamp": "2008-09-29 05:32:00",
+          "distance": 9.27
+        }
+      ]
+    },
+    {
+      "run_id": 1303,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 8.09,
+      "neighbours": [
+        {
+          "run_id": 560,
+          "label": 0,
+          "timestamp": "2008-08-30 03:10:00",
+          "distance": 8.09
+        },
+        {
+          "run_id": 845,
+          "label": 0,
+          "timestamp": "2008-09-14 23:00:00",
+          "distance": 8.897
+        },
+        {
+          "run_id": 678,
+          "label": 0,
+          "timestamp": "2008-09-02 11:47:00",
+          "distance": 9.0
+        },
+        {
+          "run_id": 1131,
+          "label": 0,
+          "timestamp": "2008-09-27 14:05:00",
+          "distance": 9.046
+        },
+        {
+          "run_id": 1133,
+          "label": 0,
+          "timestamp": "2008-09-27 15:09:00",
+          "distance": 9.444
+        }
+      ]
+    },
+    {
+      "run_id": 1324,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 2,
+      "k": 5,
+      "nearest_distance": 8.268,
+      "neighbours": [
+        {
+          "run_id": 904,
+          "label": 0,
+          "timestamp": "2008-09-19 08:08:00",
+          "distance": 8.268
+        },
+        {
+          "run_id": 929,
+          "label": 1,
+          "timestamp": "2008-09-19 21:59:00",
+          "distance": 8.476
+        },
+        {
+          "run_id": 914,
+          "label": 1,
+          "timestamp": "2008-09-19 16:58:00",
+          "distance": 8.739
+        },
+        {
+          "run_id": 1027,
+          "label": 0,
+          "timestamp": "2008-09-23 08:11:00",
+          "distance": 8.754
+        },
+        {
+          "run_id": 411,
+          "label": 0,
+          "timestamp": "2008-08-22 09:29:00",
+          "distance": 9.293
+        }
+      ]
+    },
+    {
+      "run_id": 1325,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 7.252,
+      "neighbours": [
+        {
+          "run_id": 1153,
+          "label": 0,
+          "timestamp": "2008-09-28 17:06:00",
+          "distance": 7.252
+        },
+        {
+          "run_id": 1066,
+          "label": 0,
+          "timestamp": "2008-09-24 16:26:00",
+          "distance": 7.563
+        },
+        {
+          "run_id": 1125,
+          "label": 0,
+          "timestamp": "2008-09-27 12:26:00",
+          "distance": 8.228
+        },
+        {
+          "run_id": 1146,
+          "label": 0,
+          "timestamp": "2008-09-28 06:22:00",
+          "distance": 8.33
+        },
+        {
+          "run_id": 1051,
+          "label": 0,
+          "timestamp": "2008-09-24 05:22:00",
+          "distance": 8.696
+        }
+      ]
+    },
+    {
+      "run_id": 1327,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 7.724,
+      "neighbours": [
+        {
+          "run_id": 803,
+          "label": 0,
+          "timestamp": "2008-09-12 07:21:00",
+          "distance": 7.724
+        },
+        {
+          "run_id": 1057,
+          "label": 0,
+          "timestamp": "2008-09-24 10:59:00",
+          "distance": 8.019
+        },
+        {
+          "run_id": 748,
+          "label": 0,
+          "timestamp": "2008-09-07 20:12:00",
+          "distance": 8.033
+        },
+        {
+          "run_id": 995,
+          "label": 0,
+          "timestamp": "2008-09-21 18:12:00",
+          "distance": 8.124
+        },
+        {
+          "run_id": 1118,
+          "label": 0,
+          "timestamp": "2008-09-27 01:29:00",
+          "distance": 8.609
+        }
+      ]
+    },
+    {
+      "run_id": 1328,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 6.989,
+      "neighbours": [
+        {
+          "run_id": 995,
+          "label": 0,
+          "timestamp": "2008-09-21 18:12:00",
+          "distance": 6.989
+        },
+        {
+          "run_id": 343,
+          "label": 0,
+          "timestamp": "2008-08-20 23:18:00",
+          "distance": 7.264
+        },
+        {
+          "run_id": 1101,
+          "label": 0,
+          "timestamp": "2008-09-26 13:36:00",
+          "distance": 7.714
+        },
+        {
+          "run_id": 894,
+          "label": 0,
+          "timestamp": "2008-09-19 00:30:00",
+          "distance": 7.748
+        },
+        {
+          "run_id": 1061,
+          "label": 0,
+          "timestamp": "2008-09-24 13:01:00",
+          "distance": 7.769
+        }
+      ]
+    },
+    {
+      "run_id": 1329,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 1,
+      "k": 5,
+      "nearest_distance": 8.117,
+      "neighbours": [
+        {
+          "run_id": 1153,
+          "label": 0,
+          "timestamp": "2008-09-28 17:06:00",
+          "distance": 8.117
+        },
+        {
+          "run_id": 1066,
+          "label": 0,
+          "timestamp": "2008-09-24 16:26:00",
+          "distance": 8.435
+        },
+        {
+          "run_id": 1062,
+          "label": 1,
+          "timestamp": "2008-09-24 15:05:00",
+          "distance": 8.641
+        },
+        {
+          "run_id": 1051,
+          "label": 0,
+          "timestamp": "2008-09-24 05:22:00",
+          "distance": 8.656
+        },
+        {
+          "run_id": 485,
+          "label": 0,
+          "timestamp": "2008-08-28 17:21:00",
+          "distance": 8.946
+        }
+      ]
+    },
+    {
+      "run_id": 1342,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 1,
+      "k": 5,
+      "nearest_distance": 7.346,
+      "neighbours": [
+        {
+          "run_id": 502,
+          "label": 0,
+          "timestamp": "2008-08-29 01:06:00",
+          "distance": 7.346
+        },
+        {
+          "run_id": 511,
+          "label": 0,
+          "timestamp": "2008-08-29 05:54:00",
+          "distance": 7.648
+        },
+        {
+          "run_id": 601,
+          "label": 1,
+          "timestamp": "2008-08-31 04:46:00",
+          "distance": 8.155
+        },
+        {
+          "run_id": 560,
+          "label": 0,
+          "timestamp": "2008-08-30 03:10:00",
+          "distance": 8.688
+        },
+        {
+          "run_id": 957,
+          "label": 0,
+          "timestamp": "2008-09-20 15:37:00",
+          "distance": 8.758
+        }
+      ]
+    },
+    {
+      "run_id": 1343,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 9.233,
+      "neighbours": [
+        {
+          "run_id": 846,
+          "label": 0,
+          "timestamp": "2008-09-15 02:04:00",
+          "distance": 9.233
+        },
+        {
+          "run_id": 827,
+          "label": 0,
+          "timestamp": "2008-09-13 12:48:00",
+          "distance": 9.979
+        },
+        {
+          "run_id": 865,
+          "label": 0,
+          "timestamp": "2008-09-16 18:23:00",
+          "distance": 10.064
+        },
+        {
+          "run_id": 447,
+          "label": 0,
+          "timestamp": "2008-08-24 10:14:00",
+          "distance": 10.722
+        },
+        {
+          "run_id": 852,
+          "label": 0,
+          "timestamp": "2008-09-15 19:54:00",
+          "distance": 10.963
+        }
+      ]
+    },
+    {
+      "run_id": 1363,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 7.721,
+      "neighbours": [
+        {
+          "run_id": 507,
+          "label": 0,
+          "timestamp": "2008-08-29 03:46:00",
+          "distance": 7.721
+        },
+        {
+          "run_id": 468,
+          "label": 0,
+          "timestamp": "2008-08-28 06:39:00",
+          "distance": 8.08
+        },
+        {
+          "run_id": 558,
+          "label": 0,
+          "timestamp": "2008-08-30 02:39:00",
+          "distance": 8.654
+        },
+        {
+          "run_id": 502,
+          "label": 0,
+          "timestamp": "2008-08-29 01:06:00",
+          "distance": 8.68
+        },
+        {
+          "run_id": 447,
+          "label": 0,
+          "timestamp": "2008-08-24 10:14:00",
+          "distance": 8.77
+        }
+      ]
+    },
+    {
+      "run_id": 1364,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 1,
+      "k": 5,
+      "nearest_distance": 6.619,
+      "neighbours": [
+        {
+          "run_id": 1132,
+          "label": 0,
+          "timestamp": "2008-09-27 14:46:00",
+          "distance": 6.619
+        },
+        {
+          "run_id": 1169,
+          "label": 0,
+          "timestamp": "2008-09-29 04:18:00",
+          "distance": 6.803
+        },
+        {
+          "run_id": 1062,
+          "label": 1,
+          "timestamp": "2008-09-24 15:05:00",
+          "distance": 6.961
+        },
+        {
+          "run_id": 1030,
+          "label": 0,
+          "timestamp": "2008-09-23 11:42:00",
+          "distance": 6.975
+        },
+        {
+          "run_id": 1101,
+          "label": 0,
+          "timestamp": "2008-09-26 13:36:00",
+          "distance": 7.015
+        }
+      ]
+    },
+    {
+      "run_id": 1365,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 1,
+      "k": 5,
+      "nearest_distance": 8.424,
+      "neighbours": [
+        {
+          "run_id": 350,
+          "label": 0,
+          "timestamp": "2008-08-21 05:15:00",
+          "distance": 8.424
+        },
+        {
+          "run_id": 564,
+          "label": 0,
+          "timestamp": "2008-08-30 05:05:00",
+          "distance": 9.104
+        },
+        {
+          "run_id": 1066,
+          "label": 0,
+          "timestamp": "2008-09-24 16:26:00",
+          "distance": 9.165
+        },
+        {
+          "run_id": 277,
+          "label": 1,
+          "timestamp": "2008-08-18 19:54:00",
+          "distance": 9.577
+        },
+        {
+          "run_id": 1085,
+          "label": 0,
+          "timestamp": "2008-09-25 15:55:00",
+          "distance": 9.844
+        }
+      ]
+    },
+    {
+      "run_id": 1400,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 9.227,
+      "neighbours": [
+        {
+          "run_id": 331,
+          "label": 0,
+          "timestamp": "2008-08-20 17:09:00",
+          "distance": 9.227
+        },
+        {
+          "run_id": 542,
+          "label": 0,
+          "timestamp": "2008-08-29 20:21:00",
+          "distance": 9.398
+        },
+        {
+          "run_id": 872,
+          "label": 0,
+          "timestamp": "2008-09-17 07:14:00",
+          "distance": 9.856
+        },
+        {
+          "run_id": 254,
+          "label": 0,
+          "timestamp": "2008-08-18 07:29:00",
+          "distance": 9.858
+        },
+        {
+          "run_id": 1052,
+          "label": 0,
+          "timestamp": "2008-09-24 06:13:00",
+          "distance": 10.111
+        }
+      ]
+    },
+    {
+      "run_id": 1438,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 7.661,
+      "neighbours": [
+        {
+          "run_id": 782,
+          "label": 0,
+          "timestamp": "2008-09-11 07:43:00",
+          "distance": 7.661
+        },
+        {
+          "run_id": 1109,
+          "label": 0,
+          "timestamp": "2008-09-26 17:59:00",
+          "distance": 8.012
+        },
+        {
+          "run_id": 1057,
+          "label": 0,
+          "timestamp": "2008-09-24 10:59:00",
+          "distance": 8.07
+        },
+        {
+          "run_id": 883,
+          "label": 0,
+          "timestamp": "2008-09-18 08:04:00",
+          "distance": 8.243
+        },
+        {
+          "run_id": 1132,
+          "label": 0,
+          "timestamp": "2008-09-27 14:46:00",
+          "distance": 8.383
+        }
+      ]
+    },
+    {
+      "run_id": 1443,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 1,
+      "k": 5,
+      "nearest_distance": 7.423,
+      "neighbours": [
+        {
+          "run_id": 1062,
+          "label": 1,
+          "timestamp": "2008-09-24 15:05:00",
+          "distance": 7.423
+        },
+        {
+          "run_id": 1010,
+          "label": 0,
+          "timestamp": "2008-09-22 12:45:00",
+          "distance": 7.46
+        },
+        {
+          "run_id": 1170,
+          "label": 0,
+          "timestamp": "2008-09-29 04:47:00",
+          "distance": 7.916
+        },
+        {
+          "run_id": 822,
+          "label": 0,
+          "timestamp": "2008-09-13 03:14:00",
+          "distance": 7.926
+        },
+        {
+          "run_id": 1101,
+          "label": 0,
+          "timestamp": "2008-09-26 13:36:00",
+          "distance": 7.996
+        }
+      ]
+    },
+    {
+      "run_id": 1519,
+      "reason": "failed",
+      "label": 1,
+      "neighbours_failed": 0,
+      "k": 5,
+      "nearest_distance": 9.675,
+      "neighbours": [
+        {
+          "run_id": 208,
+          "label": 0,
+          "timestamp": "2008-08-15 19:19:00",
+          "distance": 9.675
+        },
+        {
+          "run_id": 221,
+          "label": 0,
+          "timestamp": "2008-08-16 15:16:00",
+          "distance": 9.757
+        },
+        {
+          "run_id": 317,
+          "label": 0,
+          "timestamp": "2008-08-20 00:05:00",
+          "distance": 9.808
+        },
+        {
+          "run_id": 465,
+          "label": 0,
+          "timestamp": "2008-08-28 04:54:00",
+          "distance": 10.005
+        },
+        {
+          "run_id": 1059,
+          "label": 0,
+          "timestamp": "2008-09-24 12:04:00",
+          "distance": 10.012
+        }
+      ]
+    }
+  ],
+  "figures": {
+    "run_map": "figures/run_map.png"
+  }
+}

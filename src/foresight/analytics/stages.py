@@ -4,6 +4,8 @@ a ValidationSummary that the gate turns into PASS / WARNING / ERROR."""
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
@@ -14,17 +16,45 @@ from foresight.analytics.eda import build_eda
 from foresight.analytics.features import SPLIT, FeatureSpec, engineer
 from foresight.analytics.modeling import train_and_evaluate
 from foresight.analytics.risk import rank_risk
+from foresight.analytics.similar import EMBEDDINGS_FILE, SIMILAR_CSV, SIMILAR_JSON, find_similar
 from foresight.crews.checks import check_outputs
+from foresight.crews.facts import background_passages
 from foresight.crews.runner import run_crew
+from foresight.rag.index import CHUNKS_FILE, VECTORS_FILE, build_run_index
 from foresight.settings import Settings
+from foresight.utils.logging import get_logger
 from foresight.validation.contract import Check, ValidationSummary
 from foresight.validation.gates import GateStatus
+
+log = get_logger("stages")
 
 
 class StageResult(BaseModel):
     artifacts: dict[str, str] = Field(default_factory=dict)
     checks: ValidationSummary | None = None
     crew_usage: dict[str, dict] = Field(default_factory=dict)
+
+
+
+def ensure_similar_fact(run_dir: Path) -> None:
+    """The overall similar-run comparison is a computed fact: if the crew left it out of the
+    investigation's Facts, insert it as the first Facts bullet (ADR-005: tools compute)."""
+    from foresight.crews.checks import section
+    from foresight.crews.facts import similar_overall
+
+    path = run_dir / "investigation.md"
+    if not path.exists() or not (run_dir / SIMILAR_JSON).exists():
+        return
+    summary = json.loads((run_dir / SIMILAR_JSON).read_text(encoding="utf-8"))
+    share = summary.get("neighbour_fail_share_for_failing_test_runs")
+    text = path.read_text(encoding="utf-8")
+    facts = section(text, "Facts")
+    if share is None or (f"{share:.1%}" in facts and "similar_runs.json" in facts):
+        return
+    heading = re.search(r"^#{1,3}\s+Facts[^\n]*\n", text, re.MULTILINE | re.IGNORECASE)
+    if heading:
+        text = text[:heading.end()] + similar_overall(run_dir) + "\n" + text[heading.end():]
+        path.write_text(text, encoding="utf-8")
 
 
 REPORT_INPUTS = ("insights.md", "model_card.md", "investigation.md")
@@ -43,12 +73,20 @@ def _add_usage(a: dict, b: dict) -> dict:
 
 
 def _with_crew(result: StageResult, crew: str, settings: Settings, run_dir: Path,
-               extra_inputs: dict[str, str] | None = None) -> StageResult:
+               extra_inputs: dict[str, str] | None = None,
+               postprocess: Callable[[Path], None] | None = None) -> StageResult:
     """Run a crew after the deterministic work of a stage and record its outputs and usage.
     If the deterministic checks on the crew's own output warn, the crew gets the findings and
-    revises it (at most settings.llm.crew_revisions times); revisions go to crew_revisions.json."""
+    revises it (at most settings.llm.crew_revisions times); revisions go to crew_revisions.json.
+    The crew is skipped when the stage's own checks already have an ERROR: the gate that follows
+    will stop the run, so the LLM call would be wasted."""
+    if result.checks is not None and result.checks.status == GateStatus.ERROR:
+        log.info("crew %s skipped: the stage checks failed", crew)
+        return result
     inputs = dict(extra_inputs or {})
     outcome = run_crew(crew, settings, run_dir, inputs)
+    if postprocess:
+        postprocess(run_dir)
     usage = {"seconds": outcome.seconds, **outcome.usage}
     files = list(outcome.outputs)
     fixed: list[str] = []
@@ -61,14 +99,16 @@ def _with_crew(result: StageResult, crew: str, settings: Settings, run_dir: Path
                  "checks. Fix them and keep everything else as required above:\n- "
                  + "\n- ".join(problems))
         again = run_crew(crew, settings, run_dir, {**inputs, "revision_notes": notes})
+        if postprocess:
+            postprocess(run_dir)
         usage = _add_usage(usage, {"seconds": again.seconds, **again.usage})
         fixed += problems
         revisions += 1
     if fixed:
         path = run_dir / REVISIONS_FILE
-        log = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-        log[crew] = fixed
-        path.write_text(json.dumps(log, indent=2), encoding="utf-8")
+        revised = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        revised[crew] = fixed
+        path.write_text(json.dumps(revised, indent=2), encoding="utf-8")
     result.artifacts.update({Path(p).stem: p for p in outcome.outputs.values()})
     result.crew_usage[crew] = {**usage, "mock": outcome.mock, "revisions": revisions}
     return result
@@ -138,16 +178,22 @@ def run_investigate(settings: Settings, run_dir: Path) -> StageResult:
     frame, spec = load_features(run_dir)
     anomalies = detect(frame, spec, settings.analytics, settings.seed, run_dir)
     risk = rank_risk(run_dir, settings.analytics, settings.seed)
+    find_similar(frame, spec, settings.analytics, settings.seed, run_dir)
     metrics = json.loads((run_dir / "model_metrics.json").read_text(encoding="utf-8"))
     eda = json.loads((run_dir / "eda_summary.json").read_text(encoding="utf-8"))
     result = StageResult(
         artifacts={"anomalies": str(run_dir / "anomalies.csv"),
                    "anomaly_summary": str(run_dir / "anomaly_summary.json"),
                    "risk_scores": str(run_dir / "risk_scores.csv"),
-                   "risk_summary": str(run_dir / "risk_summary.json")},
+                   "risk_summary": str(run_dir / "risk_summary.json"),
+                   "run_embeddings": str(run_dir / EMBEDDINGS_FILE),
+                   "similar_runs": str(run_dir / SIMILAR_CSV),
+                   "similar_runs_summary": str(run_dir / SIMILAR_JSON)},
         checks=evidence_checks(metrics, anomalies, eda, risk),
     )
-    return _with_crew(result, "investigation", settings, run_dir)
+    return _with_crew(result, "investigation", settings, run_dir,
+                      {"background_passages": background_passages(settings)},
+                      postprocess=ensure_similar_fact)
 
 
 def run_report(settings: Settings, run_dir: Path) -> StageResult:
@@ -168,6 +214,9 @@ def run_report(settings: Settings, run_dir: Path) -> StageResult:
     (run_dir / "report_checks.json").write_text(checks.model_dump_json(indent=2),
                                                 encoding="utf-8")
     result.artifacts["report_checks"] = str(run_dir / "report_checks.json")
+    build_run_index(run_dir, settings)  # "Ask Foresight" answers from this index (§18.3)
+    result.artifacts.update({"rag_index": str(run_dir / VECTORS_FILE),
+                             "rag_chunks": str(run_dir / CHUNKS_FILE)})
     result.checks = checks
     return result
 

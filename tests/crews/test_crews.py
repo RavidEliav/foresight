@@ -287,6 +287,13 @@ def test_checkable_numbers_handle_separators_ranges_and_signs():
     assert not traced("-0.38", {"0.38"})
 
 
+def test_rubric_ignores_a_closing_paragraph_after_the_list():
+    text = ("1. Hypothesis: a. Confidence: low (weak).\n2. Hypothesis: b. Confidence: medium (q).\n"
+            "\nThese hypotheses are associations, not causes;\nthey need verification.\n")
+    assert len(numbered_items(text)) == 2
+    assert confidence_problems(numbered_items(text)) == []
+
+
 def test_rubric_reads_q_value_spellings_and_sub_headings():
     assert confidence_problems([
         "1. Hypothesis (q_value = 2.5e-08). Confidence: high (out-of-limit rate too).",

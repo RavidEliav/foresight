@@ -99,7 +99,7 @@ def numbered_items(text: str) -> list[str]:
             heading, blank = line.startswith("#"), False
         elif not line.strip():
             blank = True
-        elif items and (heading or not blank or line[:1].isspace()):
+        elif items and items[-1] and (heading or not blank or line[:1].isspace()):
             items[-1] += " " + line.strip()
             blank = False
         else:
@@ -204,6 +204,7 @@ def similar_evidence_problem(facts_text: str, run_dir: Path) -> str | None:
                 "[source: similar_runs.json]")
     rates = [*shares, summary.get("train_fail_rate") or 0, summary.get("explained_variance") or 0]
     allowed = {f"{v * 100:.{d}f}%" for v in rates for d in (0, 1, 2)}
+    allowed |= set(re.findall(r"\d+(?:\.\d+)?%", summary.get("method", "")))
     for line in facts_text.splitlines():
         if "similar_runs.json" in line:
             invented = set(re.findall(r"(?<![\d.])\d+(?:\.\d+)?%", line)) - allowed

@@ -32,9 +32,12 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     for item in history:
         _show(item)
 
-    picked = st.pills("Examples", EXAMPLES, key=f"examples-{len(history)}",
+    turn = st.session_state.setdefault("example_turn", 0)
+    picked = st.pills("Examples", EXAMPLES, key=f"examples-{turn}",
                       label_visibility="collapsed")
     question = st.chat_input("Ask about this run") or picked
+    if picked:
+        st.session_state["example_turn"] = turn + 1  # use a picked example only once
     if question:
         with st.chat_message("user"):
             st.markdown(question)

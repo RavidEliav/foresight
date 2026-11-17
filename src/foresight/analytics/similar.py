@@ -97,13 +97,14 @@ def find_similar(frame: pd.DataFrame, spec: FeatureSpec, cfg: AnalyticsSettings,
     table.insert(1, "query_reason", table["query_run_id"].map(reason))
     table.to_csv(out_dir / SIMILAR_CSV, index=False)
 
+    variance = round(variance, 3)  # one rounded value for the method text and the summary
     summary = {
         "method": f"median imputation + standard scaling + PCA ({embedded.shape[1] - 4} "
                   f"components, {variance:.0%} of variance), fitted on training runs; "
                   f"{k} nearest training runs (Euclidean), all earlier in time than the test "
                   "runs",
         "k": k,
-        "explained_variance": round(variance, 3),
+        "explained_variance": variance,
         "train_fail_rate": round(train_rate, 4),
         "neighbour_fail_share_for_failing_test_runs": _round(fail_share),
         "neighbour_fail_share_for_passing_test_runs": _round(pass_share),

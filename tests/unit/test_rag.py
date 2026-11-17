@@ -119,6 +119,30 @@ def test_uncited_or_refusing_llm_answers_become_the_refusal(run_dir, settings, m
     assert chat.ask("What was the model's PR-AUC?", run_dir, settings).refused
 
 
+def test_citations_must_name_retrieved_sections_and_cover_every_paragraph():
+    from foresight.rag.index import Hit
+
+    hits = [Hit(Chunk("insights.md", "Notable sensors",
+                      "f_059 differs [source: eda_summary.json]."), 0.6)]
+    ok = "f_059 differs between failing and passing runs [source: insights.md § Notable sensors]"
+    assert chat.citation_problem(ok, hits) is None
+    quoted = ok + " [source: eda_summary.json]"  # a source tag quoted inside the excerpt
+    assert chat.citation_problem(quoted, hits) is None
+    invented = "f_059 measures pressure. [source: insights.md § Anything]"
+    assert "cited no retrieved excerpt" in chat.citation_problem(invented, hits)
+    mixed = ok + " It causes failures [source: insights.md § Anything]"
+    assert "not retrieved" in chat.citation_problem(mixed, hits)
+    assert "not retrieved" in chat.citation_problem(ok + " [source: other.json]", hits)
+    uncited = ok + "\n\nIt also causes failures."
+    assert chat.citation_problem(uncited, hits) == "part of it has no citation"
+    listed = ("The sensors are:\n\n1. f_059 differs\n\n2. f_103 differs "
+              "[source: insights.md § Notable sensors]")
+    assert chat.citation_problem(listed, hits) is None
+    trailing = ("Next steps are:\n\n1. Check logs.\n2. Run a test.\n\n"
+                "[source: insights.md § Notable sensors]")
+    assert chat.citation_problem(trailing, hits) is None
+
+
 def test_cited_sources_only_count_retrieved_files():
     from foresight.rag.index import Hit
 

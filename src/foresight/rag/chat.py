@@ -23,7 +23,8 @@ REFUSAL = "Not found in this run's artifacts."
 CITATION = re.compile(r"\[source:\s*([^\]§]+?)\s*(?:§\s*([^\]]+?))?\s*\]", re.IGNORECASE)
 SYSTEM = f"""You are Foresight, an assistant for semiconductor process engineers.
 Answer the question using ONLY the excerpts from this run's artifacts given below.
-- After every statement, cite the excerpt it comes from exactly as [source: <file> § <section>].
+- After every statement, cite the excerpt it comes from with the excerpt's header exactly as
+  shown above it, for example [source: model_card.md § Limitations].
 - Use only numbers that appear in the excerpts. Do not use general knowledge.
 - Sensor names are anonymized; never say what a sensor physically measures.
 - Say "is associated with", never "causes".
@@ -50,8 +51,38 @@ class ChatAnswer(BaseModel):
 
 
 def _prompt(question: str, hits: list[Hit]) -> str:
-    excerpts = "\n\n".join(f"[{h.chunk.citation}]\n{h.chunk.text}" for h in hits)
+    excerpts = "\n\n".join(f"[source: {h.chunk.citation}]\n{h.chunk.text}" for h in hits)
     return f"Excerpts:\n\n{excerpts}\n\nQuestion: {question}"
+
+
+def citation_problem(answer: str, hits: list[Hit]) -> str | None:
+    """At least one citation must be traceable, no citation may point outside what was
+    retrieved, and every paragraph (except an introduction ending with ':') must cite.
+    Traceable = a retrieved excerpt (file § section) or a source tag quoted inside the
+    retrieved text (the reports cite their own data files)."""
+    excerpts = {(h.chunk.source, h.chunk.section.lower()) for h in hits}
+    files = {h.chunk.source for h in hits}
+    quoted = {m.group(1).strip() for h in hits for m in CITATION.finditer(h.chunk.text)}
+    citations = [(m.group(1).strip(), (m.group(2) or "").strip()) for m in
+                 CITATION.finditer(answer)]
+
+    def traceable(file: str, sec: str) -> bool:
+        if (file, sec.lower()) in excerpts:
+            return True
+        return file in quoted and (file not in files or not sec)
+
+    if not any(traceable(f, s) for f, s in citations):
+        return "it cited no retrieved excerpt"
+    for file, sec in citations:
+        if not traceable(file, sec):
+            return f"it cited something that was not retrieved ({file}{' § ' + sec if sec else ''})"
+    # a list is one block, even when its items are separated by blank lines, and a paragraph
+    # that is only a citation cites the block before it
+    joined = re.sub(r"\n\s*\n(?=\s*(?:\d+[.)]|[-*])\s|\s*\[source:)", "\n", answer)
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", joined) if p.strip()]
+    if any(not CITATION.search(p) and not p.endswith(":") for p in paragraphs):
+        return "part of it has no citation"
+    return None
 
 
 def cited_sources(answer: str, hits: list[Hit]) -> set[str]:
@@ -110,8 +141,8 @@ def ask(question: str, run_dir: Path, settings: Settings) -> ChatAnswer:
     refused, reason = False, ""
     if REFUSAL.lower().rstrip(".") in answer.lower():
         answer, refused, reason = REFUSAL, True, "the excerpts do not contain the answer"
-    elif not cited_sources(answer, hits):
-        answer, refused, reason = REFUSAL, True, "answer withheld: it cited no retrieved excerpt"
+    elif problem := citation_problem(answer, hits):
+        answer, refused, reason = REFUSAL, True, f"answer withheld: {problem}"
     return ChatAnswer(question=question, answer=answer, refused=refused, reason=reason,
                       sources=sources, usage=usage, mock=settings.mock_llm,
                       seconds=round(time.perf_counter() - start, 2))

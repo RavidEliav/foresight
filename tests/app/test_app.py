@@ -72,7 +72,8 @@ def test_run_found_by_progress_stays_visible_after_it_finishes(monkeypatch):
 
     tracker.finish("timeout", "stopped by the timeout guard after 1200 s")
     at.run()
-    assert any("timeout guard" in e.value for e in at.error)
+    assert any("took longer than the time limit" in e.value for e in at.error)
+    assert any("timeout guard after 1200 s" in c.value for c in at.code)  # technical details
 
 
 def test_finished_run_shows_stages_gates_and_becomes_viewable(monkeypatch, secom_env):
@@ -88,8 +89,8 @@ def test_finished_run_shows_stages_gates_and_becomes_viewable(monkeypatch, secom
     at.button(key="run").click().run()
     assert not at.exception
     assert any("completed" in s.value for s in at.success)
-    assert any("data_contract" in md.value and "PASS" in md.value for md in at.markdown)
-    assert any("Data Analyst crew" in md.value for md in at.markdown)
+    assert any("Data Contract: PASS" in md.value for md in at.markdown)
+    assert any("Data Analyst crew" in c.value for c in at.caption)
     assert "Run history (1)" in [e.label for e in at.expander]
     at.run()  # the next rerun lists the new run first in the sidebar selector
     selector = at.sidebar.selectbox(key="view_run")
@@ -113,6 +114,8 @@ def test_failed_upload_run_lists_the_failed_data_checks(monkeypatch, secom_env, 
     at.text_input(key="passcode").input("s3cret")
     at.button(key="run").click().run()
     assert not at.exception
-    assert any("stopped" in err.value and "raw_label_values" in err.value for err in at.error)
-    failed = at.dataframe[0].value
+    assert any("stopped" in err.value and "Some labels are not -1 (pass) or 1 (fail)"
+               in err.value for err in at.error)
+    assert any("upload it again" in i.value for i in at.info)
+    failed = at.dataframe[0].value  # technical details: the failed checks by name
     assert "raw_label_values" in set(failed["name"])

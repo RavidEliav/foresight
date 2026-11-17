@@ -1,5 +1,6 @@
-"""Investigation & Report page: the engineering report and its safety checks, the
-investigation, the risk ranking and the anomaly detection results."""
+"""Investigation & Report page: a short, checked summary (key findings and one card per
+hypothesis) on top; the engineering report, the full investigation, the risk ranking, similar
+past runs, anomalies and the safety checks in tabs below."""
 
 from __future__ import annotations
 
@@ -8,79 +9,159 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app.runs import no_run, read_json, run_label, show_figure, show_markdown_file
+from app import charts, ui
+from app.runs import no_run, read_json, run_label, show_markdown_file
+from foresight.crews.summary import SUMMARY_FILE, InvestigationSummary, load_summary
 
 STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:",
                "ERROR": ":material/cancel:"}
+TABS = ["Engineering report", "Full investigation", "Risk ranking", "Similar past runs",
+        "Anomalies", "Safety checks"]
 
 
 def render(run_dir: Path | None) -> None:
-    st.title("Investigation & Report")
+    ui.page_header("Investigation & Report")
     summary = read_json(run_dir, "anomaly_summary.json") if run_dir else None
     if not summary:
         no_run("investigation")
         return
 
     st.caption(run_label(run_dir))
-    _render_report(run_dir)
-
+    checks = read_json(run_dir, "report_checks.json")
     risk = read_json(run_dir, "risk_summary.json")
-    if risk:
-        _render_risk(risk)
     similar = read_json(run_dir, "similar_runs.json")
-    if similar:
-        _render_similar(run_dir, similar)
+    _status_line(checks)
+    ui.kpis(_headline_numbers(summary, risk, similar))
+    overview = load_summary(run_dir)
+    if overview:
+        _render_overview(overview)
+    elif (run_dir / SUMMARY_FILE).exists():
+        st.warning("The short summary of this run did not pass its format check, so there are "
+                   "no hypothesis cards. The full investigation is under Extended data below; "
+                   "the Safety checks tab says what was wrong.", icon=":material/warning:")
+    else:
+        st.info("This run was made before Foresight wrote a short summary, so there are no "
+                "hypothesis cards. The full investigation is under Extended data below.",
+                icon=":material/history:")
 
-    st.subheader("Anomalies")
-    cols = st.columns(4)
-    cols[0].metric("Runs flagged", summary["runs_flagged"])
-    cols[1].metric("Flag rate: failing runs", f"{summary['flag_rate_fail']:.1%}")
-    cols[2].metric("Flag rate: passing runs", f"{summary['flag_rate_pass']:.1%}",
-                   help=f"Failing runs are flagged {summary['flag_lift']}x as often")
+    left, right = st.columns(2, gap="medium")
+    with left, st.container(key="card-chart-anomalies"):
+        ui.label("Anomaly score over time")
+        charts.anomaly_timeline(run_dir, summary["score_limit"])
+    with right, st.container(key="card-chart-runmap"):
+        ui.label("Run map: similar sensor profiles sit close together")
+        if similar:
+            charts.run_map(run_dir, st.toggle("3D view", key="run-map-3d-toggle"))
+        else:
+            _older_run("Similar-run search")
+
+    ui.section_label("Extended data")
+    report, investigation, risk_tab, similar_tab, anomalies, safety = st.tabs(TABS)
+    with report:
+        _render_report(run_dir)
+    with investigation:
+        _render_investigation(run_dir / "investigation.md")
+    with risk_tab:
+        if risk:
+            _render_risk(risk)
+        else:
+            _older_run("The risk ranking")
+    with similar_tab:
+        if similar:
+            _render_similar(similar)
+        else:
+            _older_run("Similar-run search")
+    with anomalies:
+        _render_anomalies(summary)
+    with safety:
+        _render_checks(checks)
+
+
+def _headline_numbers(summary: dict, risk: dict | None,
+                      similar: dict | None) -> list[tuple[str, str, str | None, str | None]]:
+    """The numbers an engineer looks for first: (label, value, comparison, help)."""
+    items = []
+    if risk:
+        chosen = risk["recommended_ranking"]
+        test, budget = risk["test"][chosen], risk["alarm_budget"]
+        name = "model + anomaly score" if chosen == "combined" else "model alone"
+        if "fails_found" in test:
+            items.append(("Failing runs caught", f"{test['fails_found']} of {test['fails_total']}",
+                          f"with {test['alarms']} alarms",
+                          f"Flagging the riskiest {budget:.0%} of test-period runs (ranking: "
+                          f"{name}); random flagging finds about {budget:.0%} of failing runs"))
+        items.append(("Alarm precision", f"{test['precision_at_budget']:.1%}",
+                      "true alarms", "Share of the alarms that were failing runs"))
+    items.append(("Anomaly flag lift", f"{summary['flag_lift']}x",
+                  f"{summary['flag_rate_fail']:.1%} vs {summary['flag_rate_pass']:.1%} flagged",
+                  f"Failing runs are flagged {summary['flag_lift']}x as often as passing runs "
+                  f"({summary['runs_flagged']} runs flagged in total)"))
     if "mean_out_of_limit_fail" in summary:
-        fail, ok = summary["mean_out_of_limit_fail"], summary["mean_out_of_limit_pass"]
-        cols[3].metric("Sensors out of limits per run", f"{fail} vs {ok}",
-                       help="Average number of sensors outside their control limits (|z| > 3): "
-                            "failing runs vs passing runs")
-    show_figure(run_dir, summary["figures"].get("anomaly_scores"))
+        items.append(("Sensors out of limits", str(summary["mean_out_of_limit_fail"]),
+                      f"{summary['mean_out_of_limit_pass']} in passing runs",
+                      "Average number of sensors outside their control limits (|z| > 3) per "
+                      "failing run, and per passing run"))
+    if similar and similar["neighbour_fail_share_for_failing_test_runs"] is not None:
+        items.append(("Similar runs that failed",
+                      f"{similar['neighbour_fail_share_for_failing_test_runs']:.1%}",
+                      f"{similar['neighbour_fail_share_for_passing_test_runs']:.1%} for passing "
+                      "runs",
+                      f"Share of the {similar['k']} most similar past runs that failed, for "
+                      f"failing and for passing test runs (training fail rate "
+                      f"{similar['train_fail_rate']:.1%}). Close values mean weak evidence."))
+    return items
 
-    sensors = pd.DataFrame(summary["sensors_more_often_out_of_limit_in_fails"])
-    if not sensors.empty:
-        st.markdown("**Sensors more often out of control limits in failing runs**")
-        st.dataframe(sensors, hide_index=True, width="stretch")
-    runs = pd.DataFrame(summary["most_anomalous_runs"])
-    if not runs.empty:
-        st.markdown("**Most anomalous runs**")
-        st.dataframe(runs, hide_index=True, width="stretch")
-    with st.expander("Method"):
-        for name, text in summary["method"].items():
-            st.markdown(f"- **{name}:** {text}")
 
+def _older_run(feature: str) -> None:
+    st.info(f"{feature} was added after this run was made. Choose the reference run in the "
+            "sidebar, or start a new run.", icon=":material/history:")
+
+
+def _status_line(checks: dict | None) -> None:
+    if not checks:
+        return
+    status, counts = checks["status"], checks["counts"]
+    total = sum(counts.values())
+    color = ui.STATUS_COLORS[status]
+    st.markdown(f":{color}-badge[{STATUS_ICON[status]} Report safety checks: {status}] "
+                f":gray[{counts['PASS']} of {total} passed · details in the Safety checks "
+                "tab]")
+
+
+def _render_overview(overview: InvestigationSummary) -> None:
+    with st.container(key="card-summary"):
+        ui.label("Key findings")
+        st.html(f'<div class="fs-headline">{_escape(overview.headline)}</div>')
+        st.markdown("\n".join(f"- {ui.md(f.text)} :gray-badge[{f.source}]"
+                              for f in overview.key_findings))
+
+    st.markdown("**Hypotheses** :gray[AI-generated leads for an engineer to verify, not proven "
+                "causes]")
+    per_row = 3
+    cards = overview.hypotheses
+    for start in range(0, len(cards), per_row):
+        columns = st.columns(per_row)
+        for offset, (column, card) in enumerate(zip(columns, cards[start:start + per_row],
+                                                    strict=False)):
+            # keyed by position: an LLM may repeat a card number
+            with column, st.container(key=f"card-hyp-{start + offset}", height="stretch"):
+                color = ui.CONFIDENCE_COLORS[card.confidence]
+                st.markdown(f"**H{card.number}** :{color}-badge[{card.confidence} confidence]")
+                st.markdown(f"**{ui.md(card.title)}**")
+                st.markdown(f":gray[Evidence:] {ui.md(card.evidence)}")
+                st.markdown(f":blue[Verify:] {ui.md(card.verify)}")
+
+
+def _escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _render_report(run_dir: Path) -> None:
-    checks = read_json(run_dir, "report_checks.json")
-    if checks:
-        status, counts = checks["status"], checks["counts"]
-        message = (f"Report safety checks: **{status}** · {counts['PASS']} passed, "
-                   f"{counts['WARNING']} warnings, {counts['ERROR']} errors")
-        {"PASS": st.success, "WARNING": st.warning, "ERROR": st.error}[status](
-            message, icon=STATUS_ICON[status])
-        with st.expander("What the safety checks verify"):
-            st.markdown("Required sections are present, every sensor mentioned exists in the "
-                        "data, numbers can be traced to the run files, every fact in the "
-                        "investigation cites its source file, and every hypothesis follows the "
-                        "confidence rubric (\"high\" needs q < 0.001 and a second, independent "
-                        "signal). A crew whose output "
-                        "fails a check revises it once; any revisions are listed below.")
-            st.dataframe(pd.DataFrame(checks["checks"])[["status", "name", "message"]],
-                         hide_index=True, width="stretch")
-    if (run_dir / "engineering_report.md").exists():
-        st.subheader("Engineering report")
-        with st.container(border=True):
-            show_markdown_file(run_dir, "engineering_report.md", "Download engineering_report.md")
-    if (run_dir / "investigation.md").exists():
-        _render_investigation(run_dir / "investigation.md")
+    if not (run_dir / "engineering_report.md").exists():
+        st.info("No engineering report in this run.")
+        return
+    with st.container(border=True):
+        show_markdown_file(run_dir, "engineering_report.md", "Download engineering_report.md")
 
 
 INVESTIGATION_SECTIONS = [
@@ -95,8 +176,10 @@ def _render_investigation(path: Path) -> None:
     """Facts, assumptions and hypotheses in separate, colour-labelled blocks."""
     from foresight.crews.checks import section
 
+    if not path.exists():
+        st.info("No investigation in this run.")
+        return
     text = path.read_text(encoding="utf-8")
-    st.subheader("Investigation")
     for title, color, meaning in INVESTIGATION_SECTIONS:
         body = section(text, title).strip()
         if not body:
@@ -109,8 +192,45 @@ def _render_investigation(path: Path) -> None:
                        key="download-investigation.md")
 
 
-def _render_similar(run_dir: Path, similar: dict) -> None:
-    st.subheader("Similar past runs")
+def _render_checks(checks: dict | None) -> None:
+    if not checks:
+        st.info("No safety checks in this run.")
+        return
+    status, counts = checks["status"], checks["counts"]
+    message = (f"Report safety checks: **{status}** · {counts['PASS']} passed, "
+               f"{counts['WARNING']} warnings, {counts['ERROR']} errors")
+    {"PASS": st.success, "WARNING": st.warning, "ERROR": st.error}[status](
+        message, icon=STATUS_ICON[status])
+    st.markdown("Required sections are present, every sensor mentioned exists in the data, "
+                "numbers can be traced to the run files, every fact in the investigation cites "
+                "its source file, every hypothesis follows the confidence rubric (\"high\" "
+                "needs q < 0.001 and a second, independent signal) and the summary above "
+                "matches the investigation. A crew whose output fails a check revises it once; "
+                "revisions are listed below.")
+    ui.table(pd.DataFrame(checks["checks"])[["status", "name", "message"]], max_rows=30)
+
+
+def _render_anomalies(summary: dict) -> None:
+    st.markdown(f"**{summary['runs_flagged']}** runs flagged as anomalous: "
+                f"**{summary['flag_rate_fail']:.1%}** of failing runs and "
+                f"**{summary['flag_rate_pass']:.1%}** of passing runs (failing runs "
+                f"{summary['flag_lift']}x as often).")
+    sensors = pd.DataFrame(summary["sensors_more_often_out_of_limit_in_fails"])
+    if not sensors.empty:
+        st.markdown("**Sensors more often out of control limits in failing runs**")
+        ui.table(sensors, {c: st.column_config.NumberColumn(format="percent")
+                           for c in ("out_of_limit_rate_fail", "out_of_limit_rate_pass",
+                                     "difference")})
+    runs = pd.DataFrame(summary["most_anomalous_runs"])
+    if not runs.empty:
+        st.markdown("**Most anomalous runs**")
+        ui.table(runs)
+    with st.expander("Method"):
+        for name, text in summary["method"].items():
+            st.markdown(f"- **{name}:** {text}")
+
+
+def _render_similar(similar: dict) -> None:
     fail, ok = (similar["neighbour_fail_share_for_failing_test_runs"],
                 similar["neighbour_fail_share_for_passing_test_runs"])
     if fail is not None and ok is not None:
@@ -124,14 +244,13 @@ def _render_similar(run_dir: Path, similar: dict) -> None:
              "most similar runs": ", ".join(str(n["run_id"]) for n in q["neighbours"])}
             for q in similar["queries"]]
     if rows:
-        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
-    with st.expander("Run map and method"):
+        ui.table(pd.DataFrame(rows), {"nearest distance": st.column_config.NumberColumn(
+            format="%.2f")})
+    with st.expander("Method"):
         st.caption(similar["method"])
-        show_figure(run_dir, similar["figures"].get("run_map"))
 
 
 def _render_risk(risk: dict) -> None:
-    st.subheader("Risk ranking")
     chosen = risk["recommended_ranking"]
     budget = risk["alarm_budget"]
     test = risk["test"][chosen]
@@ -150,8 +269,10 @@ def _render_risk(risk: dict) -> None:
          "test recall at budget": risk["test"][name]["recall_at_budget"],
          "test precision at budget": risk["test"][name]["precision_at_budget"]}
         for name in ("model", "anomaly", "combined")])
-    st.dataframe(comparison, hide_index=True, width="stretch")
+    ui.table(comparison, {c: st.column_config.NumberColumn(format="%.3f")
+                          for c in comparison.columns if c != "ranking"})
     top = pd.DataFrame(risk["top_risk_runs"])
     if not top.empty:
         st.markdown("**Riskiest test-period runs**")
-        st.dataframe(top, hide_index=True, width="stretch")
+        ui.table(top, {c: st.column_config.NumberColumn(format="%.3f")
+                       for c in ("risk_score", "fail_probability", "anomaly_score")})

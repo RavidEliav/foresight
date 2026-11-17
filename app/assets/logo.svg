@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <radialGradient id="face" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#1B2A44"/>
+      <stop offset="1" stop-color="#0A1120"/>
+    </radialGradient>
+    <clipPath id="wafer">
+      <circle cx="32" cy="32" r="26"/>
+    </clipPath>
+  </defs>
+  <circle cx="32" cy="32" r="26" fill="url(#face)"/>
+  <g clip-path="url(#wafer)" stroke="#22D3EE" stroke-opacity="0.28" stroke-width="0.7">
+    <path d="M6 14H58M6 20H58M6 26H58M6 32H58M6 38H58M6 44H58M6 50H58"/>
+    <path d="M14 6V58M20 6V58M26 6V58M32 6V58M38 6V58M44 6V58M50 6V58"/>
+  </g>
+  <rect x="38.4" y="20.4" width="5.2" height="5.2" fill="#FBBF24" opacity="0.95"/>
+  <rect x="20.4" y="38.4" width="5.2" height="5.2" fill="#FBBF24" opacity="0.6"/>
+  <rect x="32.4" y="32.4" width="5.2" height="5.2" fill="#22D3EE" opacity="0.9"/>
+  <circle cx="32" cy="32" r="26" fill="none" stroke="url(#rim)" stroke-width="2.4"/>
+  <path d="M28.5 57.6 Q32 54.2 35.5 57.6" fill="#070B14" stroke="url(#rim)" stroke-width="1.6"/>
+</svg>

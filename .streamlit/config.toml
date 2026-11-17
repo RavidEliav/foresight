@@ -1,0 +1,38 @@
+# Foresight theme: dark "cleanroom" palette. Cyan and violet echo lithography light,
+# amber the yellow-room lighting of a fab. Fonts are loaded from Google Fonts.
+[theme]
+base = "dark"
+primaryColor = "#22D3EE"
+backgroundColor = "#070B14"
+secondaryBackgroundColor = "#101828"
+textColor = "#DCE4F0"
+linkColor = "#67E8F9"
+borderColor = "#1F2C45"
+dataframeBorderColor = "#1F2C45"
+dataframeHeaderBackgroundColor = "#0E1626"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "medium"
+buttonRadius = "full"
+baseFontSize = 15
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "'Space Grotesk':https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+headingFontWeights = [700, 600, 600, 600, 600, 600]
+metricValueFontWeight = 600
+metricValueFontSize = "1.65rem"
+blueColor = "#38BDF8"
+greenColor = "#34D399"
+orangeColor = "#FBBF24"
+redColor = "#F87171"
+violetColor = "#A78BFA"
+grayColor = "#94A3B8"
+chartCategoricalColors = ["#22D3EE", "#A78BFA", "#FBBF24", "#34D399", "#F87171", "#60A5FA"]
+
+[theme.sidebar]
+backgroundColor = "#0A1120"
+secondaryBackgroundColor = "#111B2E"
+borderColor = "#1F2C45"
+
+[client]
+toolbarMode = "minimal"

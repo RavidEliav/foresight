@@ -153,6 +153,41 @@ def investigation(run_dir: Path) -> str:
 """
 
 
+def investigation_summary(run_dir: Path) -> str:
+    """The structured summary of the mock investigation (investigation_summary.json)."""
+    import json
+    import textwrap
+
+    from foresight.crews.checks import CONFIDENCE, numbered_items, section
+
+    def short(text: str, width: int) -> str:
+        text = textwrap.shorten(text, width=width, placeholder="...")
+        return text[:1].upper() + text[1:]
+
+    text = investigation(run_dir)
+    findings = []
+    for line in section(text, "Facts").splitlines():
+        source = re.search(r"\[source:\s*([^\]]+)\]", line)
+        body = re.sub(r"\s*\[source:[^\]]*\]", "", line[2:]).strip()
+        if line.startswith("- ") and source and 10 <= len(body) <= 220:
+            findings.append({"text": body, "source": source.group(1).strip()})
+    checks = [line[2:].split(": ", 1)[-1] for line in
+              section(text, "Suggested verification").splitlines() if line.startswith("- ")]
+    cards = []
+    for i, item in enumerate(numbered_items(section(text, "Hypotheses")), start=1):
+        level = CONFIDENCE.search(item)
+        body = re.sub(r"^\s*\d+[.)]\s*(\*\*[^*]+\*\*\s*)?", "", item).split(" Background:")[0]
+        cards.append({"number": i, "title": short(body.split(". ")[0], 120),
+                      "confidence": (level.group(1) or level.group(2)).lower(),
+                      "evidence": short(body, 220),
+                      "verify": short(checks[i - 1] if i <= len(checks) else body, 220)})
+    return json.dumps({
+        "headline": "Mock draft (no LLM): a few sensors differ between failing and passing runs "
+                    "and anomaly flags add a second, weaker signal. The hypotheses are leads "
+                    "for an engineer, not proven causes.",
+        "key_findings": findings[:3], "hypotheses": cards}, indent=2)
+
+
 def engineering_report(run_dir: Path, investigation_text: str | None = None) -> str:
     f = all_facts(run_dir)
     risk = read(run_dir, "risk_summary.json")
@@ -206,6 +241,7 @@ def draft_for(task_name: str, run_dir: Path, inputs: dict[str, str]) -> str:
         "insights": lambda: insights(run_dir),
         "model_card": lambda: model_card(run_dir),
         "investigation": lambda: investigation(run_dir),
+        "investigation_summary": lambda: investigation_summary(run_dir),
         "engineering_report": lambda: engineering_report(run_dir, inputs.get("investigation")),
         "report_draft": lambda: engineering_report(run_dir, inputs.get("investigation")),
     }

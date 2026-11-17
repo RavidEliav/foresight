@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from foresight.crews.facts import all_facts
 from foresight.crews.mock_llm import MockLLM
+from foresight.crews.summary import extract_json
 from foresight.llm import get_llm
 from foresight.settings import Settings
 from foresight.tools.run_tools import build_tools
@@ -41,6 +42,12 @@ Rules (engineering safety):
   treat such values with caution.
 - Return plain markdown, without code fences.
 """
+# Structured outputs (.json) keep the safety rules but return one JSON object.
+JSON_RULES = RULES.replace(
+    "- After each factual statement, cite the file it came from as [source: <file>].\n",
+    "- Put the file each finding came from in its \"source\" field.\n",
+).replace("- Return plain markdown, without code fences.",
+          "- Return only the JSON object: no code fences, no text before or after it.")
 
 
 class CrewRunResult(BaseModel):
@@ -69,7 +76,8 @@ def build_crew(name: str, run_dir: Path, llm, inputs: dict[str, str]):
     tasks: dict[str, Task] = {}
     outputs: dict[str, str] = {}
     for spec in config["tasks"]:
-        description = spec["description"].format_map(values).strip() + "\n" + RULES
+        rules = JSON_RULES if spec.get("output", "").endswith(".json") else RULES
+        description = spec["description"].format_map(values).strip() + "\n" + rules
         tasks[spec["name"]] = Task(
             name=spec["name"], description=description,
             expected_output=spec["expected_output"], agent=agents[spec["agent"]],
@@ -98,7 +106,9 @@ def run_crew(name: str, settings: Settings, run_dir: Path,
     written = {}
     for task_name, file_name in outputs.items():
         path = run_dir / file_name
-        path.write_text(clean_markdown(tasks[task_name].output.raw), encoding="utf-8")
+        raw = tasks[task_name].output.raw
+        path.write_text(extract_json(raw) if file_name.endswith(".json") else clean_markdown(raw),
+                        encoding="utf-8")
         written[file_name] = str(path)
     # One LLM instance is shared by the crew's agents (and created per run), so its own counter
     # is the crew's usage; CrewOutput.token_usage would add it once per agent.

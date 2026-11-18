@@ -14,7 +14,8 @@ EXAMPLES = ["What is the model's test PR-AUC?", "Which sensors differ most betwe
             "and passing runs?", "What are the hypotheses and how confident are they?",
             "Did the data pass the Data Contract validation?"]
 EXAMPLES_ALL = ["How did the test PR-AUC differ between runs?", "Which sensors were among the "
-                "most important in several runs?", "Which runs had warnings in their checks?"]
+                "most important in several runs?", "Did the data pass the Data Contract in "
+                "every run?"]
 UNLOCKED = "chat_unlocked"
 SCOPES = ["This run", "All runs"]
 

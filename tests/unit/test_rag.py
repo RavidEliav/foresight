@@ -245,3 +245,16 @@ def test_questions_about_all_runs_search_every_run_and_cite_the_run(tmp_path, se
         in result.answer  # the citation names the run
     refused = chat.ask_all("What is the capital of France?", settings)
     assert refused.refused and refused.answer == chat.REFUSAL_ALL
+
+
+def test_all_runs_answers_may_sum_up_cited_lines_only_with_grounded_numbers():
+    hits = [chat.Hit(Chunk("r1/model_card.md", "Metrics", "Test PR-AUC 0.085 (95% CI)."), 0.6),
+            chat.Hit(Chunk("r2/model_card.md", "Metrics", "Test PR-AUC 0.120 (95% CI)."), 0.6)]
+    lines = ("- r1: 0.085 [source: r1/model_card.md § Metrics]\n"
+             "- r2: 0.120 [source: r2/model_card.md § Metrics]")
+    grounded = f"{lines}\n\nOverall, the PR-AUC rose from 0.085 to 0.12."
+    assert chat.citation_problem(grounded, hits) == "part of it has no citation"  # one run
+    assert chat.citation_problem(grounded, hits, grounded_summaries=True) is None
+    invented = f"{lines}\n\nOverall, the PR-AUC rose by 41%."
+    assert chat.citation_problem(invented, hits, grounded_summaries=True) \
+        == "part of it has no citation"

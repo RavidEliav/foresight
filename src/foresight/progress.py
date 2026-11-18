@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -34,6 +35,12 @@ def now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+def new_run_id() -> str:
+    """Run ids sort by time (the app relies on that). Defined here, not in flow.py, so the app
+    can create runs without importing the Flow (CrewAI and the analytics stack, about 270 MB)."""
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+
+
 # Stage of each crew (the crew runs after its stage's deterministic work)
 CREW_STAGES = {"analyst": "analyze", "scientist": "model", "investigation": "investigate",
                "report": "report"}
@@ -46,6 +53,7 @@ class StageProgress(BaseModel):
     status: str = "pending"  # pending, running, done, failed, skipped
     crew_status: str | None = None  # running, done, skipped, failed
     seconds: float | None = None
+    crew_seconds: float | None = None  # a background crew's time, after `seconds`
     # Kept so that a resumed run can reuse a finished stage instead of redoing it
     artifacts: dict[str, str] = Field(default_factory=dict)
     checks: dict | None = None
@@ -56,6 +64,7 @@ class StageProgress(BaseModel):
         """A resumed run can take this stage over: it finished, recorded its files (runs from
         before Phase 6.1 did not) and the files are still there. Ingest is always redone."""
         return (self.name != "ingest" and self.status == "done" and bool(self.artifacts)
+                and (self.crew is None or self.crew_status in ("done", "skipped"))
                 and all(Path(p).exists() for p in self.artifacts.values()))
 
 class RunProgress(BaseModel):
@@ -88,7 +97,8 @@ class RunProgress(BaseModel):
         """An interrupted, timed-out or crashed run can continue where it stopped; a run that a
         gate stopped would stop again on the same data."""
         status = self.effective_status()
-        crashed = status == "failed" and "stage error" in (self.failure_reason or "")
+        crashed = status == "failed" and any(
+            marker in (self.failure_reason or "") for marker in ("stage error", "crew error"))
         return status in ("interrupted", "timeout") or crashed
 
 
@@ -126,7 +136,14 @@ class ProgressTracker(BaseModel):
             tmp = self.run_dir / f".{PROGRESS_FILE}.{os.getpid()}.{threading.get_ident()}"
             tmp.write_text(json.dumps(self.progress.model_dump(mode="json"), indent=2),
                            encoding="utf-8")
-            os.replace(tmp, self.run_dir / PROGRESS_FILE)
+            for attempt in range(40):  # Windows refuses while a reader has the file open
+                try:
+                    os.replace(tmp, self.run_dir / PROGRESS_FILE)
+                    break
+                except PermissionError:
+                    if attempt == 39:
+                        raise
+                    time.sleep(0.05)
 
     def _stage(self, name: str) -> StageProgress | None:
         return next((s for s in self.progress.stages if s.name == name), None)
@@ -146,8 +163,10 @@ class ProgressTracker(BaseModel):
         if stage := self._stage(name):
             stage.status = "done" if ok else "failed"
             stage.seconds = None if seconds is None else round(seconds, 1)
-            stage.artifacts, stage.checks = artifacts or {}, checks
-            stage.crew_usage = crew_usage or {}
+            # merged, not replaced: a fast background crew may already have recorded its part
+            stage.artifacts = {**stage.artifacts, **(artifacts or {})}
+            stage.checks = checks
+            stage.crew_usage = {**stage.crew_usage, **(crew_usage or {})}
             if not ok and stage.crew_status == "running":
                 stage.crew_status = "failed"
         self.save()
@@ -155,6 +174,16 @@ class ProgressTracker(BaseModel):
     def crew(self, crew: str, status: str) -> None:
         if stage := self._stage(CREW_STAGES.get(crew, "")):
             stage.crew_status = status
+        self.save()
+
+    def crew_finished(self, stage_name: str, artifacts: dict[str, str],
+                      crew_usage: dict[str, dict]) -> None:
+        """A background crew's outputs and usage join its stage's record (for Continue)."""
+        if stage := self._stage(stage_name):
+            stage.artifacts = {**stage.artifacts, **artifacts}
+            stage.crew_usage = {**stage.crew_usage, **crew_usage}
+            stage.crew_status = "done"
+            stage.crew_seconds = round(sum(u.get("seconds") or 0 for u in crew_usage.values()), 1)
         self.save()
 
     def finished_stage(self, name: str) -> StageProgress | None:
@@ -170,8 +199,10 @@ class ProgressTracker(BaseModel):
         progress.gates = []
         progress.resumed_at.append(now())
         for stage in progress.stages:
-            if stage.status != "done":
+            if stage.status != "done" or not stage.reusable:
                 stage.status, stage.crew_status, stage.seconds = "pending", None, None
+                stage.crew_seconds = None
+                stage.artifacts, stage.checks, stage.crew_usage = {}, None, {}
         self.save()
 
     def gate(self, name: str, status: str, messages: list[str]) -> None:

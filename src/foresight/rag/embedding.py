@@ -29,6 +29,7 @@ MODEL_NAME = "all-MiniLM-L6-v2"
 DIMENSIONS = 384
 LOCK_TIMEOUT_S = 180
 WATCHDOG_S = 60
+BATCH = 8
 _LOCK = threading.Lock()
 log = get_logger("embedding")
 
@@ -62,7 +63,11 @@ class Embedder:
         start = time.perf_counter()
         try:
             watchdog.start()
-            vectors = np.asarray(self._model(list(texts)), dtype=np.float32)
+            # small batches: ONNX Runtime keeps memory for the largest batch it has seen
+            # (100 chunks at once cost about 430 MB more than batches of 8, for 0.8 s saved)
+            vectors = np.vstack([np.asarray(self._model(list(texts[i:i + BATCH])),
+                                            dtype=np.float32)
+                                 for i in range(0, len(texts), BATCH)])
         finally:
             watchdog.cancel()
             _LOCK.release()

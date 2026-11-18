@@ -202,6 +202,57 @@ def test_crashed_run_continues_from_where_it_stopped(monkeypatch):
     assert "model.joblib" in manifest["artifacts"]
 
 
+def test_analyst_crew_runs_while_the_models_train(monkeypatch):
+    import time
+
+    import foresight.analytics.stages as stages_module
+    import foresight.flow as flow_module
+
+    events: dict[str, float] = {}
+    run_crew, run_model = stages_module.run_crew, flow_module.run_model
+
+    def slow_crew(name, *args, **kwargs):
+        if name == "analyst":
+            time.sleep(1.5)
+            outcome = run_crew(name, *args, **kwargs)
+            events["analyst_done"] = time.perf_counter()
+            return outcome
+        return run_crew(name, *args, **kwargs)
+
+    def timed_model(*args):
+        events["model_started"] = time.perf_counter()
+        return run_model(*args)
+
+    monkeypatch.setattr(stages_module, "run_crew", slow_crew)
+    monkeypatch.setattr(flow_module, "run_model", timed_model)
+    state = run_pipeline()
+    assert state.status == "success"
+    assert events["model_started"] < events["analyst_done"]  # overlapped, not sequential
+    assert set(state.crew_usage) == {"analyst", "scientist", "investigation", "report"}
+    progress = load_progress(Path(state.run_dir))
+    assert progress.stages[1].crew_status == "done" and "insights" in progress.stages[1].artifacts
+
+
+def test_a_background_crew_failure_stops_the_run_cleanly(monkeypatch):
+    import foresight.analytics.stages as stages_module
+
+    run_crew = stages_module.run_crew
+
+    def broken(name, *args, **kwargs):
+        if name == "scientist":
+            raise RuntimeError("LLM provider unavailable")
+        return run_crew(name, *args, **kwargs)
+
+    monkeypatch.setattr(stages_module, "run_crew", broken)
+    state = run_pipeline()
+    assert state.status == "failed"
+    assert state.failure_reason == "model crew error: LLM provider unavailable"
+    progress = load_progress(Path(state.run_dir))
+    assert progress.stages[2].crew_status == "failed"
+    assert progress.stages[4].status == "skipped"
+    assert progress.can_continue  # e.g. an LLM outage: continue once it is back
+
+
 def test_report_crew_failure_fails_the_run_gracefully(monkeypatch):
     import foresight.flow as flow_module
 

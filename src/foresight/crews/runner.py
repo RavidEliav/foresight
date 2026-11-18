@@ -62,10 +62,12 @@ def load_config(name: str) -> dict:
     return yaml.safe_load((CONFIG_DIR / f"{name}.yaml").read_text(encoding="utf-8"))
 
 
-def build_crew(name: str, run_dir: Path, llm, inputs: dict[str, str]):
-    """Returns the Crew and its tasks keyed by name (with their output file names)."""
+def build_crew(name: str, run_dir: Path, llm, inputs: dict[str, str],
+               visible: frozenset[str] | None = None):
+    """Returns the Crew and its tasks keyed by name (with their output file names).
+    ``visible`` limits the tools to the files a background crew may see."""
     config = load_config(name)
-    tools = build_tools(run_dir)
+    tools = build_tools(run_dir, visible)
     values = defaultdict(str, inputs)
     agents = {
         key: Agent(role=spec["role"], goal=spec["goal"], backstory=spec["backstory"].strip(),
@@ -96,11 +98,12 @@ def clean_markdown(text: str) -> str:
 
 
 def run_crew(name: str, settings: Settings, run_dir: Path,
-             extra_inputs: dict[str, str] | None = None) -> CrewRunResult:
+             extra_inputs: dict[str, str] | None = None,
+             visible: frozenset[str] | None = None) -> CrewRunResult:
     inputs = {**all_facts(run_dir), **(extra_inputs or {})}
     llm = MockLLM(model="mock", run_dir=run_dir, inputs=inputs) if settings.mock_llm \
         else get_llm(settings)
-    crew, tasks, outputs = build_crew(name, run_dir, llm, inputs)
+    crew, tasks, outputs = build_crew(name, run_dir, llm, inputs, visible)
     start = time.perf_counter()
     crew.kickoff()
     written = {}

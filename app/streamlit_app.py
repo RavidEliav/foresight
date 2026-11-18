@@ -25,9 +25,9 @@ PINNED_KEY = "view_pinned"  # True once the user picks a run in the sidebar
 @st.cache_resource(show_spinner=False)
 def _warm_embedding_model(models_dir: str) -> bool:
     """Once per server process: get the chat's embedding model ready in the background."""
-    from foresight.rag.embedding import warm_up
+    from app import store
 
-    warm_up(models_dir)
+    store.warm_up_chat(settings)
     return True
 
 
@@ -40,21 +40,18 @@ def run_pipeline_page() -> None:
     run_page.render(settings, DATA_QUALITY)
 
 
-def _runs_dir() -> Path:
-    return settings.resolve(settings.paths.runs_dir)
-
-
 def _run_selector() -> Path | None:
     """Sidebar choice of the run shown on the result pages (newest successful run first)."""
+    from app import store
     from app.run_page import NEW_RUN_KEY
-    from app.runs import describe_run, run_details, viewable_runs
+    from app.runs import describe_run, run_details
 
-    runs = viewable_runs(_runs_dir(), settings.resolve(settings.paths.reference_run_dir))
+    runs = store.viewable_runs(settings)
     if not runs:
         return None
     options = [str(p) for p in runs]
     if new := st.session_state.pop(NEW_RUN_KEY, None):  # a run just finished: show it
-        st.session_state[VIEW_KEY] = str(_runs_dir() / new)
+        st.session_state[VIEW_KEY] = str(store.run_folder(settings, new))
         st.session_state[PINNED_KEY] = False
     if not st.session_state.get(PINNED_KEY) or st.session_state.get(VIEW_KEY) not in options:
         st.session_state[VIEW_KEY] = options[0]  # follow the newest run until one is picked
@@ -69,7 +66,9 @@ def _run_selector() -> Path | None:
 
 def _latest(required: str) -> Path | None:
     run_dir = SELECTED
-    return run_dir if run_dir is not None and (run_dir / required).exists() else None
+    from app import store
+
+    return run_dir if run_dir is not None and store.exists(run_dir, required) else None
 
 
 def data_quality_page() -> None:

@@ -151,7 +151,7 @@ def test_model_page_shows_the_model_card(run_dir):
 
 
 def test_figures_saved_with_windows_paths_still_load(tmp_path):
-    from app.runs import figure_path
+    from app.store import figure as figure_path
 
     (tmp_path / "figures").mkdir()
     (tmp_path / "figures" / "chart.png").write_bytes(b"png")
@@ -198,7 +198,9 @@ def test_ask_page_needs_the_passcode_then_answers_with_citations(run_dir):
 def test_viewable_runs_are_successful_runs_then_the_reference(tmp_path, run_dir):
     import json
 
-    from app.runs import describe_run, viewable_runs
+    from app.runs import describe_run
+    from app.store import viewable_runs
+    from foresight.settings import load_settings
 
     runs = tmp_path / "runs"
     for name, status in (("20261116T100000000000Z", "success"),
@@ -210,9 +212,44 @@ def test_viewable_runs_are_successful_runs_then_the_reference(tmp_path, run_dir)
     reference.mkdir()
     (reference / "run_manifest.json").write_text(json.dumps({"status": "success"}))
 
-    found = viewable_runs(runs, reference)
+    settings = load_settings()
+    settings.paths.runs_dir, settings.paths.reference_run_dir = runs, reference
+    found = viewable_runs(settings)
     assert [p.name for p in found] == ["20261116T120000000000Z", "20261116T100000000000Z",
                                       "reference"]
     assert describe_run(found[0]) == "16 Nov, 12:00 UTC · SECOM"  # no browser zone in tests
     assert describe_run(found[-1]) == "Reference run"
-    assert viewable_runs(tmp_path / "none", None) == []
+    settings.paths.runs_dir = settings.paths.reference_run_dir = tmp_path / "none"
+    assert viewable_runs(settings) == []
+
+
+def test_pr_points_match_scikit_learn():
+    import numpy as np
+    from sklearn.metrics import precision_recall_curve
+
+    from app.charts import pr_points
+
+    rng = np.random.default_rng(0)
+    labels = rng.integers(0, 2, 300)
+    scores = np.round(rng.random(300), 2)  # ties included
+    precision, recall = pr_points(labels, scores)
+    expected_p, expected_r, _ = precision_recall_curve(labels, scores)
+    assert np.allclose(precision, expected_p) and np.allclose(recall, expected_r)
+
+
+def test_pr_curve_fits_the_precision_axis_and_charts_zoom_on_scroll(monkeypatch, tmp_path):
+    import pandas as pd
+
+    from app import charts
+
+    pd.DataFrame({"label": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0] * 5,
+                  "fail_probability": [i / 50 for i in range(50)]}).to_csv(
+        tmp_path / "predictions.csv", index=False)
+    shown, configs = [], []
+    monkeypatch.setattr(charts.st, "plotly_chart", lambda fig, **kw: (shown.append(fig),
+                                                                      configs.append(kw)))
+    charts.pr_curve(tmp_path, baseline=0.2)
+    curve = shown[0].data[0]
+    assert max(curve.y) < 1  # no made-up (recall 0, precision 1) point
+    assert shown[0].layout.yaxis.range[1] == pytest.approx(max(max(curve.y), 0.2) * 1.15)
+    assert configs[0]["config"]["scrollZoom"] is True

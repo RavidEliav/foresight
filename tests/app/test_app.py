@@ -114,6 +114,29 @@ def test_interrupted_run_can_be_continued_with_the_passcode(monkeypatch):
     assert continued == ["20260101T000000000000Z"]
 
 
+def test_stage_tile_matches_its_crew_line(tmp_path):
+    """A stage whose crew works in the background shows as running until the crew is done;
+    a stage that finishes after its crew says what it is still doing."""
+    from app.stepper import stepper_html
+    from foresight.progress import ProgressTracker
+
+    tracker = ProgressTracker.create(tmp_path, "r")
+    tracker.running()
+    tracker.stage_started("analyze")
+    tracker.crew("analyst", "running")
+    tracker.stage_finished("analyze", 3.0)
+    tracker.stage_started("report")
+    tracker.crew("report", "done")
+    tiles = stepper_html(tracker.progress).split('<div class="fs-stage ')[1:]
+    analyze, report = tiles[1], tiles[4]
+    assert analyze.startswith("fs-running") and "crew working" in analyze
+    assert report.startswith("fs-running") and "indexing for chat" in report
+
+    tracker.crew_finished("analyze", {}, {"analyst": {"seconds": 40.2}})
+    analyze = stepper_html(tracker.progress).split('<div class="fs-stage ')[2]
+    assert analyze.startswith("fs-done") and "done · 43 s" in analyze  # stage + crew time
+
+
 def test_finished_run_shows_stages_gates_and_becomes_viewable(monkeypatch, secom_env):
     """start_run replaced by a synchronous run: the page shows the finished run's progress."""
     monkeypatch.setenv("RUN_PASSCODE", "s3cret")
@@ -160,3 +183,18 @@ def test_failed_upload_run_lists_the_failed_data_checks(monkeypatch, secom_env, 
     assert any("upload it again" in i.value for i in at.info)
     failed = at.dataframe[0].value  # technical details: the failed checks by name
     assert "raw_label_values" in set(failed["name"])
+
+
+def test_only_the_store_touches_run_data():
+    """ADR-020: pages read runs, start runs and ask the chat through app/store.py only."""
+    import re
+
+    forbidden = re.compile(r"(?<!store\.)read_text\(|(?<!store\.)read_bytes\(|\.exists\(\)|"
+                           r"pd\.read_csv|json\.loads|iterdir|from foresight import jobs|"
+                           r"foresight\.rag|load_progress")
+    app_dir = Path(APP).parent
+    offenders = [f"{path.name}: {line.strip()}" for path in app_dir.glob("*.py")
+                 if path.name != "store.py"
+                 for line in path.read_text(encoding="utf-8").splitlines()
+                 if forbidden.search(line) and "LOGO" not in line]
+    assert offenders == []

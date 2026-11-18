@@ -27,9 +27,15 @@ def _read(run_dir: Path, name: str) -> dict:
 
 class _RunTool(BaseTool):
     run_dir: Path
+    # A crew running in the background sees only the files that existed when it started, as in
+    # a sequential run (None: every file of the run folder).
+    visible: frozenset[str] | None = None
+
+    def _has(self, name: str) -> bool:
+        return (self.run_dir / name).exists() and (self.visible is None or name in self.visible)
 
     def _missing(self, *names: str) -> str | None:
-        absent = [n for n in names if not (self.run_dir / n).exists()]
+        absent = [n for n in names if not self._has(n)]
         return _dump({"error": f"not available yet: {', '.join(absent)}"}, []) if absent else None
 
 
@@ -131,7 +137,7 @@ class RunLookupTool(_RunTool):
         details = row.iloc[0].to_dict()
         sources = ["anomalies.csv"]
         predictions = self.run_dir / "predictions.csv"
-        if predictions.exists():
+        if self._has("predictions.csv"):
             pred = pd.read_csv(predictions)
             match = pred[pred["run_id"] == run_id]
             if not match.empty:
@@ -139,7 +145,7 @@ class RunLookupTool(_RunTool):
                 details["predicted_fail"] = int(match.iloc[0]["predicted_fail"])
                 sources.append("predictions.csv")
         risk = self.run_dir / "risk_scores.csv"
-        if risk.exists():
+        if self._has("risk_scores.csv"):
             ranked = pd.read_csv(risk).reset_index(drop=True)
             match = ranked[ranked["run_id"] == run_id]
             if not match.empty:
@@ -241,8 +247,10 @@ class KnowledgeSearchTool(_RunTool):
                      sorted({f"knowledge/{h.chunk.source}" for h in hits}))
 
 
-def build_tools(run_dir: Path) -> dict[str, BaseTool]:
+def build_tools(run_dir: Path,
+                visible: frozenset[str] | None = None) -> dict[str, BaseTool]:
     tools = [DataQualityTool, EdaSummaryTool, ModelMetricsTool, AnomalySummaryTool,
              RiskRankingTool, RunLookupTool, SensorStatsTool, SimilarRunsTool,
              KnowledgeSearchTool]
-    return {tool.model_fields["name"].default: tool(run_dir=run_dir) for tool in tools}
+    return {tool.model_fields["name"].default: tool(run_dir=run_dir, visible=visible)
+            for tool in tools}

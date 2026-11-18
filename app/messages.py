@@ -65,7 +65,8 @@ def explain_failure(progress: RunProgress, test_fraction: float) -> tuple[list[s
     if status == "interrupted":
         return ["The run was interrupted, for example because the app restarted."], \
             "Continue the run below: the stages it had finished are reused."
-    if stage := re.match(r"(\w+) stage error", reason):
-        return [f"Something went wrong in the {stage.group(1)} step."], \
+    if stage := re.match(r"(\w+) (stage|crew) error", reason):
+        what = "step" if stage.group(2) == "stage" else "step's crew"
+        return [f"Something went wrong in the {stage.group(1)} {what}."], \
             "Technical details are below. Continue the run to try that step again."
     return [reason or "The run stopped."], None

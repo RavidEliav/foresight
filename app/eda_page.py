@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app import charts, ui
+from app import charts, store, ui
 from app.runs import no_run, read_json, run_label, show_markdown_file
 
 
@@ -27,10 +27,10 @@ def render(run_dir: Path | None) -> None:
         ("Sensors differ (q<0.05)", str(eda["significant_features_q_below_0.05"]), None,
          "Mann-Whitney U test, failing vs passing runs, Benjamini-Hochberg corrected"),
     ])
-    if (run_dir / "insights.md").exists():
+    if store.exists(run_dir, "insights.md"):
         with st.container(key="card-insights"):
             ui.label("Insights from the Data Analyst crew")
-            _summary_section(run_dir / "insights.md")
+            _summary_section(run_dir)
 
     left, right = st.columns(2, gap="medium")
     with left, st.container(key="card-chart-failrate", height="stretch"):
@@ -71,16 +71,16 @@ def render(run_dir: Path | None) -> None:
             charts.correlation(run_dir, top)
     with insights:
         show_markdown_file(run_dir, "insights.md", "Download insights.md")
-        report = run_dir / "eda_report.html"
-        if report.exists():
-            st.download_button("Download eda_report.html", report.read_bytes(),
+        report = store.read_bytes(run_dir, "eda_report.html")
+        if report is not None:
+            st.download_button("Download eda_report.html", report,
                                file_name="eda_report.html", mime="text/html")
 
 
-def _summary_section(path: Path) -> None:
+def _summary_section(run_dir: Path) -> None:
     """The crew's Summary section; the full document is under Extended data."""
     from foresight.crews.checks import section
 
-    text = path.read_text(encoding="utf-8")
+    text = store.read_text(run_dir, "insights.md") or ""
     body = section(text, "Summary").strip()
     st.markdown(ui.md(body or text))

@@ -55,6 +55,8 @@ GATE_AFTER = {"ingest": ("data_contract", "Data Contract gate"),
 BADGE = {"done": "&#10003;", "failed": "&#10005;", "skipped": "&ndash;", "interrupted": "!"}
 CREW_TEXT = {"running": "working", "done": "done", "skipped": "skipped (not needed)",
              "failed": "failed", "interrupted": "interrupted"}
+# What a stage still does after its crew finished
+FINISHING = {"report": "checking + indexing for chat", "investigate": "checking the evidence"}
 
 
 COLORS = {"done": "#34D399", "failed": "#F87171", "running": "#22D3EE", "skipped": "#64748B",
@@ -96,15 +98,30 @@ def art(name: str, status: str) -> str:
 
 def _status_text(stage: StageProgress) -> str:
     if stage.status == "done":
-        return f"done · {stage.seconds:.0f} s" if stage.seconds is not None else "done"
-    return {"running": "running", "pending": "waiting"}.get(stage.status, stage.status)
+        seconds = None if stage.seconds is None else stage.seconds + (stage.crew_seconds or 0)
+        return f"done · {seconds:.0f} s" if seconds is not None else "done"
+    if stage.status == "running":
+        if stage.crew_status == "running":
+            return "crew working"
+        if stage.crew_status == "done":
+            return FINISHING.get(stage.name, "finishing")
+        return "running"
+    return {"pending": "waiting"}.get(stage.status, stage.status)
+
+
+def _shown(stage: StageProgress) -> StageProgress:
+    """A stage whose own work is done but whose crew still works in the background (Phase 7)
+    shows as running until the crew is done, so the tile and its crew line agree."""
+    if stage.status == "done" and stage.crew_status == "running":
+        return stage.model_copy(update={"status": "running"})
+    return stage
 
 
 def _frozen(stage: StageProgress) -> StageProgress:
     """A run that stopped while a stage was running (e.g. the app restarted): that stage and
     its crew show as interrupted, not as still running."""
     crew = "interrupted" if stage.crew_status == "running" else stage.crew_status
-    status = "interrupted" if stage.status == "running" else stage.status
+    status = "interrupted" if "running" in (stage.status, stage.crew_status) else stage.status
     return stage.model_copy(update={"status": status, "crew_status": crew})
 
 
@@ -138,7 +155,7 @@ def stepper_html(progress: RunProgress) -> str:
     parts = []
     live = progress.effective_status() in ACTIVE
     for i, stage in enumerate(progress.stages):
-        parts.append(_tile(stage if live else _frozen(stage)))
+        parts.append(_tile(_shown(stage) if live else _frozen(stage)))
         if i < len(progress.stages) - 1:
             parts.append(_link(stage, gates))
     return f'<div class="fs-stepper">{"".join(parts)}</div>'

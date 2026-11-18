@@ -12,8 +12,8 @@ import os
 import threading
 from pathlib import Path
 
-from foresight.flow import new_run_id, run_pipeline
-from foresight.progress import ProgressTracker
+from foresight.flow import run_pipeline
+from foresight.progress import ProgressTracker, new_run_id
 from foresight.settings import load_settings
 
 TIMEOUT_EXIT_CODE = 3

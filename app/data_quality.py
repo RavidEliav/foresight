@@ -10,7 +10,8 @@ import streamlit as st
 
 from app import ui
 from app.messages import EXPECTED_FOR_UPLOADS
-from app.runs import is_upload, read_json, run_label
+from app.runs import is_upload, run_label
+from app.store import read_json
 
 STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:",
                "ERROR": ":material/cancel:"}

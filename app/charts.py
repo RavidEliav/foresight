@@ -30,19 +30,15 @@ pio.templates["foresight"] = go.layout.Template(layout=go.Layout(
 
 def show(fig: go.Figure, key: str, height: int = 380) -> None:
     fig.update_layout(template="foresight", height=height)
-    st.plotly_chart(fig, key=key, config={"displaylogo": False,
+    st.plotly_chart(fig, key=key, config={"displaylogo": False, "scrollZoom": True,
                                           "modeBarButtonsToRemove": ["lasso2d", "select2d"]})
-
-
-@st.cache_data(show_spinner=False)
-def _csv(path: str, mtime: float, columns: tuple[str, ...] | None = None) -> pd.DataFrame:
-    return pd.read_csv(path, usecols=list(columns) if columns else None)
 
 
 def read_csv(run_dir: Path, name: str,
              columns: tuple[str, ...] | None = None) -> pd.DataFrame | None:
-    path = run_dir / name
-    return _csv(str(path), path.stat().st_mtime, columns) if path.exists() else None
+    from app import store
+
+    return store.read_csv(run_dir, name, columns)
 
 
 def _runs(frame: pd.DataFrame, mask, name: str, color: str, size: int, hover: str,
@@ -194,14 +190,32 @@ def risk_over_time(run_dir: Path, cutoff: float | None, threshold: float | None)
     show(fig, "risk-over-time", height=MODEL_HEIGHT)
 
 
+def pr_points(labels, scores) -> tuple:
+    """Precision and recall at every distinct score threshold (as scikit-learn's
+    precision_recall_curve, without importing scikit-learn into the app: about 60 MB)."""
+    import numpy as np
+
+    order = np.argsort(-np.asarray(scores, dtype=float), kind="mergesort")
+    y = np.asarray(labels)[order]
+    s = np.asarray(scores, dtype=float)[order]
+    last = np.r_[np.where(np.diff(s))[0], len(s) - 1]  # last index of each distinct score
+    tp = np.cumsum(y)[last]
+    fp = (last + 1) - tp
+    precision = tp / (tp + fp)
+    recall = tp / y.sum()
+    return np.r_[precision[::-1], 1.0], np.r_[recall[::-1], 0.0]
+
+
 def pr_curve(run_dir: Path, baseline: float) -> None:
     """Precision-recall curve on the test period against random guessing."""
-    from sklearn.metrics import precision_recall_curve
-
     frame = read_csv(run_dir, "predictions.csv", ("label", "fail_probability"))
     if frame is None or frame.label.nunique() < 2:
         return
-    precision, recall, _ = precision_recall_curve(frame.label, frame.fail_probability)
+    precision, recall = pr_points(frame.label, frame.fail_probability)
+    # the last point (recall 0, precision 1) is a convention, not a threshold the model has;
+    # without it the precision axis can fit the real curve
+    precision, recall = precision[:-1], recall[:-1]
+    top = min(1.0, max(float(precision.max()), baseline) * 1.15)
     fig = go.Figure([
         go.Scatter(x=recall, y=precision, mode="lines", name="selected model",
                    line={"color": CYAN, "width": 2.5, "shape": "hv"}, fill="tozeroy",
@@ -211,7 +225,7 @@ def pr_curve(run_dir: Path, baseline: float) -> None:
                    line={"color": AMBER, "dash": "dot"}, hoverinfo="skip"),
     ])
     fig.update_layout(xaxis={"title": "recall (failing runs found)", "range": [0, 1]},
-                      yaxis={"title": "precision", "range": [0, 1.02]})
+                      yaxis={"title": "precision", "range": [0, top]})
     show(fig, "pr-curve", height=MODEL_HEIGHT)
 
 
@@ -225,7 +239,8 @@ def confusion(cm: dict) -> None:
         texttemplate="%{text}", textfont={"size": 15, "color": "#F1F5F9"}, showscale=False,
         hoverinfo="skip",
         colorscale=[[0, "rgba(34,211,238,0.06)"], [1, "rgba(34,211,238,0.55)"]]))
-    fig.update_layout(yaxis={"autorange": "reversed"}, xaxis={"side": "top"})
+    fig.update_layout(yaxis={"autorange": "reversed", "fixedrange": True},
+                      xaxis={"side": "top", "fixedrange": True})
     show(fig, "confusion", height=MODEL_HEIGHT)
 
 

@@ -27,8 +27,8 @@ def test_page_shows_validation_cleaning_and_contract(secom_env):
     at = _render(state.run_dir)
     assert not at.exception
     assert "PASS" in at.success[0].value
-    assert [m.label for m in at.metric] == ["Runs", "Failing runs", "Features kept",
-                                            "Fail rate", "Missing cells"]
+    assert [m.label for m in at.metric] == ["Runs", "Failing runs", "Fail rate",
+                                            "Features kept", "Missing cells"]
     assert at.metric[0].value == "150"
     assert at.metric[1].value == "15"
 
@@ -43,3 +43,31 @@ def test_page_shows_errors_for_a_failed_validation(secom_env):
     at = _render(state.run_dir)
     assert not at.exception
     assert "ERROR" in at.error[0].value
+
+
+def test_expected_upload_warning_is_explained_not_alarming(secom_env, tmp_path):
+    import json
+    import shutil
+
+    from foresight.flow import run_pipeline
+
+    run_dir = Path(run_pipeline().run_dir)
+    upload = tmp_path / "upload_run"
+    shutil.copytree(run_dir, upload)
+    path = upload / "validation_summary.json"
+    summary = json.loads(path.read_text(encoding="utf-8"))
+    for check in summary["checks"]:
+        if check["name"] == "data_checksums":
+            check.update(status="WARNING", message="raw files differ")
+    summary.update(status="WARNING", counts={**summary["counts"], "WARNING": 1,
+                                             "PASS": summary["counts"]["PASS"] - 1})
+    path.write_text(json.dumps(summary), encoding="utf-8")
+    at = _render(str(upload))
+    assert at.warning, "built-in SECOM data: a checksum mismatch stays a real warning"
+
+    (upload / "progress.json").write_text(json.dumps(
+        {"run_id": "r", "dataset": "Uploaded CSV (batch.csv)"}), encoding="utf-8")
+    at = _render(str(upload))
+    assert not at.exception and not at.warning
+    assert "expected for an uploaded file" in at.success[0].value
+    assert any("never matches them" in i.value for i in at.info)

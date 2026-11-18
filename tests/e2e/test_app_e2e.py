@@ -17,8 +17,16 @@ deployed = pytest.mark.deployed
 
 
 def _goto(page: Page, title: str) -> None:
-    page.get_by_test_id("stSidebarNav").get_by_role("link", name=title).click()
+    page.get_by_test_id("stSidebar").get_by_role("link", name=title, exact=True).click()
     expect(page.get_by_role("heading", name=title, level=1)).to_be_visible(timeout=60_000)
+
+
+def _show_reference_run(page: Page) -> None:
+    """Deployed apps may hold older runs; the read-only checks look at the committed one."""
+    page.get_by_test_id("stSidebar").get_by_test_id("stSelectbox").click()
+    page.get_by_role("option", name="Reference run").click()
+    expect(page.get_by_test_id("stSidebar").get_by_text("Committed reference run")
+           ).to_be_visible(timeout=30_000)
 
 
 @deployed
@@ -33,13 +41,15 @@ def test_e1_app_loads_and_shows_environment(app_page: Page, expected_env):
 
 @deployed
 def test_e2_every_result_page_shows_its_content(app_page: Page):
+    _show_reference_run(app_page)
     _goto(app_page, "Data Quality")
     expect(app_page.get_by_text("Data Contract validation")).to_be_visible()
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Failing runs")).to_be_visible()
 
     _goto(app_page, "EDA & Insights")
-    expect(app_page.get_by_test_id("stImage").first).to_be_visible(timeout=30_000)
+    expect(app_page.get_by_test_id("stPlotlyChart").first).to_be_visible(timeout=30_000)
     expect(app_page.get_by_text("Insights from the Data Analyst crew")).to_be_visible()
+    expect(app_page.get_by_test_id("stMetric").filter(has_text="Fail rate")).to_be_visible()
 
     _goto(app_page, "Model")
     expect(app_page.get_by_role("heading", name="Model comparison")).to_be_visible()
@@ -52,9 +62,17 @@ def test_e2_every_result_page_shows_its_content(app_page: Page):
 
 @deployed
 def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
+    _show_reference_run(app_page)
     _goto(app_page, "Investigation & Report")
+    expect(app_page.get_by_test_id("stMetric").filter(has_text="Failing runs caught")
+           ).to_be_visible()
+    expect(app_page.get_by_text("Key findings")).to_be_visible()
+    expect(app_page.get_by_text("confidence").first).to_be_visible()  # hypothesis cards
+    expect(app_page.get_by_test_id("stPlotlyChart").first).to_be_visible(timeout=30_000)
+    app_page.get_by_role("tab", name="Full investigation").click()
     for label in ("Facts", "Assumptions", "Hypotheses"):
-        expect(app_page.locator("span", has_text=label).first).to_be_visible()
+        expect(app_page.locator("span:visible", has_text=label).first).to_be_visible()
+    app_page.get_by_role("tab", name="Engineering report").click()
     with app_page.expect_download() as download:
         app_page.get_by_role("button", name="Download engineering_report.md").click()
     text = Path(download.value.path()).read_text(encoding="utf-8")
@@ -112,10 +130,12 @@ def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_pa
     app_page.get_by_label("Passcode").fill(e2e_passcode)
     app_page.get_by_role("button", name="Run pipeline").click()
 
-    expect(app_page.get_by_text("Data checks that did not pass")).to_be_visible(timeout=180_000)
     expect(app_page.get_by_test_id("stAlertContentError").filter(
-        has_text="raw_label_values")).to_be_visible()
-    expect(app_page.get_by_text("Gate data_contract: ERROR")).to_be_visible()
+        has_text="Some labels are not -1 (pass) or 1 (fail)")).to_be_visible(timeout=180_000)
+    expect(app_page.get_by_text("Data Contract: ERROR")).to_be_visible()
+    app_page.get_by_text("Technical details").click()
+    expect(app_page.get_by_text("Data checks that did not pass")).to_be_visible()
+    expect(app_page.get_by_test_id("stCode")).to_contain_text("raw_label_values")
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
 
 
@@ -137,4 +157,4 @@ def test_e6_full_run_shows_progress_then_the_new_report(app_page: Page, e2e_pass
     caption = page.get_by_test_id("stMain").get_by_test_id("stCaptionContainer").first
     expect(caption).to_contain_text("Run ")
     expect(caption).not_to_contain_text("Reference")
-    expect(page.get_by_text("Report safety checks")).to_be_visible()
+    expect(page.get_by_text("Report safety checks").first).to_be_visible()

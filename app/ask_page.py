@@ -17,7 +17,7 @@ UNLOCKED = "chat_unlocked"
 
 
 def render(run_dir: Path | None, settings: Settings) -> None:
-    st.title("Ask Foresight")
+    ui.page_header("Ask Foresight")
     if run_dir is None:
         no_run("report to ask about")
         return
@@ -29,6 +29,10 @@ def render(run_dir: Path | None, settings: Settings) -> None:
         return
 
     history: list[dict] = st.session_state.setdefault("chat", {}).setdefault(str(run_dir), [])
+    opened = st.session_state.pop("chat_open", None)  # picked in the sidebar's history
+    if opened and opened.get("run") == run_dir.name and (
+            not history or history[-1]["question"] != opened["question"]):
+        history.append({**opened, "from_history": True})
     for item in history:
         _show(item)
 
@@ -41,7 +45,8 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     if question:
         with st.chat_message("user"):
             st.markdown(question)
-        with st.chat_message("assistant"), st.spinner("Searching this run's reports..."):
+        with st.chat_message("assistant", avatar=ui.LOGO_IMAGE), \
+                st.spinner("Searching this run's reports..."):
             item = _ask(question, run_dir, settings)
         if item:
             history.append(item)
@@ -62,11 +67,15 @@ def _unlock(settings: Settings) -> None:
 
 
 def _ask(question: str, run_dir: Path, settings: Settings) -> dict | None:
-    from foresight.rag.chat import ask, log_answer
+    from foresight.rag.chat import ChatAnswer, ask, log_answer
+    from foresight.utils.logging import get_logger
 
     try:
         result = ask(question, run_dir, settings)
-    except Exception as exc:  # friendly message, never a stack trace
+    except Exception as exc:  # friendly message, never a stack trace; the failure is logged
+        get_logger("chat").exception("question failed for run %s", run_dir.name)
+        log_answer(settings, run_dir, ChatAnswer(question=question, answer="", refused=True,
+                                                 reason=f"error: {exc}"))
         ui.friendly_error(f"The question could not be answered: {exc}")
         return None
     log_answer(settings, run_dir, result)
@@ -76,12 +85,19 @@ def _ask(question: str, run_dir: Path, settings: Settings) -> dict | None:
 def _show(item: dict) -> None:
     with st.chat_message("user"):
         st.markdown(item["question"])
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=ui.LOGO_IMAGE):
         st.markdown(item["answer"])
+        if item.get("from_history"):
+            from app.runs import local_time
+
+            st.caption(f"From the chat history, asked {local_time(item['time'])}")
         if item["refused"]:
             st.caption(f"Why: {item['reason']}")
         if item["sources"]:
             with st.expander(f"Sources ({len(item['sources'])})"):
                 for s in item["sources"]:
+                    if isinstance(s, str):  # logged answers keep "file § section (score)"
+                        st.markdown(f"**{s}**")
+                        continue
                     st.markdown(f"**{s['file']} § {s['section']}** · similarity {s['score']:.2f}")
                     st.caption(s["text"])

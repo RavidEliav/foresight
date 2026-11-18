@@ -80,7 +80,13 @@ def citation_problem(answer: str, hits: list[Hit]) -> str | None:
     # that is only a citation cites the block before it
     joined = re.sub(r"\n\s*\n(?=\s*(?:\d+[.)]|[-*])\s|\s*\[source:)", "\n", answer)
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", joined) if p.strip()]
-    if any(not CITATION.search(p) and not p.endswith(":") for p in paragraphs):
+    for i, paragraph in enumerate(paragraphs):
+        if CITATION.search(paragraph) or paragraph.endswith(":"):
+            continue
+        # a list whose closing sentence (the next paragraph) cites the excerpt it came from
+        is_list = re.search(r"^\s*(?:\d+[.)]|[-*])\s", paragraph, re.MULTILINE)
+        if is_list and i + 1 < len(paragraphs) and CITATION.search(paragraphs[i + 1]):
+            continue
         return "part of it has no citation"
     return None
 
@@ -160,3 +166,22 @@ def log_answer(settings: Settings, run_dir: Path, result: ChatAnswer) -> None:
               "sources": [f"{s.file} § {s.section} ({s.score})" for s in result.sources]}
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record) + "\n")
+
+
+def recent_questions(settings: Settings, run_dir: Path, limit: int = 6) -> list[dict]:
+    """The run's latest distinct questions from its chat log, newest first."""
+    path = log_path(settings, run_dir)
+    if not path.exists():
+        return []
+    found: dict[str, dict] = {}
+    for line in reversed(path.read_text(encoding="utf-8").splitlines()):
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        key = record.get("question", "").strip().lower()
+        if key and key not in found:
+            found[key] = record
+        if len(found) == limit:
+            break
+    return list(found.values())

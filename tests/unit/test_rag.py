@@ -158,3 +158,66 @@ def test_knowledge_index_is_cached_by_content(settings, tmp_path):
     assert len(first.chunks) > 20
     assert {c.source for c in first.chunks} >= {"spc_control_charts.md", "secom_dataset.md"}
     assert "SOURCES.md" not in {c.source for c in first.chunks}
+
+
+def test_recent_questions_are_the_newest_distinct_ones(tmp_path):
+    import json
+
+    from foresight.rag.chat import log_path, recent_questions
+    from foresight.settings import load_settings
+
+    settings = load_settings()
+    run_dir = tmp_path / "20260101T000000000000Z"
+    path = log_path(settings, run_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    questions = ["What is PR-AUC?", "Which sensors differ?", "what is pr-auc? ", "Fail rate?"]
+    path.write_text("\n".join(json.dumps({"time": f"2026-01-01T00:00:0{i}+00:00",
+                                          "question": q, "answer": "a"})
+                              for i, q in enumerate(questions)) + "\nnot json\n",
+                    encoding="utf-8")
+    found = [r["question"] for r in recent_questions(settings, run_dir, limit=3)]
+    assert found == ["Fail rate?", "what is pr-auc? ", "Which sensors differ?"]
+
+
+
+def _similar(run: Path, distances: dict[int, float]) -> None:
+    queries = [{"run_id": run_id, "reason": "failed", "label": 1, "neighbours_failed": 1, "k": 2,
+                "nearest_distance": d,
+                "neighbours": [{"run_id": 900 + run_id, "label": 0, "timestamp": "t",
+                                "distance": d}]} for run_id, d in distances.items()]
+    (run / "similar_runs.json").write_text(json.dumps({
+        "method": "PCA, 5 nearest training runs", "k": 2, "train_fail_rate": 0.068,
+        "neighbour_fail_share_for_failing_test_runs": 0.058,
+        "neighbour_fail_share_for_passing_test_runs": 0.047, "queries": queries}))
+
+
+def test_run_data_gives_each_run_a_section_and_flags_far_neighbours(tmp_path, settings):
+    from foresight.rag.run_data import write_run_data
+
+    run = tmp_path / "run"
+    run.mkdir()
+    _similar(run, {11: 8.0, 12: 9.0, 13: 25102.0})
+    text = write_run_data(run).read_text(encoding="utf-8")
+    assert "## Run 11" in text and "## Run 13" in text
+    assert text.count("far above the typical 9.0") == 1  # only run 13
+    build_run_index(run, settings)
+    hits = retrieve(VectorIndex.load(run), "why is the nearest distance of 13 so big?", settings)
+    assert hits[0].chunk.citation == "run_data.md § Run 13"
+
+
+def test_runs_indexed_before_run_data_existed_are_reindexed(run_dir, settings):
+    assert "run_data.md" not in VectorIndex.load(run_dir).params["files"]
+    _similar(run_dir, {11: 8.0})
+    index = run_index(run_dir, settings)
+    assert "run_data.md" in index.params["files"] and (run_dir / "run_data.md").exists()
+
+
+def test_a_list_may_be_cited_by_its_closing_sentence():
+    from foresight.rag.index import Hit
+
+    hits = [Hit(Chunk("run_data.md", "Riskiest test-period runs", "1. Run 1"), 0.8)]
+    cite = "[source: run_data.md § Riskiest test-period runs]"
+    listed = "The riskiest runs are:\n\n1. Run 1\n2. Run 2\n\n"
+    assert chat.citation_problem(f"{listed}They are ordered by risk. {cite}", hits) is None
+    assert chat.citation_problem(f"An uncited claim.\n\n{listed}Ordered. {cite}",
+                                 hits) == "part of it has no citation"

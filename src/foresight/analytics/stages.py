@@ -20,7 +20,10 @@ from foresight.analytics.similar import EMBEDDINGS_FILE, SIMILAR_CSV, SIMILAR_JS
 from foresight.crews.checks import check_outputs
 from foresight.crews.facts import background_passages
 from foresight.crews.runner import run_crew
+from foresight.crews.summary import SUMMARY_FILE
+from foresight.progress import ProgressTracker
 from foresight.rag.index import CHUNKS_FILE, VECTORS_FILE, build_run_index
+from foresight.rag.run_data import RUN_DATA_FILE
 from foresight.settings import Settings
 from foresight.utils.logging import get_logger
 from foresight.validation.contract import Check, ValidationSummary
@@ -58,7 +61,7 @@ def ensure_similar_fact(run_dir: Path) -> None:
 
 
 REPORT_INPUTS = ("insights.md", "model_card.md", "investigation.md")
-CREW_OUTPUTS = [*REPORT_INPUTS, "engineering_report.md"]
+CREW_OUTPUTS = [*REPORT_INPUTS, SUMMARY_FILE, "engineering_report.md"]
 REVISIONS_FILE = "crew_revisions.json"
 
 
@@ -74,7 +77,8 @@ def _add_usage(a: dict, b: dict) -> dict:
 
 def _with_crew(result: StageResult, crew: str, settings: Settings, run_dir: Path,
                extra_inputs: dict[str, str] | None = None,
-               postprocess: Callable[[Path], None] | None = None) -> StageResult:
+               postprocess: Callable[[Path], None] | None = None,
+               tracker: ProgressTracker | None = None) -> StageResult:
     """Run a crew after the deterministic work of a stage and record its outputs and usage.
     If the deterministic checks on the crew's own output warn, the crew gets the findings and
     revises it (at most settings.llm.crew_revisions times); revisions go to crew_revisions.json.
@@ -82,7 +86,11 @@ def _with_crew(result: StageResult, crew: str, settings: Settings, run_dir: Path
     will stop the run, so the LLM call would be wasted."""
     if result.checks is not None and result.checks.status == GateStatus.ERROR:
         log.info("crew %s skipped: the stage checks failed", crew)
+        if tracker:
+            tracker.crew(crew, "skipped")
         return result
+    if tracker:
+        tracker.crew(crew, "running")
     inputs = dict(extra_inputs or {})
     outcome = run_crew(crew, settings, run_dir, inputs)
     if postprocess:
@@ -111,6 +119,8 @@ def _with_crew(result: StageResult, crew: str, settings: Settings, run_dir: Path
         path.write_text(json.dumps(revised, indent=2), encoding="utf-8")
     result.artifacts.update({Path(p).stem: p for p in outcome.outputs.values()})
     result.crew_usage[crew] = {**usage, "mock": outcome.mock, "revisions": revisions}
+    if tracker:
+        tracker.crew(crew, "done")
     return result
 
 
@@ -124,7 +134,8 @@ def load_features(run_dir: Path) -> tuple[pd.DataFrame, FeatureSpec]:
     return frame, spec
 
 
-def run_analyze(settings: Settings, run_dir: Path) -> StageResult:
+def run_analyze(settings: Settings, run_dir: Path,
+                tracker: ProgressTracker | None = None) -> StageResult:
     """EDA + feature engineering; checks that modeling has what it needs (features gate)."""
     cfg = settings.analytics
     cleaned = load_clean(run_dir)
@@ -138,7 +149,7 @@ def run_analyze(settings: Settings, run_dir: Path) -> StageResult:
             ("features", "features.csv"), ("feature_spec", "feature_spec.json"))},
         checks=feature_checks(frame, spec, settings),
     )
-    return _with_crew(result, "analyst", settings, run_dir)
+    return _with_crew(result, "analyst", settings, run_dir, tracker=tracker)
 
 
 def feature_checks(frame: pd.DataFrame, spec: FeatureSpec, settings: Settings) -> ValidationSummary:
@@ -163,17 +174,19 @@ def feature_checks(frame: pd.DataFrame, spec: FeatureSpec, settings: Settings) -
     return ValidationSummary.from_checks(checks)
 
 
-def run_model(settings: Settings, run_dir: Path) -> StageResult:
+def run_model(settings: Settings, run_dir: Path,
+              tracker: ProgressTracker | None = None) -> StageResult:
     frame, spec = load_features(run_dir)
     train_and_evaluate(frame, spec, settings.analytics, settings.seed, run_dir)
     result = StageResult(artifacts={name: str(run_dir / file) for name, file in (
         ("model", "model.joblib"), ("model_metrics", "model_metrics.json"),
         ("evaluation_report", "evaluation_report.md"), ("predictions", "predictions.csv"),
         ("oof_predictions", "oof_predictions.csv"))})
-    return _with_crew(result, "scientist", settings, run_dir)
+    return _with_crew(result, "scientist", settings, run_dir, tracker=tracker)
 
 
-def run_investigate(settings: Settings, run_dir: Path) -> StageResult:
+def run_investigate(settings: Settings, run_dir: Path,
+                    tracker: ProgressTracker | None = None) -> StageResult:
     """Anomaly detection and risk ranking; checks the evidence for the report (evidence gate)."""
     frame, spec = load_features(run_dir)
     anomalies = detect(frame, spec, settings.analytics, settings.seed, run_dir)
@@ -193,15 +206,16 @@ def run_investigate(settings: Settings, run_dir: Path) -> StageResult:
     )
     return _with_crew(result, "investigation", settings, run_dir,
                       {"background_passages": background_passages(settings)},
-                      postprocess=ensure_similar_fact)
+                      postprocess=ensure_similar_fact, tracker=tracker)
 
 
-def run_report(settings: Settings, run_dir: Path) -> StageResult:
+def run_report(settings: Settings, run_dir: Path,
+               tracker: ProgressTracker | None = None) -> StageResult:
     """Engineering Report crew, then deterministic checks on all crew outputs (revisions made
     by any crew are listed as their own checks)."""
     inputs = {Path(name).stem: (run_dir / name).read_text(encoding="utf-8")
               for name in REPORT_INPUTS if (run_dir / name).exists()}
-    result = _with_crew(StageResult(), "report", settings, run_dir, inputs)
+    result = _with_crew(StageResult(), "report", settings, run_dir, inputs, tracker=tracker)
     checks = check_outputs(run_dir, CREW_OUTPUTS)
     revisions_path = run_dir / REVISIONS_FILE
     if revisions_path.exists():
@@ -217,6 +231,8 @@ def run_report(settings: Settings, run_dir: Path) -> StageResult:
     build_run_index(run_dir, settings)  # "Ask Foresight" answers from this index (§18.3)
     result.artifacts.update({"rag_index": str(run_dir / VECTORS_FILE),
                              "rag_chunks": str(run_dir / CHUNKS_FILE)})
+    if (run_dir / RUN_DATA_FILE).exists():
+        result.artifacts["run_data"] = str(run_dir / RUN_DATA_FILE)
     result.checks = checks
     return result
 

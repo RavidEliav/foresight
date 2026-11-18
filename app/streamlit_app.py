@@ -15,7 +15,8 @@ import streamlit as st  # noqa: E402
 from app import ui  # noqa: E402
 from foresight.settings import load_settings  # noqa: E402
 
-st.set_page_config(page_title="Foresight", page_icon=":material/insights:", layout="wide")
+st.set_page_config(page_title="Foresight", page_icon=str(ui.LOGO), layout="wide")
+ui.apply_style()
 settings = load_settings()
 VIEW_KEY = "view_run"
 PINNED_KEY = "view_pinned"  # True once the user picks a run in the sidebar
@@ -46,7 +47,7 @@ def _runs_dir() -> Path:
 def _run_selector() -> Path | None:
     """Sidebar choice of the run shown on the result pages (newest successful run first)."""
     from app.run_page import NEW_RUN_KEY
-    from app.runs import describe_run, viewable_runs
+    from app.runs import describe_run, run_details, viewable_runs
 
     runs = viewable_runs(_runs_dir(), settings.resolve(settings.paths.reference_run_dir))
     if not runs:
@@ -59,7 +60,10 @@ def _run_selector() -> Path | None:
         st.session_state[VIEW_KEY] = options[0]  # follow the newest run until one is picked
     choice = st.sidebar.selectbox("Results shown", options, key=VIEW_KEY,
                                   format_func=lambda p: describe_run(Path(p)),
+                                  help="The run whose results the pages show. Times are in "
+                                       "your local time zone.",
                                   on_change=lambda: st.session_state.update({PINNED_KEY: True}))
+    st.sidebar.caption(run_details(Path(choice)))
     return Path(choice)
 
 
@@ -98,23 +102,24 @@ def ask_page() -> None:
     page.render(_latest("engineering_report.md"), settings)
 
 
-st.sidebar.title("Foresight")
-st.sidebar.caption("Semiconductor yield intelligence")
-ui.environment_badge(settings)
-SELECTED = _run_selector()
-
 DATA_QUALITY = st.Page(data_quality_page, title="Data Quality", icon=":material/verified:",
                        url_path="data-quality")
-navigation = st.navigation(
-    [
-        st.Page(run_pipeline_page, title="Run Pipeline", icon=":material/play_arrow:",
-                default=True),
-        DATA_QUALITY,
-        st.Page(eda_page, title="EDA & Insights", icon=":material/bar_chart:", url_path="eda"),
-        st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),
-        st.Page(report_page, title="Investigation & Report", icon=":material/description:",
-                url_path="report"),
-        st.Page(ask_page, title="Ask Foresight", icon=":material/forum:", url_path="ask"),
-    ]
-)
+ASK = st.Page(ask_page, title="Ask Foresight", icon=":material/forum:", url_path="ask")
+PAGES = [
+    st.Page(run_pipeline_page, title="Run Pipeline", icon=":material/play_arrow:", default=True),
+    DATA_QUALITY,
+    st.Page(eda_page, title="EDA & Insights", icon=":material/bar_chart:", url_path="eda"),
+    st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),
+    st.Page(report_page, title="Investigation & Report", icon=":material/description:",
+            url_path="report"),
+    ASK,
+]
+# Streamlit draws its own page menu above everything else in the sidebar; it is hidden so that
+# the brand comes first and the menu is drawn with page links (ui.sidebar_nav).
+navigation = st.navigation(PAGES, position="hidden")
+ui.brand()
+ui.environment_badge(settings)
+ui.sidebar_nav(PAGES, navigation)
+SELECTED = _run_selector()
+ui.recent_questions(SELECTED, settings, ASK)
 navigation.run()

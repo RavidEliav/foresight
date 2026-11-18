@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import streamlit as st
 
@@ -28,19 +30,65 @@ def viewable_runs(runs_dir: Path, reference: Path | None) -> list[Path]:
     return runs
 
 
+def local_zone() -> tzinfo:
+    """The viewer's time zone from the browser (UTC when it is unknown, e.g. in tests)."""
+    try:
+        name = st.context.timezone
+        return ZoneInfo(name) if name else UTC
+    except (ZoneInfoNotFoundError, ValueError, AttributeError):
+        return UTC
+
+
+def local_time(value: datetime | str, fmt: str = "%d %b %Y, %H:%M") -> str:
+    """A UTC timestamp (datetime or ISO text) in the viewer's time zone; 'UTC' is added only
+    when the browser's zone is unknown."""
+    moment = datetime.fromisoformat(value) if isinstance(value, str) else value
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    zone = local_zone()
+    return moment.astimezone(zone).strftime(fmt) + (" UTC" if zone is UTC else "")
+
+
+def run_started(run_dir: Path) -> datetime | None:
+    """Run ids are UTC start times, e.g. 20261116T211713416782Z."""
+    try:
+        return datetime.strptime(run_dir.name[:15], "%Y%m%dT%H%M%S").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def _dataset(run_dir: Path) -> str:
+    return (read_json(run_dir, "progress.json") or {}).get("dataset", "SECOM (UCI)")
+
+
+def is_upload(run_dir: Path) -> bool:
+    return _dataset(run_dir).startswith("Uploaded")
+
+
 def describe_run(run_dir: Path) -> str:
-    """Short label for the run selector, e.g. '2026-11-16 15:14 UTC · SECOM (UCI)'."""
+    """Short label for the run selector, e.g. '16 Nov, 23:17 · SECOM' (local time)."""
     if run_dir.name == "reference":
-        return "Reference run (committed)"
-    progress = read_json(run_dir, "progress.json") or {}
-    name = run_dir.name
-    when = (f"{name[:4]}-{name[4:6]}-{name[6:8]} {name[9:11]}:{name[11:13]} UTC"
-            if len(name) >= 13 and name[8] == "T" else name)
-    return f"{when} · {progress.get('dataset', 'SECOM (UCI)')}"
+        return "Reference run"
+    started = run_started(run_dir)
+    when = local_time(started, "%d %b, %H:%M") if started else run_dir.name
+    return f"{when} · {'Upload' if is_upload(run_dir) else 'SECOM'}"
+
+
+def run_details(run_dir: Path) -> str:
+    """Full description of a run, shown under the selector."""
+    if run_dir.name == "reference":
+        return "Committed reference run on the SECOM data (UCI), shipped with the app."
+    started = run_started(run_dir)
+    dataset = _dataset(run_dir)
+    return (f"{dataset} · started {local_time(started)}" if started else dataset)
 
 
 def run_label(run_dir: Path) -> str:
-    return "Reference run" if run_dir.name == "reference" else f"Run `{run_dir.name}`"
+    if run_dir.name == "reference":
+        return "Reference run · SECOM (UCI), committed with the app"
+    started = run_started(run_dir)
+    return (f"Run started {local_time(started)} · {_dataset(run_dir)}" if started
+            else f"Run `{run_dir.name}`")
 
 
 def show_markdown_file(run_dir: Path, name: str, download_label: str | None = None) -> bool:

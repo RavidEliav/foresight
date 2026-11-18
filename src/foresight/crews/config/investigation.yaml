@@ -72,6 +72,10 @@ tasks:
         medium = one strong statistical signal;
         low = weak or indirect evidence (for example a few individual runs, their similar past
         runs, or risk scores).
+        Supporting evidence comes only from this run's facts and tool results. The data has no
+        maintenance, equipment or recipe records, so never present them as evidence; they
+        belong in Suggested verification. Write "is associated with"; never "contributes to",
+        "is a contributing factor", "causes", "leads to" or "drives".
         For at least one hypothesis, end it (on the same line, inside the numbered item) with
         one sentence that starts with "Background:", restates in your own words one of the
         background passages below that is relevant to that hypothesis, and ends with that
@@ -89,3 +93,30 @@ tasks:
       as modest and never as "effective" or "accurate".
       {revision_notes}
     expected_output: A markdown investigation with the four required sections.
+
+  - name: investigation_summary
+    agent: hypothesis_generator
+    context: [investigation]
+    output: investigation_summary.json
+    description: |
+      Summarize the investigation you just wrote for the app's overview page, in plain
+      language for a busy process engineer. Return one JSON object of this shape:
+      {{"headline": "...",
+        "key_findings": [{{"text": "...", "source": "<file>"}}],
+        "hypotheses": [{{"number": 1, "title": "...", "confidence": "medium",
+                         "evidence": "...", "verify": "..."}}]}}
+      - headline: one or two sentences (at most 300 characters) saying what this run shows
+        overall. Say plainly that the findings are associations, not proven causes, and that
+        the model's predictive evidence is modest; never call the overall evidence strong.
+      - key_findings: the 3 most important Facts of the investigation, each restated in at
+        most 220 characters, with "source" set to the one file that Fact cites (for example
+        "risk_summary.json"). Facts only, never background knowledge.
+      - hypotheses: one card per numbered hypothesis, in the same order, numbered 1, 2, 3, ...
+        "confidence" is exactly the level the investigation gives it (high, medium or low).
+        "title": the hypothesis in at most 120 characters, worded as "... is associated
+        with ...". "evidence": the supporting evidence the investigation gives, in at most
+        220 characters; add no new evidence. "verify": how an engineer can check it, in at
+        most 220 characters.
+      Use only numbers and sensor names that appear in the investigation.
+      {revision_notes}
+    expected_output: One JSON object with headline, key_findings and hypotheses.

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -46,8 +47,12 @@ def test_eda_page_shows_overview_and_top_sensor(run_dir):
     assert not at.exception
     assert [m.label for m in at.metric][:3] == ["Runs", "Sensors", "Fail rate"]
     assert at.dataframe[0].value.iloc[0]["feature"] == "f_020"
-    assert [h.value for h in at.subheader] == [
-        "Fail rate over time", "Sensors that differ between failing and passing runs"]
+    charts = [c.key for c in at.get("plotly_chart")]
+    assert charts == ["weekly-fail-rate", "sensor-differences", "missing-by-sensor",
+                      "correlation"]  # the last two under Extended data
+    assert [t.label for t in at.tabs] == ["Sensor statistics", "Missing data and redundancy",
+                                          "Full insights"]
+
     assert any("## Summary" in md.value for md in at.markdown)
 
 
@@ -62,14 +67,17 @@ def test_model_page_shows_metrics_with_confidence_intervals(run_dir):
                                         "rf_select_k", "baseline_always_pass"}
 
 
-def test_report_page_shows_anomalies(run_dir):
+def test_report_page_leads_with_headline_numbers_and_puts_details_in_tabs(run_dir):
     at = _render("app.report_page", run_dir)
     assert not at.exception
-    assert [m.label for m in at.metric] == ["Runs flagged", "Flag rate: failing runs",
-                                            "Flag rate: passing runs",
-                                            "Sensors out of limits per run"]
-    assert [h.value for h in at.subheader] == ["Engineering report", "Investigation",
-                                               "Risk ranking", "Similar past runs", "Anomalies"]
+    assert [m.label for m in at.metric] == ["Failing runs caught", "Alarm precision",
+                                            "Anomaly flag lift", "Sensors out of limits",
+                                            "Similar runs that failed"]
+    assert " of " in at.metric[0].value and at.metric[0].delta.startswith("with ")
+    assert [t.label for t in at.tabs] == ["Engineering report", "Full investigation",
+                                          "Risk ranking", "Similar past runs", "Anomalies",
+                                          "Safety checks"]
+    assert len(at.get("plotly_chart")) == 2  # anomaly timeline, run map
     assert "Report safety checks: **PASS**" in at.success[0].value
     assert any("## What was detected" in md.value for md in at.markdown)
     assert not any(md.value.startswith("# Engineering report") for md in at.markdown)
@@ -78,10 +86,60 @@ def test_report_page_shows_anomalies(run_dir):
     assert any("Most anomalous runs" in md.value for md in at.markdown)
 
 
+def test_summary_cards_follow_the_investigation(run_dir):
+    import json
+
+    summary = json.loads((run_dir / "investigation_summary.json").read_text(encoding="utf-8"))
+    at = _render("app.report_page", run_dir)
+    cards = [md.value for md in at.markdown if re.match(r"\*\*H\d", md.value)]
+    assert len(cards) == len(summary["hypotheses"])
+    first = summary["hypotheses"][0]
+    assert f"{first['confidence']} confidence" in cards[0]
+    assert any(summary["headline"][:40] in h.value for h in at.get("html"))
+
+
+def test_summary_with_repeated_numbers_or_bad_format_does_not_break_the_page(run_dir, tmp_path):
+    import json
+    import shutil
+
+    run = tmp_path / "run"
+    shutil.copytree(run_dir, run)
+    path = run / "investigation_summary.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for card in data["hypotheses"]:
+        card["number"] = 1
+    path.write_text(json.dumps(data), encoding="utf-8")
+    at = _render("app.report_page", run)
+    assert not at.exception
+    assert len([md for md in at.markdown if re.match(r"\*\*H1\*\*", md.value)]) == len(
+        data["hypotheses"])
+
+    path.write_text('{"headline": "too short"}', encoding="utf-8")
+    at = _render("app.report_page", run)
+    assert not at.exception
+    assert any("did not pass its format check" in w.value for w in at.warning)
+
+
+def test_older_runs_explain_what_they_lack(run_dir, tmp_path):
+    import shutil
+
+    old = tmp_path / "old"
+    shutil.copytree(run_dir, old)
+    for name in ("investigation_summary.json", "similar_runs.json"):
+        (old / name).unlink()
+    at = _render("app.report_page", old)
+    assert not at.exception
+    notes = [i.value for i in at.info]
+    assert any("before Foresight wrote a short summary" in n for n in notes)
+    assert any("Similar-run search was added after this run" in n for n in notes)
+
+
 def test_investigation_is_split_into_labelled_blocks(run_dir):
     at = _render("app.report_page", run_dir)
-    labels = [md.value for md in at.markdown if "-badge[" in md.value]
-    assert [label.split("[")[1].split("]")[0] for label in labels] == [
+    sections = {"Facts", "Assumptions", "Hypotheses", "Suggested verification"}
+    labels = [md.value.split("[")[1].split("]")[0] for md in at.markdown
+              if "-badge[" in md.value]
+    assert [label for label in labels if label in sections] == [
         "Facts", "Assumptions", "Hypotheses", "Suggested verification"]
     assert {b.label for b in at.get("download_button")} >= {"Download engineering_report.md",
                                                             "Download investigation.md"}
@@ -155,6 +213,6 @@ def test_viewable_runs_are_successful_runs_then_the_reference(tmp_path, run_dir)
     found = viewable_runs(runs, reference)
     assert [p.name for p in found] == ["20261116T120000000000Z", "20261116T100000000000Z",
                                       "reference"]
-    assert describe_run(found[0]) == "2026-11-16 12:00 UTC · SECOM (UCI)"
-    assert describe_run(found[-1]) == "Reference run (committed)"
+    assert describe_run(found[0]) == "16 Nov, 12:00 UTC · SECOM"  # no browser zone in tests
+    assert describe_run(found[-1]) == "Reference run"
     assert viewable_runs(tmp_path / "none", None) == []

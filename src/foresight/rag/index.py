@@ -16,10 +16,11 @@ from pathlib import Path
 import numpy as np
 
 from foresight.rag.embedding import MODEL_NAME, get_embedder
+from foresight.rag.run_data import RUN_DATA_FILE, TABLE_FILES, write_run_data
 from foresight.settings import Settings
 
 RUN_SOURCES = ("insights.md", "evaluation_report.md", "model_card.md", "investigation.md",
-               "engineering_report.md", "validation_summary.json")
+               "engineering_report.md", "validation_summary.json", RUN_DATA_FILE)
 VECTORS_FILE = "rag_index.npz"
 CHUNKS_FILE = "rag_chunks.json"
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
@@ -30,6 +31,7 @@ STOPWORDS = {"a", "an", "and", "are", "as", "at", "be", "by", "can", "did", "do"
              "to", "was", "were", "what", "when", "where", "which", "who", "why", "will", "with",
              "you", "your", "run", "runs"}
 TITLE_BOOST = 0.3  # hybrid retrieval: + 0.3 x share of the question's words in the section title
+ID_BOOST = 0.3  # + 0.3 when a number in the question (e.g. a run id) is in the section title
 
 
 def content_words(text: str) -> set[str]:
@@ -123,9 +125,11 @@ class VectorIndex:
             return []
         scores = self.vectors @ query
         if words:
-            boost = np.array([len(words & content_words(c.section)) / len(words)
+            ids = {w for w in words if w.isdigit() and len(w) >= 2}
+            boost = np.array([TITLE_BOOST * len(words & content_words(c.section)) / len(words)
+                              + ID_BOOST * bool(ids & content_words(c.section))
                               for c in self.chunks])
-            scores = scores + TITLE_BOOST * boost
+            scores = scores + boost
         order = np.argsort(-scores, kind="stable")[:k]
         return [Hit(self.chunks[i], round(float(scores[i]), 4)) for i in order]
 
@@ -169,16 +173,21 @@ def _build(paths: list[Path], settings: Settings) -> VectorIndex:
 
 
 def build_run_index(run_dir: Path, settings: Settings) -> dict:
-    """Index the run's text artifacts and save it in the run folder; returns its parameters."""
+    """Index the run's text artifacts and save it in the run folder; returns its parameters.
+    run_data.md (the run's tables as text) is written first."""
+    write_run_data(run_dir)
     index = _build([run_dir / n for n in RUN_SOURCES if (run_dir / n).exists()], settings)
     index.save(run_dir)
     return index.params
 
 
 def run_index(run_dir: Path, settings: Settings) -> VectorIndex:
-    """The run's saved index, built now for runs made before indexing existed."""
+    """The run's saved index, built now for runs made before indexing existed, and rebuilt
+    once for runs indexed before run_data.md existed."""
     index = VectorIndex.load(run_dir)
-    if index is None:
+    outdated = index is not None and RUN_DATA_FILE not in index.params.get("files", []) and \
+        any((run_dir / name).exists() for name in TABLE_FILES)
+    if index is None or outdated:
         build_run_index(run_dir, settings)
         index = VectorIndex.load(run_dir)
     return index

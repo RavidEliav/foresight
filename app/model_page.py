@@ -51,19 +51,19 @@ def render(run_dir: Path | None) -> None:
                     f"{fixed['recall_fail']:.0%} of failing runs.")
 
     left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-chart-risk"):
+    with left, st.container(key="card-chart-risk", height="stretch"):
         ui.label("Risk scores over the test period")
         charts.risk_over_time(run_dir, op.get("cutoff_probability_in_test"),
                               metrics.get("threshold"))
         st.caption("Drift moves the scores; the alarm budget adapts, a fixed threshold does not.")
-    with right, st.container(key="card-chart-pr"):
+    with right, st.container(key="card-chart-pr", height="stretch"):
         ui.label("Precision-recall curve")
         charts.pr_curve(run_dir, metrics["baseline_pr_auc"])
     left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-chart-confusion"):
+    with left, st.container(key="card-chart-confusion", height="stretch"):
         ui.label("Alarms vs outcomes (test period)")
         charts.confusion(cm)
-    with right, st.container(key="card-chart-importance"):
+    with right, st.container(key="card-chart-importance", height="stretch"):
         ui.label("Most important sensors")
         charts.importance(metrics)
 

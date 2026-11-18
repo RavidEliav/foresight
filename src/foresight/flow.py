@@ -71,13 +71,31 @@ class ForesightFlow(Flow[ForesightState]):
     settings: Settings = Field(default_factory=load_settings)
     dataset: Path | None = None
     tracker: ProgressTracker | None = None
+    resume: bool = False
+
+    def _reuse(self, name: str, checks_attr: str | None) -> bool:
+        """A resumed run takes over a stage that finished before the interruption (its files,
+        checks and crew usage); ingest is always redone (about a second, and it re-reads the
+        data checksums)."""
+        stage = self.tracker.finished_stage(name) if self.resume and name != "ingest" else None
+        if stage is None:
+            return False
+        self.state.artifacts.update(stage.artifacts)
+        self.state.crew_usage.update(stage.crew_usage)
+        if checks_attr and stage.checks is not None:
+            setattr(self.state, checks_attr, stage.checks)
+        self.state.stages_completed.append(name)
+        self.state.durations[name] = stage.seconds or 0.0
+        log.info("stage %s reused from before the interruption", name)
+        return True
 
     def _stage(self, name: str, work: Callable[[], StageResult] | None = None,
                checks_attr: str | None = None) -> None:
         """Run one stage; an exception is recorded and routed to handle_failure."""
-        if self.state.stage_error:
+        if self.state.stage_error or self._reuse(name, checks_attr):
             return
         start_time = time.perf_counter()
+        result = None
         self.tracker.stage_started(name)
         try:
             if work is None:
@@ -96,7 +114,10 @@ class ForesightFlow(Flow[ForesightState]):
             return
         self.state.stages_completed.append(name)
         self.state.durations[name] = round(time.perf_counter() - start_time, 4)
-        self.tracker.stage_finished(name, self.state.durations[name])
+        self.tracker.stage_finished(
+            name, self.state.durations[name], artifacts=result.artifacts if result else None,
+            checks=getattr(self.state, checks_attr) if checks_attr else None,
+            crew_usage=result.crew_usage if result else None)
         log.info("stage %s completed in %.1fs", name, self.state.durations[name])
 
     def _gate(self, name: str) -> str:
@@ -150,7 +171,7 @@ class ForesightFlow(Flow[ForesightState]):
 
     @listen("data_ok")
     def analyze(self):
-        self._stage("analyze", lambda: run_analyze(self.settings, self._run_dir),
+        self._stage("analyze", lambda: run_analyze(self.settings, self._run_dir, self.tracker),
                     "feature_checks")
 
     @router(analyze)
@@ -159,11 +180,12 @@ class ForesightFlow(Flow[ForesightState]):
 
     @listen("features_ok")
     def model(self):
-        self._stage("model", lambda: run_model(self.settings, self._run_dir))
+        self._stage("model", lambda: run_model(self.settings, self._run_dir, self.tracker))
 
     @listen(model)
     def investigate(self):
-        self._stage("investigate", lambda: run_investigate(self.settings, self._run_dir),
+        self._stage("investigate",
+                    lambda: run_investigate(self.settings, self._run_dir, self.tracker),
                     "evidence_checks")
 
     @router(investigate)
@@ -172,7 +194,8 @@ class ForesightFlow(Flow[ForesightState]):
 
     @listen("evidence_ok")
     def report(self):
-        self._stage("report", lambda: run_report(self.settings, self._run_dir), "report_checks")
+        self._stage("report", lambda: run_report(self.settings, self._run_dir, self.tracker),
+                    "report_checks")
 
     @router(report)
     def report_done(self):
@@ -226,11 +249,12 @@ def new_run_id() -> str:
 
 
 def run_pipeline(settings: Settings | None = None, run_id: str | None = None,
-                 dataset: Path | None = None,
-                 tracker: ProgressTracker | None = None) -> ForesightState:
+                 dataset: Path | None = None, tracker: ProgressTracker | None = None,
+                 resume: bool = False) -> ForesightState:
     """Run the whole Flow. ``dataset`` is an uploaded CSV (default: the built-in SECOM files);
-    ``tracker`` lets the background runner share progress.json (and add a heartbeat)."""
+    ``tracker`` lets the background runner share progress.json (and add a heartbeat);
+    ``resume`` continues an interrupted run, reusing the stages it had finished."""
     flow = ForesightFlow(settings=settings or load_settings(), dataset=dataset, tracker=tracker,
-                         suppress_flow_events=True)
+                         resume=resume, suppress_flow_events=True)
     flow.kickoff(inputs={"run_id": run_id} if run_id else None)
     return flow.state

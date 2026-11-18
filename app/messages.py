@@ -61,10 +61,11 @@ def explain_failure(progress: RunProgress, test_fraction: float) -> tuple[list[s
     status, reason = progress.effective_status(), progress.failure_reason or ""
     if status == "timeout":
         return ["The run took longer than the time limit and was stopped."], \
-            "Start it again; if it keeps happening, the LLM service may be slow."
+            "Continue the run below; if it keeps happening, the LLM service may be slow."
     if status == "interrupted":
-        return ["The run was interrupted because the app restarted."], "Start a new run."
+        return ["The run was interrupted, for example because the app restarted."], \
+            "Continue the run below: the stages it had finished are reused."
     if stage := re.match(r"(\w+) stage error", reason):
         return [f"Something went wrong in the {stage.group(1)} step."], \
-            "Technical details are below; start a new run to try again."
+            "Technical details are below. Continue the run to try that step again."
     return [reason or "The run stopped."], None

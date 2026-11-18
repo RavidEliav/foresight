@@ -34,13 +34,29 @@ def now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+# Stage of each crew (the crew runs after its stage's deterministic work)
+CREW_STAGES = {"analyst": "analyze", "scientist": "model", "investigation": "investigate",
+               "report": "report"}
+
+
 class StageProgress(BaseModel):
     name: str
     label: str
     crew: str | None = None
     status: str = "pending"  # pending, running, done, failed, skipped
+    crew_status: str | None = None  # running, done, skipped, failed
     seconds: float | None = None
+    # Kept so that a resumed run can reuse a finished stage instead of redoing it
+    artifacts: dict[str, str] = Field(default_factory=dict)
+    checks: dict | None = None
+    crew_usage: dict[str, dict] = Field(default_factory=dict)
 
+    @property
+    def reusable(self) -> bool:
+        """A resumed run can take this stage over: it finished, recorded its files (runs from
+        before Phase 6.1 did not) and the files are still there. Ingest is always redone."""
+        return (self.name != "ingest" and self.status == "done" and bool(self.artifacts)
+                and all(Path(p).exists() for p in self.artifacts.values()))
 
 class RunProgress(BaseModel):
     run_id: str
@@ -53,6 +69,7 @@ class RunProgress(BaseModel):
         StageProgress(name=n, label=label, crew=crew) for n, label, crew in STAGES])
     gates: list[dict] = Field(default_factory=list)
     failure_reason: str | None = None
+    resumed_at: list[str] = Field(default_factory=list)
 
     def effective_status(self, stale_after_s: int = STALE_AFTER_S) -> str:
         """``interrupted`` when an active run stopped sending heartbeats."""
@@ -65,6 +82,14 @@ class RunProgress(BaseModel):
     @property
     def current(self) -> StageProgress | None:
         return next((s for s in self.stages if s.status == "running"), None)
+
+    @property
+    def can_continue(self) -> bool:
+        """An interrupted, timed-out or crashed run can continue where it stopped; a run that a
+        gate stopped would stop again on the same data."""
+        status = self.effective_status()
+        crashed = status == "failed" and "stage error" in (self.failure_reason or "")
+        return status in ("interrupted", "timeout") or crashed
 
 
 def load_progress(run_dir: Path) -> RunProgress | None:
@@ -115,10 +140,38 @@ class ProgressTracker(BaseModel):
             stage.status = "running"
         self.save()
 
-    def stage_finished(self, name: str, seconds: float | None, ok: bool = True) -> None:
+    def stage_finished(self, name: str, seconds: float | None, ok: bool = True,
+                       artifacts: dict[str, str] | None = None, checks: dict | None = None,
+                       crew_usage: dict[str, dict] | None = None) -> None:
         if stage := self._stage(name):
             stage.status = "done" if ok else "failed"
             stage.seconds = None if seconds is None else round(seconds, 1)
+            stage.artifacts, stage.checks = artifacts or {}, checks
+            stage.crew_usage = crew_usage or {}
+            if not ok and stage.crew_status == "running":
+                stage.crew_status = "failed"
+        self.save()
+
+    def crew(self, crew: str, status: str) -> None:
+        if stage := self._stage(CREW_STAGES.get(crew, "")):
+            stage.crew_status = status
+        self.save()
+
+    def finished_stage(self, name: str) -> StageProgress | None:
+        """The stage if it finished before (a resumed run reuses it) and its files are still
+        there."""
+        stage = self._stage(name)
+        return stage if stage is not None and stage.reusable else None
+
+    def prepare_resume(self) -> None:
+        """Reset what did not finish, so the run can continue from there."""
+        progress = self.progress
+        progress.status, progress.failure_reason, progress.finished_at = "queued", None, None
+        progress.gates = []
+        progress.resumed_at.append(now())
+        for stage in progress.stages:
+            if stage.status != "done":
+                stage.status, stage.crew_status, stage.seconds = "pending", None, None
         self.save()
 
     def gate(self, name: str, status: str, messages: list[str]) -> None:
@@ -132,6 +185,8 @@ class ProgressTracker(BaseModel):
         for stage in self.progress.stages:
             if stage.status == "running":
                 stage.status = "failed"
+                if stage.crew_status == "running":
+                    stage.crew_status = "failed"
             elif stage.status == "pending" and status != "success":
                 stage.status = "skipped"
         self.save()

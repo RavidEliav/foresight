@@ -46,8 +46,10 @@ def active_run(settings: Settings) -> RunProgress | None:
 
 
 def runs_in_last_hour(settings: Settings) -> int:
+    """Starts and continues in the last hour (both spend LLM tokens)."""
     since = datetime.now(UTC) - timedelta(hours=1)
-    return sum(datetime.fromisoformat(p.started_at) > since for p in list_runs(settings))
+    return sum(datetime.fromisoformat(t) > since for p in list_runs(settings)
+               for t in (p.started_at, *p.resumed_at))
 
 
 def check_can_start(settings: Settings) -> None:
@@ -86,7 +88,27 @@ def start_run(settings: Settings, upload: bytes | None = None,
             command += ["--dataset", str(run_dir / UPLOAD_FILE)]
             label = f"Uploaded CSV ({upload_name or UPLOAD_FILE})"
         ProgressTracker.create(run_dir, run_id, label)
+    _launch(command, run_dir)
+    return run_id
 
+
+def resume_run(settings: Settings, run_id: str) -> str:
+    """Continue an interrupted (or timed-out, or crashed) run from where it stopped."""
+    with _START_LOCK:
+        check_can_start(settings)
+        run_dir = runs_dir(settings) / run_id
+        progress = load_progress(run_dir)
+        if progress is None or not progress.can_continue:
+            raise RunLimitError(f"Run {run_id} cannot be continued.")
+        command = [sys.executable, "-m", "foresight.cli", "run", "--run-id", run_id, "--resume"]
+        if (run_dir / UPLOAD_FILE).exists():
+            command += ["--dataset", str(run_dir / UPLOAD_FILE)]
+        ProgressTracker(run_dir=run_dir, progress=progress).prepare_resume()
+    _launch(command, run_dir)
+    return run_id
+
+
+def _launch(command: list[str], run_dir: Path) -> None:
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(
         p for p in (str(PROJECT_ROOT / "src"), env.get("PYTHONPATH")) if p)
@@ -97,4 +119,3 @@ def start_run(settings: Settings, upload: bytes | None = None,
         process = subprocess.Popen(command, cwd=PROJECT_ROOT, env=env, stdin=subprocess.DEVNULL,
                                    stdout=log, stderr=subprocess.STDOUT, **detach)
     threading.Thread(target=process.wait, daemon=True).start()  # reap the finished process
-    return run_id

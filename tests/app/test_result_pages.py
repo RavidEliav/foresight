@@ -47,9 +47,12 @@ def test_eda_page_shows_overview_and_top_sensor(run_dir):
     assert not at.exception
     assert [m.label for m in at.metric][:3] == ["Runs", "Sensors", "Fail rate"]
     assert at.dataframe[0].value.iloc[0]["feature"] == "f_020"
-    assert len(at.get("plotly_chart")) == 2  # fail rate over time, sensor differences
+    charts = [c.key for c in at.get("plotly_chart")]
+    assert charts == ["weekly-fail-rate", "sensor-differences", "missing-by-sensor",
+                      "correlation"]  # the last two under Extended data
     assert [t.label for t in at.tabs] == ["Sensor statistics", "Missing data and redundancy",
                                           "Full insights"]
+
     assert any("## Summary" in md.value for md in at.markdown)
 
 

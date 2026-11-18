@@ -49,6 +49,61 @@ def test_run_without_heartbeat_counts_as_interrupted():
     assert jobs.active_run(settings) is None
 
 
+@pytest.mark.parametrize(("status", "reason", "heartbeat_s_ago", "expected"), [
+    ("running", None, 600, True),  # interrupted: the app restarted
+    ("timeout", "stopped by the timeout guard after 1200 s", 0, True),
+    ("failed", "model stage error: connection reset", 0, True),
+    ("failed", "features_present: test_fails: 4 failing runs", 0, False),  # same data, same stop
+    ("success", None, 0, False),
+    ("running", None, 0, False),
+])
+def test_which_runs_can_continue(status, reason, heartbeat_s_ago, expected):
+    settings = load_settings()
+    run_dir = _fake_run(settings, "20260101T000000000000Z", status, 0, heartbeat_s_ago)
+    progress = load_progress(run_dir)
+    progress.failure_reason = reason
+    assert progress.can_continue is expected
+
+
+def test_continuing_a_run_resets_what_did_not_finish_and_counts_toward_the_limit(monkeypatch):
+    settings = load_settings()
+    run_dir = _fake_run(settings, "20260101T000000000000Z", heartbeat_s_ago=600)
+    tracker = ProgressTracker.create(run_dir, "20260101T000000000000Z")
+    tracker.stage_finished("ingest", 1.0, artifacts={"x": str(run_dir / "progress.json")})
+    tracker.stage_started("analyze")
+    tracker.crew("analyst", "running")
+    progress = tracker.progress
+    progress.updated_at = (datetime.now(UTC) - timedelta(seconds=600)).isoformat()
+    (run_dir / "progress.json").write_text(progress.model_dump_json())
+    launched = []
+    monkeypatch.setattr(jobs, "_launch", lambda command, _dir: launched.append(command))
+
+    jobs.resume_run(settings, "20260101T000000000000Z")
+    progress = load_progress(run_dir)
+    assert progress.status == "queued" and len(progress.resumed_at) == 1
+    assert [(s.status, s.crew_status) for s in progress.stages[:2]] == [("done", None),
+                                                                         ("pending", None)]
+    assert launched[0][-1] == "--resume"
+    assert jobs.runs_in_last_hour(settings) == 2  # the start and the continue
+    with pytest.raises(jobs.RunLimitError, match="still in progress"):
+        jobs.resume_run(settings, "20260101T000000000000Z")
+
+
+def test_only_stages_with_their_files_are_reused(tmp_path):
+    from foresight.progress import StageProgress
+
+    kept = tmp_path / "eda_summary.json"
+    kept.write_text("{}")
+    stage = StageProgress(name="analyze", label="EDA", status="done")
+    assert not stage.reusable  # recorded before Phase 6.1: no artifacts listed
+    stage.artifacts = {"eda_summary": str(kept)}
+    assert stage.reusable
+    kept.unlink()
+    assert not stage.reusable  # a listed file is gone: redo the stage
+    assert not StageProgress(name="ingest", label="x", status="done",
+                             artifacts={"p": str(tmp_path)}).reusable
+
+
 def test_only_one_run_at_a_time():
     settings = load_settings()
     _fake_run(settings, "20260101T000000000000Z")

@@ -29,6 +29,10 @@ def render(run_dir: Path | None, settings: Settings) -> None:
         return
 
     history: list[dict] = st.session_state.setdefault("chat", {}).setdefault(str(run_dir), [])
+    opened = st.session_state.pop("chat_open", None)  # picked in the sidebar's history
+    if opened and opened.get("run") == run_dir.name and (
+            not history or history[-1]["question"] != opened["question"]):
+        history.append({**opened, "from_history": True})
     for item in history:
         _show(item)
 
@@ -41,7 +45,8 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     if question:
         with st.chat_message("user"):
             st.markdown(question)
-        with st.chat_message("assistant"), st.spinner("Searching this run's reports..."):
+        with st.chat_message("assistant", avatar=ui.LOGO_IMAGE), \
+                st.spinner("Searching this run's reports..."):
             item = _ask(question, run_dir, settings)
         if item:
             history.append(item)
@@ -76,12 +81,19 @@ def _ask(question: str, run_dir: Path, settings: Settings) -> dict | None:
 def _show(item: dict) -> None:
     with st.chat_message("user"):
         st.markdown(item["question"])
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=ui.LOGO_IMAGE):
         st.markdown(item["answer"])
+        if item.get("from_history"):
+            from app.runs import local_time
+
+            st.caption(f"From the chat history, asked {local_time(item['time'])}")
         if item["refused"]:
             st.caption(f"Why: {item['reason']}")
         if item["sources"]:
             with st.expander(f"Sources ({len(item['sources'])})"):
                 for s in item["sources"]:
+                    if isinstance(s, str):  # logged answers keep "file § section (score)"
+                        st.markdown(f"**{s}**")
+                        continue
                     st.markdown(f"**{s['file']} § {s['section']}** · similarity {s['score']:.2f}")
                     st.caption(s["text"])

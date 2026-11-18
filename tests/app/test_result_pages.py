@@ -253,3 +253,20 @@ def test_pr_curve_fits_the_precision_axis_and_charts_zoom_on_scroll(monkeypatch,
     assert max(curve.y) < 1  # no made-up (recall 0, precision 1) point
     assert shown[0].layout.yaxis.range[1] == pytest.approx(max(max(curve.y), 0.2) * 1.15)
     assert configs[0]["config"]["scrollZoom"] is True
+
+
+def test_trends_page_reads_the_run_folders_without_supabase():
+    """No database and no new runs: the committed reference run is the history."""
+    def page():
+        from app import trends_page
+        from foresight.settings import load_settings
+
+        trends_page.render(load_settings())
+
+    at = AppTest.from_function(page, default_timeout=60).run()
+    assert not at.exception
+    assert at.metric[0].label == "Runs recorded" and at.metric[0].value == "1"
+    assert any("run folders on this server" in c.value for c in at.caption)
+    assert "trend-quality" in [c.key for c in at.get("plotly_chart")]
+    assert any("No stage times recorded yet." in c.value for c in at.caption)
+    assert at.dataframe[0].value.iloc[0]["source"] == "Reference"

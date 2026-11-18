@@ -293,3 +293,68 @@ def correlation(run_dir: Path, sensors: list[str], limit: int = 15) -> None:
     fig.update_layout(yaxis={"autorange": "reversed", "type": "category"},
                       xaxis={"type": "category", "tickangle": -45})
     show(fig, "correlation", height=DETAIL_HEIGHT)
+
+
+# --- Trends (run registry). Frames carry "when" (local start time) and "label" (run label). ---
+
+STAGE_NAMES = {"ingest": "Load + contract", "analyze": "EDA", "model": "Model",
+               "investigate": "Investigate", "report": "Report"}
+STAGE_COLORS = {"ingest": SLATE, "analyze": CYAN, "model": VIOLET, "investigate": AMBER,
+                "report": GREEN}
+
+
+def quality_trend(runs: pd.DataFrame) -> None:
+    """Test PR-AUC and fail recall of every successful run, against random guessing."""
+    runs = runs[runs.status.eq("success") & runs.pr_auc.notna()].sort_values("when")
+    if runs.empty:
+        st.caption("No successful run with model results yet.")
+        return
+    custom = runs[["label", "source", "selected_model"]].to_numpy()
+    fig = go.Figure([
+        go.Scatter(x=runs.when, y=runs.pr_auc, name="PR-AUC", mode="lines+markers",
+                   line={"color": CYAN, "width": 2.5}, marker={"size": 8}, customdata=custom,
+                   hovertemplate="%{customdata[0]} (%{customdata[1]})<br>%{customdata[2]}"
+                                 "<br>PR-AUC %{y:.3f}<extra></extra>"),
+        go.Scatter(x=runs.when, y=runs.recall, name="fail recall", mode="lines+markers",
+                   line={"color": VIOLET, "width": 2}, marker={"size": 7}, customdata=custom,
+                   hovertemplate="%{customdata[0]}<br>fail recall %{y:.3f}<extra></extra>"),
+        go.Scatter(x=runs.when, y=runs.baseline_pr_auc, name="random guessing (PR-AUC)",
+                   mode="lines", line={"color": AMBER, "dash": "dot"}, hoverinfo="skip"),
+    ])
+    fig.update_layout(yaxis={"title": "test metric", "rangemode": "tozero"})
+    show(fig, "trend-quality", height=ROW_HEIGHT)
+
+
+def run_time_trend(runs: pd.DataFrame, stages: pd.DataFrame) -> None:
+    """Where each run's time goes: seconds per stage (its crew included), stacked."""
+    if stages.empty:
+        st.caption("No stage times recorded yet.")
+        return
+    stages = stages.assign(total=stages.seconds.fillna(0) + stages.crew_seconds.fillna(0))
+    order = runs[runs.run_id.isin(stages.run_id)].sort_values("when")
+    bars = []
+    for name, title in STAGE_NAMES.items():
+        part = stages[stages.name.eq(name)].set_index("run_id").reindex(order.run_id)
+        if part.total.notna().any():
+            bars.append(go.Bar(x=order.label, y=part.total, name=title,
+                               marker_color=STAGE_COLORS[name],
+                               hovertemplate=f"{title}: " + "%{y:.0f} s<extra></extra>"))
+    fig = go.Figure(bars)
+    fig.update_layout(barmode="stack", yaxis_title="seconds", xaxis={"type": "category"})
+    show(fig, "trend-run-time", height=ROW_HEIGHT)
+
+
+def tokens_trend(runs: pd.DataFrame) -> None:
+    """LLM tokens of every run with real crews."""
+    real = runs.total_tokens.notna() & ~runs.llm_mock.astype("boolean").fillna(False)
+    runs = runs[real].sort_values("when")
+    if runs.empty:
+        st.caption("No run with real LLM crews yet.")
+        return
+    fig = go.Figure(go.Bar(
+        x=runs.label, y=runs.total_tokens, marker_color=VIOLET,
+        customdata=runs[["status"]].to_numpy(),
+        hovertemplate="%{x} (%{customdata[0]})<br>%{y:,} tokens<extra></extra>"))
+    fig.update_layout(yaxis={"title": "tokens", "tickformat": ",d"}, showlegend=False,
+                      xaxis={"type": "category"})
+    show(fig, "trend-tokens", height=ROW_HEIGHT)

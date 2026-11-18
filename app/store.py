@@ -134,6 +134,69 @@ def upload_template(settings: Settings) -> bytes | None:
     return _template(str(raw_dir))
 
 
+# --- run registry (Trends) --------------------------------------------------------------------
+
+@st.cache_data(ttl=20, show_spinner=False)
+def _history(key: str, _settings: Settings) -> tuple[list[dict], str | None]:
+    from foresight import registry
+
+    try:
+        return registry.history(_settings), None
+    except Exception as exc:  # database unreachable: the run folders still work
+        from foresight.utils.logging import get_logger
+
+        get_logger("registry").warning("registry read failed: %s", exc)
+        files = _settings.model_copy(update={"database_url": ""})
+        return registry.history(files), f"{type(exc).__name__}"
+
+
+def run_history(settings: Settings) -> tuple[pd.DataFrame, str, str | None]:
+    """Recorded runs (newest first), where they came from, and an error if the database could
+    not be read (then the run folders are used)."""
+    from foresight import registry
+
+    rows, error = _history(settings.model_dump_json(), settings)
+    source = "files" if error else registry.backend(settings)
+    return pd.DataFrame(rows), source, error
+
+
+@st.cache_data(ttl=20, show_spinner=False)
+def _stages(key: str, run_ids: tuple[str, ...], _settings: Settings) -> list[dict]:
+    from foresight import registry
+
+    try:
+        return registry.stage_history(_settings, list(run_ids))
+    except Exception:
+        return registry.stage_history(_settings.model_copy(update={"database_url": ""}),
+                                      list(run_ids))
+
+
+def stage_history(settings: Settings, run_ids: list[str]) -> pd.DataFrame:
+    return pd.DataFrame(_stages(settings.model_dump_json(), tuple(run_ids), settings))
+
+
+def sync_registry_in_background(settings: Settings) -> None:
+    """Record the runs on this server in Supabase (runs from before it was connected, runs a
+    restart interrupted); a background thread, so the page never waits for it."""
+    if not settings.database_url:
+        return
+    import threading
+
+    def work() -> None:
+        from foresight import registry
+        from foresight.registry import db
+        from foresight.utils.logging import get_logger
+
+        log = get_logger("registry")
+        try:
+            db.ping(settings.database_url)
+            log.info("registry sync: %d runs recorded", registry.sync(settings))
+        except Exception as exc:
+            log.warning("registry sync skipped: %s", type(exc).__name__)
+
+    threading.Thread(target=work, name="registry-sync", daemon=True).start()
+
+
 # --- chat ------------------------------------------------------------------------------------
 
 def ask(question: str, run_dir: Path, settings: Settings) -> dict:

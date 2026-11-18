@@ -24,7 +24,10 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     if run_dir is None:
         no_run("report to ask about")
         return
-    scope = st.segmented_control("Scope", SCOPES, default=SCOPES[0], key="chat_scope",
+    if st.session_state.get("chat_open"):  # a question from the sidebar belongs to this run
+        st.session_state["chat_scope"] = SCOPES[0]
+    st.session_state.setdefault("chat_scope", SCOPES[0])
+    scope = st.segmented_control("Scope", SCOPES, key="chat_scope",
                                  label_visibility="collapsed") or SCOPES[0]
     every = scope == "All runs"
     if every:

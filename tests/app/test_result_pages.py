@@ -203,6 +203,15 @@ def test_ask_page_needs_the_passcode_then_answers_with_citations(run_dir):
     assert "/" in answer.markdown[0].value and "[source: " in answer.markdown[0].value
     assert any(e.label.startswith("Sources") for e in answer.expander)
 
+    # a question opened from the sidebar's history belongs to this run: the scope follows
+    at.session_state["chat_open"] = {"run": run_dir.name, "question": "Opened from history?",
+                                     "answer": "An answer.", "refused": False, "sources": [],
+                                     "time": "2026-11-18T10:00:00+00:00"}
+    at.run()
+    assert at.segmented_control(key="chat_scope").value == "This run"
+    assert any(m.markdown[0].value == "Opened from history?" for m in at.chat_message
+               if m.name == "user")
+
 
 def test_viewable_runs_are_successful_runs_then_the_reference(tmp_path, run_dir):
     import json

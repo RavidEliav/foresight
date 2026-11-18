@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-from app import ui
-from foresight import jobs
-from foresight.progress import ACTIVE, RunProgress, load_progress
+from app import store, ui
+from foresight.progress import ACTIVE, RunProgress
 from foresight.settings import Settings
 
 SECOM = "SECOM (UCI, built in)"
@@ -38,7 +36,7 @@ def render(settings: Settings, results_page=None) -> None:
             st.caption("Columns: `timestamp` (dd/mm/yyyy HH:MM:SS or ISO), `label` (-1 pass, "
                        "1 fail) and the 590 sensor columns in SECOM order. The file goes "
                        "through the same Data Contract checks as the built-in data.")
-            template = _template(settings)
+            template = store.upload_template(settings)
             if template is not None:
                 st.download_button("Download a template (SECOM in this format)", template,
                                    file_name="secom_upload_format.csv", mime="text/csv")
@@ -47,7 +45,7 @@ def render(settings: Settings, results_page=None) -> None:
             _start(settings, entered, source, upload)
 
     watched = st.session_state.get("watch_run")
-    active = jobs.active_run(settings) or _continuable(settings)
+    active = store.active_run(settings) or _continuable(settings)
     run_id = watched or (active.run_id if active else None)
     if run_id:
         st.session_state["watch_run"] = run_id  # keep showing it after it finishes
@@ -64,9 +62,9 @@ def _start(settings: Settings, entered: str, source: str, upload) -> None:
         ui.friendly_error("Choose a CSV file to upload first.")
         return
     try:
-        run_id = jobs.start_run(settings, upload.getvalue() if upload else None,
-                                upload.name if upload else None)
-    except jobs.RunLimitError as exc:
+        run_id = store.start_run(settings, upload.getvalue() if upload else None,
+                                 upload.name if upload else None)
+    except store.RunLimitError as exc:
         st.warning(str(exc), icon=":material/hourglass_top:")
         return
     st.session_state["watch_run"] = run_id
@@ -74,7 +72,7 @@ def _start(settings: Settings, entered: str, source: str, upload) -> None:
 
 def _continuable(settings: Settings) -> RunProgress | None:
     """After a restart nothing is watched any more: show the newest run if it can continue."""
-    runs = jobs.list_runs(settings)
+    runs = store.all_runs(settings)
     return runs[0] if runs and runs[0].can_continue else None
 
 
@@ -83,8 +81,8 @@ def _continue(settings: Settings, run_id: str) -> None:
         ui.friendly_error("Not authorized: enter the passcode above to continue the run.")
         return
     try:
-        jobs.resume_run(settings, run_id)
-    except jobs.RunLimitError as exc:
+        store.resume_run(settings, run_id)
+    except store.RunLimitError as exc:
         st.warning(str(exc), icon=":material/hourglass_top:")
         return
     st.session_state["watch_run"] = run_id
@@ -92,8 +90,8 @@ def _continue(settings: Settings, run_id: str) -> None:
 
 
 def _show_run(settings: Settings, run_id: str, results_page) -> None:
-    run_dir = jobs.runs_dir(settings) / run_id
-    progress = load_progress(run_dir)
+    run_dir = store.run_folder(settings, run_id)
+    progress = store.progress(run_dir)
     if progress is None:
         return
     if progress.effective_status() in ACTIVE:
@@ -105,7 +103,7 @@ def _show_run(settings: Settings, run_id: str, results_page) -> None:
 
 @st.fragment(run_every=2)
 def _live(run_dir: str) -> None:
-    progress = load_progress(Path(run_dir))
+    progress = store.progress(Path(run_dir))
     if progress is None:
         return
     _render_progress(progress, Path(run_dir))
@@ -180,10 +178,9 @@ def _test_fraction() -> float:
 
 
 def _show_failed_checks(run_dir: Path) -> None:
-    path = run_dir / "validation_summary.json"
-    if not path.exists():
+    summary = store.read_json(run_dir, "validation_summary.json")
+    if not summary:
         return
-    summary = json.loads(path.read_text(encoding="utf-8"))
     failed = [c for c in summary["checks"] if c["status"] != "PASS"]
     if failed:
         st.markdown("**Data checks that did not pass**")
@@ -194,13 +191,14 @@ def _history(settings: Settings) -> None:
     from app.messages import explain_failure
     from app.runs import local_time
 
-    runs = jobs.list_runs(settings)
+    runs = store.all_runs(settings)
     if not runs:
         return
     with st.expander(f"Run history ({len(runs)})"):
         rows = []
         for p in runs[:30]:
-            manifest = _manifest(jobs.runs_dir(settings) / p.run_id)
+            manifest = store.read_json(store.run_folder(settings, p.run_id),
+                                       store.MANIFEST) or {}
             usage = manifest.get("crew_usage", {})
             checks = manifest.get("report_checks") or {}
             status = p.effective_status()
@@ -218,30 +216,9 @@ def _history(settings: Settings) -> None:
         ui.table(pd.DataFrame(rows), max_rows=30)
 
 
-def _manifest(run_dir: Path) -> dict:
-    path = run_dir / "run_manifest.json"
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-
-
 def _minutes(p: RunProgress) -> float | None:
     end = p.finished_at or (p.updated_at if p.effective_status() in ACTIVE else None)
     if end is None:
         return None
     start = datetime.fromisoformat(p.started_at)
     return round((datetime.fromisoformat(end) - start).total_seconds() / 60, 1)
-
-
-@st.cache_data(show_spinner=False)
-def _template_bytes(raw_dir: str) -> bytes:
-    from foresight.data.secom import load_raw, to_upload_csv
-
-    return to_upload_csv(load_raw(Path(raw_dir)))
-
-
-def _template(settings: Settings) -> bytes | None:
-    from foresight.data.secom import DATA_FILE, LABELS_FILE
-
-    raw_dir = settings.resolve(settings.paths.data_raw_dir)
-    if not all((raw_dir / name).exists() for name in (DATA_FILE, LABELS_FILE)):
-        return None
-    return _template_bytes(str(raw_dir))

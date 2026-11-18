@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import warnings
 from pathlib import Path
 
@@ -168,6 +169,45 @@ def classification_metrics(y: np.ndarray, scores: np.ndarray, pred: np.ndarray) 
     }
 
 
+def fast_metrics(y: np.ndarray, scores: np.ndarray, pred: np.ndarray) -> dict:
+    """classification_metrics in plain numpy, for the 1000 bootstrap resamples: the same
+    values (tested), without scikit-learn's input validation on every call (about 28 s per
+    run)."""
+    y = np.asarray(y).astype(int)
+    scores = np.asarray(scores, dtype=float)
+    pos = int(y.sum())
+    neg = len(y) - pos
+    nan = float("nan")
+    if pos:
+        order = np.argsort(-scores, kind="mergesort")
+        ys, ss = y[order], scores[order]
+        last = np.r_[np.where(np.diff(ss))[0], len(ss) - 1]
+        tps = np.cumsum(ys)[last]
+        precision = tps / (last + 1)
+        recall = tps / pos
+        pr_auc = float(np.sum(np.diff(np.r_[0.0, recall]) * precision))
+    else:
+        pr_auc = nan
+    if pos and neg:
+        from scipy.stats import rankdata
+
+        ranks = rankdata(scores)
+        roc_auc = float((ranks[y == 1].sum() - pos * (pos + 1) / 2) / (pos * neg))
+    else:
+        roc_auc = nan
+    tp = int(((pred == 1) & (y == 1)).sum())
+    fp = int(((pred == 1) & (y == 0)).sum())
+    fn = pos - tp
+    tn = neg - fp
+    recall_fail = tp / pos if pos else 0.0
+    precision_fail = tp / (tp + fp) if tp + fp else 0.0
+    f1 = 2 * tp / (2 * tp + fp + fn) if tp else 0.0
+    rates = [r for r, n in ((recall_fail, pos), (tn / neg if neg else 0.0, neg)) if n]
+    return {"pr_auc": pr_auc, "roc_auc": roc_auc, "recall_fail": float(recall_fail),
+            "precision_fail": float(precision_fail), "f1_fail": float(f1),
+            "balanced_accuracy": float(np.mean(rates))}
+
+
 def bootstrap_ci(y: np.ndarray, scores: np.ndarray, rule: dict, samples: int,
                  seed: int) -> dict[str, list[float]]:
     """95% CIs; the operating rule (budget or threshold) is re-applied to every resample."""
@@ -177,7 +217,7 @@ def bootstrap_ci(y: np.ndarray, scores: np.ndarray, rule: dict, samples: int,
         idx = rng.integers(0, len(y), len(y))
         if len(np.unique(y[idx])) < 2:
             continue
-        values = classification_metrics(y[idx], scores[idx], flags_for(scores[idx], rule))
+        values = fast_metrics(y[idx], scores[idx], flags_for(scores[idx], rule))
         for key, value in values.items():
             collected.setdefault(key, []).append(value)
     return {k: [round(float(np.percentile(v, 2.5)), 4), round(float(np.percentile(v, 97.5)), 4)]
@@ -221,18 +261,36 @@ def native_importance(model: Pipeline, features: list[str]) -> pd.Series:
 
 def permutation_importance_top(model: Pipeline, X: pd.DataFrame, y: pd.Series,
                                candidates: list[str], repeats: int, seed: int) -> pd.DataFrame:
-    """Drop in test PR-AUC when one feature is shuffled (only for the candidate features)."""
+    """Drop in test PR-AUC when one feature is shuffled (only for the candidate features).
+    The shuffles are drawn in order first (the same as one by one), then scored in parallel
+    threads; each prediction uses one thread, so the results do not depend on the threads."""
+    from concurrent.futures import ThreadPoolExecutor
+
     rng = np.random.default_rng(seed)
     base = average_precision_score(y, model.predict_proba(X)[:, 1])
+    shuffles = [(feature, rng.permutation(X[feature].to_numpy()))
+                for feature in candidates for _ in range(repeats)]
+    estimator = model.named_steps["model"]
+    n_jobs = getattr(estimator, "n_jobs", None)
+    if n_jobs is not None:
+        estimator.set_params(n_jobs=1)
+
+    def drop(item: tuple[str, np.ndarray]) -> float:
+        shuffled = X.copy()
+        shuffled[item[0]] = item[1]
+        return base - average_precision_score(y, model.predict_proba(shuffled)[:, 1])
+
+    try:
+        with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as pool:
+            drops = list(pool.map(drop, shuffles))
+    finally:
+        if n_jobs is not None:
+            estimator.set_params(n_jobs=n_jobs)
     rows = []
-    for feature in candidates:
-        drops = []
-        for _ in range(repeats):
-            shuffled = X.copy()
-            shuffled[feature] = rng.permutation(shuffled[feature].to_numpy())
-            drops.append(base - average_precision_score(y, model.predict_proba(shuffled)[:, 1]))
-        rows.append({"feature": feature, "importance_mean": float(np.mean(drops)),
-                     "importance_std": float(np.std(drops))})
+    for i, feature in enumerate(candidates):
+        values = drops[i * repeats:(i + 1) * repeats]
+        rows.append({"feature": feature, "importance_mean": float(np.mean(values)),
+                     "importance_std": float(np.std(values))})
     return pd.DataFrame(rows).sort_values(["importance_mean", "feature"],
                                           ascending=[False, True]).reset_index(drop=True)
 

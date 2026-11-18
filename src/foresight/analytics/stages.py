@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from collections.abc import Callable
+from concurrent.futures import Executor, Future
 from pathlib import Path
 
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from foresight.analytics.anomalies import detect
 from foresight.analytics.eda import build_eda
@@ -18,10 +20,10 @@ from foresight.analytics.modeling import train_and_evaluate
 from foresight.analytics.risk import rank_risk
 from foresight.analytics.similar import EMBEDDINGS_FILE, SIMILAR_CSV, SIMILAR_JSON, find_similar
 from foresight.crews.checks import check_outputs
-from foresight.crews.facts import background_passages
+from foresight.crews.facts import all_facts, allowed_numbers, background_passages
 from foresight.crews.runner import run_crew
 from foresight.crews.summary import SUMMARY_FILE
-from foresight.progress import ProgressTracker
+from foresight.progress import CREW_STAGES, ProgressTracker
 from foresight.rag.index import CHUNKS_FILE, VECTORS_FILE, build_run_index
 from foresight.rag.run_data import RUN_DATA_FILE
 from foresight.settings import Settings
@@ -33,9 +35,13 @@ log = get_logger("stages")
 
 
 class StageResult(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     artifacts: dict[str, str] = Field(default_factory=dict)
     checks: ValidationSummary | None = None
     crew_usage: dict[str, dict] = Field(default_factory=dict)
+    # a crew still running in the background (its own StageResult when done)
+    pending: Future | None = Field(default=None, exclude=True)
 
 
 
@@ -63,6 +69,7 @@ def ensure_similar_fact(run_dir: Path) -> None:
 REPORT_INPUTS = ("insights.md", "model_card.md", "investigation.md")
 CREW_OUTPUTS = [*REPORT_INPUTS, SUMMARY_FILE, "engineering_report.md"]
 REVISIONS_FILE = "crew_revisions.json"
+_REVISIONS_LOCK = threading.Lock()  # crews may finish at the same time
 
 
 def _problems(checks: ValidationSummary) -> list[str]:
@@ -78,7 +85,9 @@ def _add_usage(a: dict, b: dict) -> dict:
 def _with_crew(result: StageResult, crew: str, settings: Settings, run_dir: Path,
                extra_inputs: dict[str, str] | None = None,
                postprocess: Callable[[Path], None] | None = None,
-               tracker: ProgressTracker | None = None) -> StageResult:
+               tracker: ProgressTracker | None = None,
+               allowed: set[str] | None = None,
+               visible: frozenset[str] | None = None) -> StageResult:
     """Run a crew after the deterministic work of a stage and record its outputs and usage.
     If the deterministic checks on the crew's own output warn, the crew gets the findings and
     revises it (at most settings.llm.crew_revisions times); revisions go to crew_revisions.json.
@@ -92,7 +101,7 @@ def _with_crew(result: StageResult, crew: str, settings: Settings, run_dir: Path
     if tracker:
         tracker.crew(crew, "running")
     inputs = dict(extra_inputs or {})
-    outcome = run_crew(crew, settings, run_dir, inputs)
+    outcome = run_crew(crew, settings, run_dir, inputs, visible)
     if postprocess:
         postprocess(run_dir)
     usage = {"seconds": outcome.seconds, **outcome.usage}
@@ -100,13 +109,13 @@ def _with_crew(result: StageResult, crew: str, settings: Settings, run_dir: Path
     fixed: list[str] = []
     revisions = 0
     for _ in range(settings.llm.crew_revisions):
-        problems = _problems(check_outputs(run_dir, files))
+        problems = _problems(check_outputs(run_dir, files, allowed))
         if not problems:
             break
         notes = ("REVISION REQUEST: the previous version of this output failed these automatic "
                  "checks. Fix them and keep everything else as required above:\n- "
                  + "\n- ".join(problems))
-        again = run_crew(crew, settings, run_dir, {**inputs, "revision_notes": notes})
+        again = run_crew(crew, settings, run_dir, {**inputs, "revision_notes": notes}, visible)
         if postprocess:
             postprocess(run_dir)
         usage = _add_usage(usage, {"seconds": again.seconds, **again.usage})
@@ -114,13 +123,41 @@ def _with_crew(result: StageResult, crew: str, settings: Settings, run_dir: Path
         revisions += 1
     if fixed:
         path = run_dir / REVISIONS_FILE
-        revised = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-        revised[crew] = fixed
-        path.write_text(json.dumps(revised, indent=2), encoding="utf-8")
+        with _REVISIONS_LOCK:
+            revised = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+            revised[crew] = fixed
+            path.write_text(json.dumps(revised, indent=2), encoding="utf-8")
     result.artifacts.update({Path(p).stem: p for p in outcome.outputs.values()})
     result.crew_usage[crew] = {**usage, "mock": outcome.mock, "revisions": revisions}
     if tracker:
         tracker.crew(crew, "done")
+    return result
+
+
+def _crew_step(result: StageResult, crew: str, settings: Settings, run_dir: Path,
+               tracker: ProgressTracker | None = None,
+               executor: Executor | None = None) -> StageResult:
+    """Run the stage's crew now, or in the background when an executor is given (the Flow then
+    goes on with the next stage and waits for the crew before the report). A background crew
+    takes its fact sheets, the numbers its checks accept and the files its tools may read
+    now, so it sees what a sequential run would see. When it ends, its outputs, usage and
+    "done" are recorded together, so Continue never reuses a half-recorded stage."""
+    skipped = result.checks is not None and result.checks.status == GateStatus.ERROR
+    if executor is None or skipped:
+        return _with_crew(result, crew, settings, run_dir, tracker=tracker)
+    if tracker:
+        tracker.crew(crew, "running")
+    facts, allowed = all_facts(run_dir), allowed_numbers(run_dir)
+    visible = frozenset(p.name for p in run_dir.iterdir() if p.is_file())
+
+    def job() -> StageResult:
+        done = _with_crew(StageResult(), crew, settings, run_dir, facts, None, None, allowed,
+                          visible)
+        if tracker:
+            tracker.crew_finished(CREW_STAGES[crew], done.artifacts, done.crew_usage)
+        return done
+
+    result.pending = executor.submit(job)
     return result
 
 
@@ -134,8 +171,8 @@ def load_features(run_dir: Path) -> tuple[pd.DataFrame, FeatureSpec]:
     return frame, spec
 
 
-def run_analyze(settings: Settings, run_dir: Path,
-                tracker: ProgressTracker | None = None) -> StageResult:
+def run_analyze(settings: Settings, run_dir: Path, tracker: ProgressTracker | None = None,
+                executor: Executor | None = None) -> StageResult:
     """EDA + feature engineering; checks that modeling has what it needs (features gate)."""
     cfg = settings.analytics
     cleaned = load_clean(run_dir)
@@ -149,7 +186,7 @@ def run_analyze(settings: Settings, run_dir: Path,
             ("features", "features.csv"), ("feature_spec", "feature_spec.json"))},
         checks=feature_checks(frame, spec, settings),
     )
-    return _with_crew(result, "analyst", settings, run_dir, tracker=tracker)
+    return _crew_step(result, "analyst", settings, run_dir, tracker, executor)
 
 
 def feature_checks(frame: pd.DataFrame, spec: FeatureSpec, settings: Settings) -> ValidationSummary:
@@ -174,15 +211,15 @@ def feature_checks(frame: pd.DataFrame, spec: FeatureSpec, settings: Settings) -
     return ValidationSummary.from_checks(checks)
 
 
-def run_model(settings: Settings, run_dir: Path,
-              tracker: ProgressTracker | None = None) -> StageResult:
+def run_model(settings: Settings, run_dir: Path, tracker: ProgressTracker | None = None,
+              executor: Executor | None = None) -> StageResult:
     frame, spec = load_features(run_dir)
     train_and_evaluate(frame, spec, settings.analytics, settings.seed, run_dir)
     result = StageResult(artifacts={name: str(run_dir / file) for name, file in (
         ("model", "model.joblib"), ("model_metrics", "model_metrics.json"),
         ("evaluation_report", "evaluation_report.md"), ("predictions", "predictions.csv"),
         ("oof_predictions", "oof_predictions.csv"))})
-    return _with_crew(result, "scientist", settings, run_dir, tracker=tracker)
+    return _crew_step(result, "scientist", settings, run_dir, tracker, executor)
 
 
 def run_investigate(settings: Settings, run_dir: Path,

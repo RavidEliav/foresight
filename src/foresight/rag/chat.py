@@ -136,13 +136,7 @@ def ask(question: str, run_dir: Path, settings: Settings) -> ChatAnswer:
     if settings.mock_llm:
         answer = mock_answer(question, hits)
     else:
-        from foresight.llm import get_llm
-
-        llm = get_llm(settings)
-        answer = str(llm.call([{"role": "system", "content": SYSTEM},
-                               {"role": "user", "content": _prompt(question, hits)}])).strip()
-        usage = {k: int(v) for k, v in llm.get_token_usage_summary().model_dump().items()
-                 if isinstance(v, int)}
+        answer, usage = complete(settings, SYSTEM, _prompt(question, hits))
 
     refused, reason = False, ""
     if REFUSAL.lower().rstrip(".") in answer.lower():
@@ -156,6 +150,24 @@ def ask(question: str, run_dir: Path, settings: Settings) -> ChatAnswer:
 
 def log_path(settings: Settings, run_dir: Path) -> Path:
     return settings.resolve(settings.paths.runs_dir) / "chat_logs" / f"{run_dir.name}.jsonl"
+
+
+def complete(settings: Settings, system: str, prompt: str) -> tuple[str, dict[str, int]]:
+    """One chat completion through the OpenAI SDK. The chat runs inside the app process, where
+    CrewAI's LLM wrapper would add about 70 MB and 3 s to the first question; the crews keep
+    using it."""
+    from openai import OpenAI
+
+    from foresight.llm import check_api_key
+
+    check_api_key()
+    response = OpenAI().chat.completions.create(
+        model=settings.llm.model, temperature=settings.llm.temperature,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}])
+    usage = response.usage
+    tokens = {"prompt_tokens": usage.prompt_tokens, "completion_tokens": usage.completion_tokens,
+              "total_tokens": usage.total_tokens} if usage else {}
+    return (response.choices[0].message.content or "").strip(), tokens
 
 
 def log_answer(settings: Settings, run_dir: Path, result: ChatAnswer) -> None:

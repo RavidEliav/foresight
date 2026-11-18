@@ -18,8 +18,13 @@ SOURCE_FILES = (
 
 
 def read(run_dir: Path, name: str) -> dict:
+    """A run file as a dict; {} if it does not exist yet or is being written by a stage that
+    runs at the same time as a background crew."""
     path = run_dir / name
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
 
 
 def pct(value: float, digits: int = 1) -> str:

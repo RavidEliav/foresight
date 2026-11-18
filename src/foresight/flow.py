@@ -4,6 +4,10 @@ Stage order: ingest -> [data contract gate] -> analyze -> [features gate] -> mod
 -> investigate -> [evidence gate] -> report. Any ERROR, or an exception inside a stage,
 routes to handle_failure, which writes a failure report instead of crashing.
 
+The Data Analyst and Data Scientist crews run in the background while the next stages compute
+(they only read files that already exist); the Flow waits for them before the report, which
+needs their documents.
+
 Deterministic Python tools compute every number; each stage then runs a CrewAI crew that
 interprets them (analyze: Data Analyst, model: Data Scientist, investigate: Investigation,
 report: Engineering Report). Crew outputs are checked deterministically (report_checks.json).
@@ -14,11 +18,11 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 from crewai.flow.flow import Flow, listen, or_, router, start
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from foresight.analytics.stages import (
     StageResult,
@@ -28,7 +32,7 @@ from foresight.analytics.stages import (
     run_report,
 )
 from foresight.data.ingest import run_ingest
-from foresight.progress import ProgressTracker
+from foresight.progress import ProgressTracker, new_run_id
 from foresight.rag.index import CHUNKS_FILE
 from foresight.settings import Settings, load_settings
 from foresight.utils.logging import get_logger, setup_logging
@@ -71,13 +75,44 @@ class ForesightFlow(Flow[ForesightState]):
     settings: Settings = Field(default_factory=load_settings)
     dataset: Path | None = None
     tracker: ProgressTracker | None = None
-    resume: bool = False
+    continue_run: bool = False  # `resume` is taken by CrewAI's Flow
+    background_crews: bool = True
+    _pending: dict[str, Future] = PrivateAttr(default_factory=dict)
+    _executor: ThreadPoolExecutor | None = PrivateAttr(default=None)
 
+    @property
+    def executor(self) -> ThreadPoolExecutor | None:
+        if not self.background_crews:
+            return None
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="crew")
+        return self._executor
+
+    def _join_crews(self) -> None:
+        """Wait for the crews running in the background and take over their outputs; a crew
+        that failed fails its stage."""
+        for name, future in list(self._pending.items()):
+            try:
+                crew = future.result()  # its stage record was updated when it finished
+                self.state.artifacts.update(crew.artifacts)
+                self.state.crew_usage.update(crew.crew_usage)
+            except Exception as exc:  # reported like a stage error, never a crash
+                log.exception("crew of stage %s failed", name)
+                self.state.stage_error = self.state.stage_error or f"{name} crew error: {exc}"
+                stage = next((s for s in self.tracker.progress.stages if s.name == name), None)
+                if stage is not None:
+                    stage.crew_status = "failed"
+                    self.tracker.save()
+            del self._pending[name]
+        if self._executor is not None:  # no crew starts after this point
+            self._executor.shutdown(wait=False)
+            self._executor = None
     def _reuse(self, name: str, checks_attr: str | None) -> bool:
         """A resumed run takes over a stage that finished before the interruption (its files,
         checks and crew usage); ingest is always redone (about a second, and it re-reads the
         data checksums)."""
-        stage = self.tracker.finished_stage(name) if self.resume and name != "ingest" else None
+        resumable = self.continue_run and name != "ingest"
+        stage = self.tracker.finished_stage(name) if resumable else None
         if stage is None:
             return False
         self.state.artifacts.update(stage.artifacts)
@@ -103,6 +138,8 @@ class ForesightFlow(Flow[ForesightState]):
                     json.dumps({"stage": name, "placeholder": True}), encoding="utf-8")
             else:
                 result = work()
+                if result.pending is not None:
+                    self._pending[name] = result.pending
                 self.state.artifacts.update(result.artifacts)
                 self.state.crew_usage.update(result.crew_usage)
                 if checks_attr and result.checks is not None:
@@ -171,8 +208,8 @@ class ForesightFlow(Flow[ForesightState]):
 
     @listen("data_ok")
     def analyze(self):
-        self._stage("analyze", lambda: run_analyze(self.settings, self._run_dir, self.tracker),
-                    "feature_checks")
+        self._stage("analyze", lambda: run_analyze(self.settings, self._run_dir, self.tracker,
+                                                   self.executor), "feature_checks")
 
     @router(analyze)
     def features_gate(self):
@@ -180,7 +217,8 @@ class ForesightFlow(Flow[ForesightState]):
 
     @listen("features_ok")
     def model(self):
-        self._stage("model", lambda: run_model(self.settings, self._run_dir, self.tracker))
+        self._stage("model", lambda: run_model(self.settings, self._run_dir, self.tracker,
+                                               self.executor))
 
     @listen(model)
     def investigate(self):
@@ -194,6 +232,7 @@ class ForesightFlow(Flow[ForesightState]):
 
     @listen("evidence_ok")
     def report(self):
+        self._join_crews()  # the report needs the insights and the model card
         self._stage("report", lambda: run_report(self.settings, self._run_dir, self.tracker),
                     "report_checks")
 
@@ -212,6 +251,9 @@ class ForesightFlow(Flow[ForesightState]):
 
     @listen(or_(FAILED))
     def handle_failure(self):
+        self._join_crews()  # no crew may still write files after the failure report
+        if self.state.stage_error and not self.state.failure_reason:
+            self.state.failure_reason = self.state.stage_error
         self.state.status = "failed"
         report = (
             f"# Run {self.state.run_id} stopped\n\n"
@@ -243,10 +285,6 @@ class ForesightFlow(Flow[ForesightState]):
         write_manifest(manifest, Path(self.state.run_dir) / "run_manifest.json")
 
 
-def new_run_id() -> str:
-    """Run ids sort by time (the app relies on that)."""
-    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-
 
 def run_pipeline(settings: Settings | None = None, run_id: str | None = None,
                  dataset: Path | None = None, tracker: ProgressTracker | None = None,
@@ -255,6 +293,6 @@ def run_pipeline(settings: Settings | None = None, run_id: str | None = None,
     ``tracker`` lets the background runner share progress.json (and add a heartbeat);
     ``resume`` continues an interrupted run, reusing the stages it had finished."""
     flow = ForesightFlow(settings=settings or load_settings(), dataset=dataset, tracker=tracker,
-                         resume=resume, suppress_flow_events=True)
+                         continue_run=resume, suppress_flow_events=True)
     flow.kickoff(inputs={"run_id": run_id} if run_id else None)
     return flow.state

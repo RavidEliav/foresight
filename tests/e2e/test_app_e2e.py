@@ -133,8 +133,15 @@ def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_pa
     expect(app_page.get_by_test_id("stAlertContentError").filter(
         has_text="Some labels are not -1 (pass) or 1 (fail)")).to_be_visible(timeout=180_000)
     expect(app_page.get_by_text("Data Contract: ERROR")).to_be_visible()
-    app_page.get_by_text("Technical details").click()
-    expect(app_page.get_by_text("Data checks that did not pass")).to_be_visible()
+    failed_checks = app_page.get_by_text("Data checks that did not pass")
+    for _ in range(3):  # the page reruns once more when the run ends; a click may be lost
+        app_page.get_by_text("Technical details").click()
+        try:
+            expect(failed_checks).to_be_visible(timeout=5_000)
+            break
+        except AssertionError:
+            continue
+    expect(failed_checks).to_be_visible()
     expect(app_page.get_by_test_id("stCode")).to_contain_text("raw_label_values")
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
 

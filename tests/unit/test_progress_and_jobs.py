@@ -81,7 +81,7 @@ def test_continuing_a_run_resets_what_did_not_finish_and_counts_toward_the_limit
     jobs.resume_run(settings, "20260101T000000000000Z")
     progress = load_progress(run_dir)
     assert progress.status == "queued" and len(progress.resumed_at) == 1
-    assert [(s.status, s.crew_status) for s in progress.stages[:2]] == [("done", None),
+    assert [(s.status, s.crew_status) for s in progress.stages[:2]] == [("pending", None),
                                                                          ("pending", None)]
     assert launched[0][-1] == "--resume"
     assert jobs.runs_in_last_hour(settings) == 2  # the start and the continue

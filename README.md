@@ -79,7 +79,7 @@ Each crew runs right after the deterministic work of its stage. Agents, tasks an
 
 If a crew's own output fails a check, the crew gets the findings and revises it once (`llm.crew_revisions` in `config/settings.yaml`). Revisions are listed in `crew_revisions.json` and in the report checks. A crew is skipped when its stage's own checks already have an ERROR, so a run that a gate will stop spends no tokens.
 
-**Mock or real LLM.** With `MOCK_LLM=true`, a deterministic mock LLM writes the outputs from the same facts and goes through the same CrewAI agents, tasks and checks. Tests and CI use it, and a session guard makes any paid call fail a test. With the real model (`gpt-4o-mini`, temperature 0), a full run takes about 3.5 minutes and about 27,000 tokens (under 1 US cent). CrewAI's cloud tracing and telemetry are turned off: they added about 15 seconds per crew, and Foresight keeps its own logs and run manifest.
+**Mock or real LLM.** With `MOCK_LLM=true`, a deterministic mock LLM writes the outputs from the same facts and goes through the same CrewAI agents, tasks and checks. Tests and CI use it, and a session guard makes any paid call fail a test. With the real model (`gpt-4o-mini`, temperature 0), a full run takes about 2.5 minutes on Railway and about 25,500 tokens (under 1 US cent). CrewAI's cloud tracing and telemetry are turned off: they added about 15 seconds per crew, and Foresight keeps its own logs and run manifest.
 
 **Reference run.** [`artifacts/reference/`](artifacts/reference) holds a complete real run (gpt-4o-mini, all gates and all 26 report checks PASS, no revisions, with its summary and chat index). The app shows it until a newer run exists.
 
@@ -127,10 +127,12 @@ Measured, then changed without changing any result: `scripts/compare_runs.py <ru
 
 | | Before (Phase 6) | After (Phase 7) |
 |---|---|---|
+| Real run on Railway (`dev`) | 3.3–3.6 min | 2.5 min |
 | Mock run, local (deterministic work only) | 168 s | 87 s |
 | Model stage, local | 118 s | 57 s |
 | Peak memory of a run process | 973 MB | 640 MB |
 | App server after visiting every page and asking the (mock) chat | 521 MB | 323 MB (the real chat adds about 30 MB for the OpenAI SDK) |
+| `dev` service at rest after a real run | 1,239 MB | 445 MB |
 
 What changed:
 - **Crews in the background:** the Data Analyst crew writes its insights while the models train, and the Data Scientist crew writes the model card while the investigation runs; the Flow waits for both before the report. Each takes its fact sheets and the numbers its checks accept when it starts, from the same files a sequential run would see.

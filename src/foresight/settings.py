@@ -36,6 +36,7 @@ class RagSettings(BaseModel):
     top_k: int = 4
     min_similarity: float = 0.25     # below this the chat refuses without calling the LLM
     knowledge_k: int = 3
+    all_runs_k: int = 6              # excerpts for a question about all runs (Phase 8.2)
 
 
 class DataSettings(BaseModel):

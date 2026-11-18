@@ -39,6 +39,16 @@ def content_words(text: str) -> set[str]:
         {w.rstrip("s") for w in STOPWORDS}
 
 
+def title_boost(words: set[str], section: str) -> float:
+    """Hybrid retrieval bonus: TITLE_BOOST x the share of the question's content words in the
+    section title, plus ID_BOOST when a number in the question (a run id) is in the title."""
+    if not words:
+        return 0.0
+    ids = {w for w in words if w.isdigit() and len(w) >= 2}
+    title = content_words(section)
+    return TITLE_BOOST * len(words & title) / len(words) + ID_BOOST * bool(ids & title)
+
+
 @dataclass
 class Chunk:
     source: str
@@ -125,11 +135,7 @@ class VectorIndex:
             return []
         scores = self.vectors @ query
         if words:
-            ids = {w for w in words if w.isdigit() and len(w) >= 2}
-            boost = np.array([TITLE_BOOST * len(words & content_words(c.section)) / len(words)
-                              + ID_BOOST * bool(ids & content_words(c.section))
-                              for c in self.chunks])
-            scores = scores + boost
+            scores = scores + np.array([title_boost(words, c.section) for c in self.chunks])
         order = np.argsort(-scores, kind="stable")[:k]
         return [Hit(self.chunks[i], round(float(scores[i]), 4)) for i in order]
 
@@ -215,6 +221,10 @@ def knowledge_index(settings: Settings) -> VectorIndex:
 def retrieve(index: VectorIndex, question: str, settings: Settings,
              k: int | None = None) -> list[Hit]:
     """The top ``k`` chunks with similarity at or above ``rag.min_similarity``."""
-    query = _embedder(settings).embed([question])[0]
+    query = embed_question(question, settings)
     hits = index.search(query, k or settings.rag.top_k, content_words(question))
     return [h for h in hits if h.score >= settings.rag.min_similarity]
+
+
+def embed_question(question: str, settings: Settings) -> np.ndarray:
+    return _embedder(settings).embed([question])[0]

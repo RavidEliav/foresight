@@ -106,3 +106,17 @@ def stage_records(run_dir: Path) -> list[dict]:
              "seconds": s.seconds, "crew_seconds": s.crew_seconds,
              "tokens": sum(u.get("total_tokens") or 0 for u in s.crew_usage.values()) or None}
             for i, s in enumerate(progress.stages)]
+
+
+def chunk_records(run_dir: Path) -> list[dict]:
+    """The run's chat chunks with their stored embeddings (written at the end of the run), for
+    cross-run search; nothing is embedded again."""
+    chunks, vectors = run_dir / "rag_chunks.json", run_dir / "rag_index.npz"
+    if not (chunks.exists() and vectors.exists()):
+        return []
+    import numpy as np
+
+    meta = json.loads(chunks.read_text(encoding="utf-8"))["chunks"]
+    matrix = np.load(vectors)["vectors"]
+    return [{"position": i, "source": c["source"], "section": c["section"], "body": c["text"],
+             "embedding": matrix[i].tolist()} for i, c in enumerate(meta)]

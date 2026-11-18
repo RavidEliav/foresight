@@ -194,6 +194,15 @@ def test_ask_page_needs_the_passcode_then_answers_with_citations(run_dir):
     answers = [m for m in at.chat_message if m.name == "assistant"]
     assert answers[-1].markdown[0].value == "Not found in this run's artifacts."
 
+    # All runs: no Supabase in tests, so the run folders' indexes (here the reference run)
+    at.segmented_control(key="chat_scope").set_value("All runs").run()
+    assert not [m for m in at.chat_message if m.name == "assistant"]  # its own history
+    at.chat_input[0].set_value("What is the model's test PR-AUC?").run()
+    assert not at.exception
+    answer = [m for m in at.chat_message if m.name == "assistant"][-1]
+    assert "/" in answer.markdown[0].value and "[source: " in answer.markdown[0].value
+    assert any(e.label.startswith("Sources") for e in answer.expander)
+
 
 def test_viewable_runs_are_successful_runs_then_the_reference(tmp_path, run_dir):
     import json

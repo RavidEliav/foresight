@@ -30,6 +30,19 @@ Answer the question using ONLY the excerpts from this run's artifacts given belo
 - Say "is associated with", never "causes".
 - If the excerpts do not contain the answer, reply exactly: {REFUSAL}
 - Keep the answer short: at most about 120 words."""
+REFUSAL_ALL = "Not found in the recorded runs."
+SYSTEM_ALL = f"""You are Foresight, an assistant for semiconductor process engineers.
+Answer the question using ONLY the excerpts below. They come from several pipeline runs,
+listed under "Runs"; an excerpt's header starts with its run id.
+- Say which run every statement is about (by its start date and data), and compare runs only
+  through what the excerpts say.
+- After every statement, cite the excerpt it comes from with the excerpt's header exactly as
+  shown above it, for example [source: 20261118T201632841000Z/model_card.md § Limitations].
+- Use only numbers that appear in the excerpts. Do not use general knowledge.
+- Sensor names are anonymized; never say what a sensor physically measures.
+- Say "is associated with", never "causes".
+- If the excerpts do not contain the answer, reply exactly: {REFUSAL_ALL}
+- Keep the answer short: at most about 150 words."""
 
 
 class Source(BaseModel):
@@ -37,6 +50,7 @@ class Source(BaseModel):
     section: str
     score: float
     text: str
+    run: str = ""  # the run it comes from (All runs mode)
 
 
 class ChatAnswer(BaseModel):
@@ -127,8 +141,31 @@ def ask(question: str, run_dir: Path, settings: Settings) -> ChatAnswer:
     hits = retrieve(run_index(run_dir, settings), question, settings)
     sources = [Source(file=h.chunk.source, section=h.chunk.section, score=h.score,
                       text=h.chunk.text) for h in hits]
+    return _answer(question, hits, sources, settings, SYSTEM, _prompt(question, hits), REFUSAL,
+                   start)
+
+
+def ask_all(question: str, settings: Settings) -> ChatAnswer:
+    """A question about all recorded runs (Supabase pgvector, else this server's runs)."""
+    from foresight.rag.cross import retrieve_all, split_source
+
+    start = time.perf_counter()
+    question = question.strip()
+    hits, runs = retrieve_all(question, settings)
+    sources = []
+    for h in hits:
+        run_id, file = split_source(h.chunk.source)
+        sources.append(Source(file=file, section=h.chunk.section, score=h.score,
+                              text=h.chunk.text, run=runs[run_id].label))
+    listing = "\n".join(f"- {info.label}" for info in runs.values())
+    prompt = f"Runs:\n{listing}\n\n{_prompt(question, hits)}"
+    return _answer(question, hits, sources, settings, SYSTEM_ALL, prompt, REFUSAL_ALL, start)
+
+
+def _answer(question: str, hits: list[Hit], sources: list[Source], settings: Settings,
+            system: str, prompt: str, refusal: str, start: float) -> ChatAnswer:
     if not hits:
-        return ChatAnswer(question=question, answer=REFUSAL, refused=True,
+        return ChatAnswer(question=question, answer=refusal, refused=True,
                           reason=f"no excerpt reached similarity {settings.rag.min_similarity}",
                           seconds=round(time.perf_counter() - start, 2), mock=settings.mock_llm)
 
@@ -136,13 +173,14 @@ def ask(question: str, run_dir: Path, settings: Settings) -> ChatAnswer:
     if settings.mock_llm:
         answer = mock_answer(question, hits)
     else:
-        answer, usage = complete(settings, SYSTEM, _prompt(question, hits))
+        answer, usage = complete(settings, system, prompt)
 
     refused, reason = False, ""
-    if REFUSAL.lower().rstrip(".") in answer.lower():
-        answer, refused, reason = REFUSAL, True, "the excerpts do not contain the answer"
+    if refusal.lower().rstrip(".") in answer.lower() or \
+            REFUSAL.lower().rstrip(".") in answer.lower():
+        answer, refused, reason = refusal, True, "the excerpts do not contain the answer"
     elif problem := citation_problem(answer, hits):
-        answer, refused, reason = REFUSAL, True, f"answer withheld: {problem}"
+        answer, refused, reason = refusal, True, f"answer withheld: {problem}"
     return ChatAnswer(question=question, answer=answer, refused=refused, reason=reason,
                       sources=sources, usage=usage, mock=settings.mock_llm,
                       seconds=round(time.perf_counter() - start, 2))

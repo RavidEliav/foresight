@@ -16,9 +16,6 @@ from foresight.settings import Settings
 
 SECOM = "SECOM (UCI, built in)"
 UPLOAD = "Upload a CSV"
-STAGE_ICON = {"pending": ":material/radio_button_unchecked:", "running": ":material/pending:",
-              "done": ":material/check_circle:", "failed": ":material/cancel:",
-              "skipped": ":material/block:"}
 STATUS_TEXT = {"queued": "is starting", "running": "is running", "success": "completed",
                "failed": "stopped", "timeout": "was stopped by the time limit",
                "interrupted": "was interrupted"}
@@ -50,7 +47,7 @@ def render(settings: Settings, results_page=None) -> None:
             _start(settings, entered, source, upload)
 
     watched = st.session_state.get("watch_run")
-    active = jobs.active_run(settings)
+    active = jobs.active_run(settings) or _continuable(settings)
     run_id = watched or (active.run_id if active else None)
     if run_id:
         st.session_state["watch_run"] = run_id  # keep showing it after it finishes
@@ -75,6 +72,25 @@ def _start(settings: Settings, entered: str, source: str, upload) -> None:
     st.session_state["watch_run"] = run_id
 
 
+def _continuable(settings: Settings) -> RunProgress | None:
+    """After a restart nothing is watched any more: show the newest run if it can continue."""
+    runs = jobs.list_runs(settings)
+    return runs[0] if runs and runs[0].can_continue else None
+
+
+def _continue(settings: Settings, run_id: str) -> None:
+    if not ui.passcode_ok(settings, st.session_state.get("passcode", "")):
+        ui.friendly_error("Not authorized: enter the passcode above to continue the run.")
+        return
+    try:
+        jobs.resume_run(settings, run_id)
+    except jobs.RunLimitError as exc:
+        st.warning(str(exc), icon=":material/hourglass_top:")
+        return
+    st.session_state["watch_run"] = run_id
+    st.rerun()
+
+
 def _show_run(settings: Settings, run_id: str, results_page) -> None:
     run_dir = jobs.runs_dir(settings) / run_id
     progress = load_progress(run_dir)
@@ -83,7 +99,8 @@ def _show_run(settings: Settings, run_id: str, results_page) -> None:
     if progress.effective_status() in ACTIVE:
         _live(str(run_dir))
     else:
-        _render_progress(progress, run_dir, results_page)
+        _render_progress(progress, run_dir, results_page,
+                         on_continue=lambda: _continue(settings, run_id))
 
 
 @st.fragment(run_every=2)
@@ -100,11 +117,10 @@ def _live(run_dir: str) -> None:
 
 GATE_NAMES = {"data_contract": "Data Contract", "features_present": "Features",
               "evidence_present": "Evidence"}
-STAGE_COLORS = {"pending": "gray", "running": "blue", "done": "green", "failed": "red",
-                "skipped": "gray"}
 
 
-def _render_progress(progress: RunProgress, run_dir: Path, results_page=None) -> None:
+def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
+                     on_continue=None) -> None:
     from app.messages import explain_failure
     from app.runs import local_time
 
@@ -121,16 +137,26 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None) ->
         st.success(message, icon=":material/check_circle:")
     else:
         reasons, hint = explain_failure(progress, _test_fraction())
-        ui.friendly_error(f"{message}\n\n" + "\n".join(f"- {r}" for r in reasons))
+        text = f"{message}\n\n" + "\n".join(f"- {r}" for r in reasons)
+        if status == "interrupted":
+            st.warning(text, icon=":material/pause_circle:")
+        else:
+            ui.friendly_error(text)
         if hint:
             st.info(hint, icon=":material/lightbulb:")
+        if on_continue is not None and progress.can_continue:
+            done = sum(s.reusable for s in progress.stages)
+            reused = f"the {done} finished stage{'s' if done != 1 else ''}" if done else \
+                "nothing (no stage had finished)"
+            if st.button("Continue run", key="continue", type="primary",
+                         icon=":material/play_circle:"):
+                on_continue()
+            st.caption(f"Continue reuses {reused} and runs the rest. It uses the passcode "
+                       "above and counts toward the hourly run limit.")
 
-    for column, stage in zip(st.columns(len(progress.stages)), progress.stages, strict=True):
-        with column, st.container(key=f"card-stage-{stage.name}", height="stretch"):
-            color = STAGE_COLORS.get(stage.status, "gray")
-            seconds = f" · {stage.seconds:.0f} s" if stage.seconds is not None else ""
-            st.markdown(f":{color}[{STAGE_ICON[stage.status]}] **{stage.label}**")
-            st.caption((stage.crew or "deterministic only") + seconds)
+    from app.stepper import stepper_html
+
+    st.html(stepper_html(progress))
     if progress.gates:
         st.markdown("Gates: " + " ".join(
             f":{ui.STATUS_COLORS.get(g['status'], 'gray')}-badge["

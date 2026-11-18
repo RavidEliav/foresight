@@ -102,23 +102,24 @@ def ask_page() -> None:
     page.render(_latest("engineering_report.md"), settings)
 
 
-st.sidebar.title("Foresight")
-st.sidebar.caption("Semiconductor yield intelligence")
-ui.environment_badge(settings)
-SELECTED = _run_selector()
-
 DATA_QUALITY = st.Page(data_quality_page, title="Data Quality", icon=":material/verified:",
                        url_path="data-quality")
-navigation = st.navigation(
-    [
-        st.Page(run_pipeline_page, title="Run Pipeline", icon=":material/play_arrow:",
-                default=True),
-        DATA_QUALITY,
-        st.Page(eda_page, title="EDA & Insights", icon=":material/bar_chart:", url_path="eda"),
-        st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),
-        st.Page(report_page, title="Investigation & Report", icon=":material/description:",
-                url_path="report"),
-        st.Page(ask_page, title="Ask Foresight", icon=":material/forum:", url_path="ask"),
-    ]
-)
+ASK = st.Page(ask_page, title="Ask Foresight", icon=":material/forum:", url_path="ask")
+PAGES = [
+    st.Page(run_pipeline_page, title="Run Pipeline", icon=":material/play_arrow:", default=True),
+    DATA_QUALITY,
+    st.Page(eda_page, title="EDA & Insights", icon=":material/bar_chart:", url_path="eda"),
+    st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),
+    st.Page(report_page, title="Investigation & Report", icon=":material/description:",
+            url_path="report"),
+    ASK,
+]
+# Streamlit draws its own page menu above everything else in the sidebar; it is hidden so that
+# the brand comes first and the menu is drawn with page links (ui.sidebar_nav).
+navigation = st.navigation(PAGES, position="hidden")
+ui.brand()
+ui.environment_badge(settings)
+ui.sidebar_nav(PAGES, navigation)
+SELECTED = _run_selector()
+ui.recent_questions(SELECTED, settings, ASK)
 navigation.run()

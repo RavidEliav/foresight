@@ -13,6 +13,8 @@ import streamlit as st
 CYAN, VIOLET, AMBER, GREEN, RED, SLATE = ("#22D3EE", "#A78BFA", "#FBBF24", "#34D399", "#F87171",
                                           "#64748B")
 GRID = "rgba(148,163,184,0.10)"
+# Charts that share a row have the same height, so their tops and bottoms line up.
+ROW_HEIGHT, MODEL_HEIGHT, DETAIL_HEIGHT = 420, 360, 460
 
 pio.templates["foresight"] = go.layout.Template(layout=go.Layout(
     font={"family": "Inter, sans-serif", "color": "#CBD5E1", "size": 13},
@@ -114,7 +116,7 @@ def run_map(run_dir: Path, three_d: bool = False) -> None:
         fig.update_layout(scene={f"{k}axis": {**axis, "title": pc.upper(),
                                               "range": ranges[pc][0]}
                                  for k, pc in zip("xyz", shown, strict=True)})
-        show(fig, "run-map-3d", height=520)
+        show(fig, "run-map-3d")
     else:
         fig = go.Figure([_runs(frame, m, name, color, size, hover, ["run_id"], alpha,
                                x="pc1", y="pc2")
@@ -147,10 +149,10 @@ def weekly_fail_rate(eda: dict) -> None:
     fig.update_layout(yaxis={"title": "fail rate", "tickformat": ".0%"},
                       yaxis2={"overlaying": "y", "side": "right", "showgrid": False,
                               "title": "runs", "tickformat": ",d"})
-    show(fig, "weekly-fail-rate", height=340)
+    show(fig, "weekly-fail-rate", height=ROW_HEIGHT)
 
 
-def sensor_differences(eda: dict, limit: int = 15) -> None:
+def sensor_differences(eda: dict, limit: int = 14) -> None:
     """Effect size of the sensors that differ most between failing and passing runs."""
     table = pd.DataFrame(eda.get("top_discriminating_features", [])).head(limit)
     if table.empty:
@@ -165,7 +167,7 @@ def sensor_differences(eda: dict, limit: int = 15) -> None:
                       "<extra></extra>"))
     fig.update_layout(xaxis_title="effect size (amber: higher in failing runs, violet: lower)",
                       yaxis={"type": "category"}, showlegend=False)
-    show(fig, "sensor-differences", height=max(300, 24 * len(table) + 80))
+    show(fig, "sensor-differences", height=ROW_HEIGHT)
 
 
 def risk_over_time(run_dir: Path, cutoff: float | None, threshold: float | None) -> None:
@@ -189,7 +191,7 @@ def risk_over_time(run_dir: Path, cutoff: float | None, threshold: float | None)
                       annotation_text="fixed threshold", annotation_position="bottom right",
                       annotation_font_color=VIOLET)
     fig.update_layout(yaxis_title="risk score")
-    show(fig, "risk-over-time", height=360)
+    show(fig, "risk-over-time", height=MODEL_HEIGHT)
 
 
 def pr_curve(run_dir: Path, baseline: float) -> None:
@@ -210,7 +212,7 @@ def pr_curve(run_dir: Path, baseline: float) -> None:
     ])
     fig.update_layout(xaxis={"title": "recall (failing runs found)", "range": [0, 1]},
                       yaxis={"title": "precision", "range": [0, 1.02]})
-    show(fig, "pr-curve", height=340)
+    show(fig, "pr-curve", height=MODEL_HEIGHT)
 
 
 def confusion(cm: dict) -> None:
@@ -224,7 +226,7 @@ def confusion(cm: dict) -> None:
         hoverinfo="skip",
         colorscale=[[0, "rgba(34,211,238,0.06)"], [1, "rgba(34,211,238,0.55)"]]))
     fig.update_layout(yaxis={"autorange": "reversed"}, xaxis={"side": "top"})
-    show(fig, "confusion", height=300)
+    show(fig, "confusion", height=MODEL_HEIGHT)
 
 
 def importance(metrics: dict, limit: int = 12) -> None:
@@ -240,4 +242,39 @@ def importance(metrics: dict, limit: int = 12) -> None:
         hovertemplate="%{y}: %{x:.4f}<extra></extra>"))
     fig.update_layout(xaxis_title="drop in PR-AUC when the sensor is shuffled",
                       yaxis={"type": "category"}, showlegend=False)
-    show(fig, "importance", height=max(300, 24 * len(table) + 80))
+    show(fig, "importance", height=MODEL_HEIGHT)
+
+
+def missing_by_sensor(run_dir: Path, limit: int = 20) -> None:
+    """Share of runs with a missing value, for the sensors with the most gaps."""
+    frame = read_csv(run_dir, "clean_data.csv")
+    if frame is None:
+        return
+    sensors = [c for c in frame.columns if c.startswith("f_")]
+    share = frame[sensors].isna().mean()
+    share = share[share > 0].sort_values(ascending=False).head(limit).iloc[::-1]
+    if share.empty:
+        st.caption("No sensor has missing values.")
+        return
+    fig = go.Figure(go.Bar(x=share.values, y=share.index, orientation="h", marker_color=VIOLET,
+                           hovertemplate="%{y}: %{x:.1%} of runs missing<extra></extra>"))
+    fig.update_layout(xaxis={"title": "share of runs with a missing value", "tickformat": ".0%"},
+                      yaxis={"type": "category"}, showlegend=False)
+    show(fig, "missing-by-sensor", height=DETAIL_HEIGHT)
+
+
+def correlation(run_dir: Path, sensors: list[str], limit: int = 15) -> None:
+    """Pearson correlation between the sensors that differ most (near duplicates stand out)."""
+    names = tuple(sensors[:limit])
+    frame = read_csv(run_dir, "clean_data.csv", names) if names else None
+    if frame is None or frame.empty:
+        return
+    corr = frame[list(names)].corr()
+    fig = go.Figure(go.Heatmap(
+        z=corr.values, x=list(names), y=list(names), zmin=-1, zmax=1, zmid=0,
+        colorscale=[[0, VIOLET], [0.5, "#0E1626"], [1, CYAN]],
+        colorbar={"thickness": 10, "outlinewidth": 0},
+        hovertemplate="%{x} vs %{y}: r = %{z:.2f}<extra></extra>"))
+    fig.update_layout(yaxis={"autorange": "reversed", "type": "category"},
+                      xaxis={"type": "category", "tickangle": -45})
+    show(fig, "correlation", height=DETAIL_HEIGHT)

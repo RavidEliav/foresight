@@ -1,4 +1,5 @@
-"""Command line: ``python -m foresight.cli run [--run-id ID] [--dataset CSV] [--timeout S]``.
+"""Command line: ``python -m foresight.cli run [--run-id ID] [--dataset CSV] [--timeout S]
+[--resume]``.
 
 Used by the app for background runs, and handy for runs from a terminal. Adds a heartbeat to
 progress.json and a timeout guard that stops the run and records why.
@@ -26,11 +27,16 @@ def stop_on_timeout(tracker: ProgressTracker, timeout_s: int) -> None:
     os._exit(TIMEOUT_EXIT_CODE)  # the Flow may be inside an LLM call; stop the process now
 
 
-def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None) -> int:
+def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None,
+                resume: bool = False) -> int:
     settings = load_settings()
+    if resume and not run_id:
+        raise SystemExit("--resume needs --run-id")
     run_id = run_id or new_run_id()
     run_dir = settings.resolve(settings.paths.runs_dir) / run_id
     tracker = ProgressTracker.create(run_dir, run_id, "Uploaded CSV" if dataset else None)
+    if resume and tracker.progress.status != "queued":  # the app prepares it before starting
+        tracker.prepare_resume()
     timeout_s = timeout_s or settings.app.run_timeout_s
 
     stop = threading.Event()
@@ -44,7 +50,7 @@ def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None)
     guard.daemon = True
     guard.start()
     try:
-        state = run_pipeline(settings, run_id, dataset, tracker)
+        state = run_pipeline(settings, run_id, dataset, tracker, resume=resume)
     except Exception as exc:  # the Flow handles stage errors; this is a last resort
         tracker.finish("failed", f"unexpected error: {exc}")
         raise
@@ -63,8 +69,10 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--run-id", help="run folder name (default: a new time-based id)")
     run.add_argument("--dataset", type=Path, help="CSV to analyze instead of the SECOM files")
     run.add_argument("--timeout", type=int, help="seconds before the timeout guard stops the run")
+    run.add_argument("--resume", action="store_true",
+                     help="continue the interrupted run --run-id, reusing its finished stages")
     args = parser.parse_args(argv)
-    return run_command(args.run_id, args.dataset, args.timeout)
+    return run_command(args.run_id, args.dataset, args.timeout, args.resume)
 
 
 if __name__ == "__main__":

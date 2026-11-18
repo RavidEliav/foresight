@@ -17,7 +17,7 @@ deployed = pytest.mark.deployed
 
 
 def _goto(page: Page, title: str) -> None:
-    page.get_by_test_id("stSidebarNav").get_by_role("link", name=title).click()
+    page.get_by_test_id("stSidebar").get_by_role("link", name=title, exact=True).click()
     expect(page.get_by_role("heading", name=title, level=1)).to_be_visible(timeout=60_000)
 
 
@@ -135,7 +135,7 @@ def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_pa
     expect(app_page.get_by_text("Data Contract: ERROR")).to_be_visible()
     app_page.get_by_text("Technical details").click()
     expect(app_page.get_by_text("Data checks that did not pass")).to_be_visible()
-    expect(app_page.get_by_text("raw_label_values").first).to_be_visible()
+    expect(app_page.get_by_test_id("stCode")).to_contain_text("raw_label_values")
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
 
 

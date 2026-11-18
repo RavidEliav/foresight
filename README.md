@@ -99,14 +99,14 @@ A question costs about 600–1,100 tokens (well under 0.1 cent).
 
 | Page | What it shows |
 |---|---|
-| Run Pipeline | Dataset choice (built-in SECOM or an uploaded CSV), passcode, live progress as five stage cards, gate badges; a stopped run says why in plain language and what to do, with the technical details collapsed; run history in local time (status, duration, tokens, report checks, why it stopped) |
+| Run Pipeline | Dataset choice (built-in SECOM or an uploaded CSV), passcode, live progress as five stage tiles (green done, red failed, gray skipped, amber interrupted, cyan with a small animation of the stage's work while it runs; each tile also shows its crew's status) joined by the gates; **Continue run** for an interrupted, timed-out or crashed run; a stopped run says why in plain language and what to do, with the technical details collapsed; run history in local time (status, duration, tokens, report checks, why it stopped) |
 | Data Quality | Headline numbers, Data Contract validation (the checksum warning every upload gets is explained as expected), cleaning decisions; all checks and the contract under Extended data |
 | EDA & Insights | Headline numbers (with a weekly fail-rate sparkline), the Data Analyst crew's summary, interactive fail rate over time and sensor differences; sensor statistics, missing data and the full insights under Extended data |
 | Model | Test metrics with 95% CIs vs random, the selected model and its alarms, interactive risk over time, precision-recall curve, alarms vs outcomes and sensor importance; model comparison, evaluation report and model card under Extended data |
 | Investigation & Report | Headline numbers (failing runs caught, alarm precision, anomaly lift, sensors out of limits, similar runs that failed), key findings and one card per hypothesis (confidence, evidence, how to verify), the anomaly timeline and the run map (2D/3D); the engineering report (download), full investigation, risk ranking, similar runs, anomalies and the safety checks under Extended data |
-| Ask Foresight | Chat about the selected run, answered only from its reports, with sources and similarity scores |
+| Ask Foresight | Chat about the selected run, answered only from its reports, with sources and similarity scores; the assistant's avatar is the Foresight logo. Once the chat is unlocked, the sidebar lists the run's recent questions (from its chat log); a click opens the answer |
 
-The sidebar's **Results shown** picks which successful run the result pages display (a short label, the full description under it); it follows the newest run until you choose another one, and the committed reference run is always available. Times are shown in the viewer's time zone (from the browser). A run made before a feature existed says so instead of hiding the section.
+The sidebar starts with the Foresight wordmark (its "o" is the wafer logo) and the page menu. **Results shown** picks which successful run the result pages display (a short label, the full description under it); it follows the newest run until you choose another one, and the committed reference run is always available. Times are shown in the viewer's time zone (from the browser). A run made before a feature existed says so instead of hiding the section.
 
 **Design.** A dark "cleanroom" theme (`.streamlit/config.toml`): cyan and violet for lithography light, amber (the fab's yellow-room light) for failing runs, a faint die-grid background, a wafer logo, frosted-glass cards, tiles and sidebar (`app/ui.py`). Each page leads with its headline numbers and main charts; the long tables and documents sit under **Extended data**. Charts are Plotly (`app/charts.py`): hover for run ids and values, zoom, and a 3D run map. Fonts (Inter, Space Grotesk, JetBrains Mono) load from Google Fonts.
 
@@ -114,12 +114,12 @@ The sidebar's **Results shown** picks which successful run the result pages disp
 
 - one run at a time and at most 6 runs per hour (cost control),
 - a timeout guard stops a run after 20 minutes and records why,
-- a run whose heartbeat stopped (for example after a redeploy) is shown as interrupted,
+- a run whose heartbeat stopped (for example after a redeploy) is shown as interrupted and can be **continued**: the stages it had finished are reused (their files, gate checks and crew usage are kept in `progress.json`), the data is re-read, and the rest runs again; a continue needs the passcode and counts toward the hourly limit. A run stopped by a gate is not offered a continue (the same data would stop again),
 - only the newest 20 finished runs are kept.
 
 **Uploading data.** A CSV with `timestamp` (`dd/mm/yyyy HH:MM:SS` or ISO 8601), `label` (-1 pass, 1 fail) and the 590 sensor columns in SECOM order. The page offers SECOM itself in this format as a template. Uploads are cleaned with the committed Data Contract's feature list (so a smaller or newer batch stays comparable) and validated like the built-in data; a broken file stops at the contract gate with the failed checks listed.
 
-From a terminal: `python -m foresight.cli run [--dataset file.csv] [--timeout 600]`.
+From a terminal: `python -m foresight.cli run [--dataset file.csv] [--timeout 600]`, or `python -m foresight.cli run --run-id <id> --resume` to continue a run.
 
 ## Quick start
 

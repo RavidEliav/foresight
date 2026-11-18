@@ -158,3 +158,22 @@ def test_knowledge_index_is_cached_by_content(settings, tmp_path):
     assert len(first.chunks) > 20
     assert {c.source for c in first.chunks} >= {"spc_control_charts.md", "secom_dataset.md"}
     assert "SOURCES.md" not in {c.source for c in first.chunks}
+
+
+def test_recent_questions_are_the_newest_distinct_ones(tmp_path):
+    import json
+
+    from foresight.rag.chat import log_path, recent_questions
+    from foresight.settings import load_settings
+
+    settings = load_settings()
+    run_dir = tmp_path / "20260101T000000000000Z"
+    path = log_path(settings, run_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    questions = ["What is PR-AUC?", "Which sensors differ?", "what is pr-auc? ", "Fail rate?"]
+    path.write_text("\n".join(json.dumps({"time": f"2026-01-01T00:00:0{i}+00:00",
+                                          "question": q, "answer": "a"})
+                              for i, q in enumerate(questions)) + "\nnot json\n",
+                    encoding="utf-8")
+    found = [r["question"] for r in recent_questions(settings, run_dir, limit=3)]
+    assert found == ["Fail rate?", "what is pr-auc? ", "Which sensors differ?"]

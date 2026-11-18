@@ -45,13 +45,17 @@ def render(run_dir: Path | None) -> None:
                 icon=":material/history:")
 
     left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-chart-anomalies"):
+    with left, st.container(key="card-chart-anomalies", height="stretch"):
         ui.label("Anomaly score over time")
         charts.anomaly_timeline(run_dir, summary["score_limit"])
-    with right, st.container(key="card-chart-runmap"):
+        st.caption("Dotted line: the flag limit (95% of training-run scores). Shaded: the test "
+                   "period.")
+    with right, st.container(key="card-chart-runmap", height="stretch"):
         ui.label("Run map: similar sensor profiles sit close together")
         if similar:
-            charts.run_map(run_dir, st.toggle("3D view", key="run-map-3d-toggle"))
+            three_d = st.session_state.get("run-map-3d-toggle", False)
+            charts.run_map(run_dir, three_d)
+            st.toggle("3D view", key="run-map-3d-toggle")
         else:
             _older_run("Similar-run search")
 
@@ -216,15 +220,20 @@ def _render_anomalies(summary: dict) -> None:
                 f"**{summary['flag_rate_pass']:.1%}** of passing runs (failing runs "
                 f"{summary['flag_lift']}x as often).")
     sensors = pd.DataFrame(summary["sensors_more_often_out_of_limit_in_fails"])
-    if not sensors.empty:
-        st.markdown("**Sensors more often out of control limits in failing runs**")
-        ui.table(sensors, {c: st.column_config.NumberColumn(format="percent")
-                           for c in ("out_of_limit_rate_fail", "out_of_limit_rate_pass",
-                                     "difference")})
     runs = pd.DataFrame(summary["most_anomalous_runs"])
-    if not runs.empty:
-        st.markdown("**Most anomalous runs**")
-        ui.table(runs)
+    left, right = st.columns([2, 3], gap="medium")
+    with left:
+        if not sensors.empty:
+            st.markdown("**Sensors more often out of limits in failing runs**")
+            rates = sensors.rename(columns={"out_of_limit_rate_fail": "failing",
+                                            "out_of_limit_rate_pass": "passing"})
+            rates[["failing", "passing", "difference"]] *= 100
+            ui.table(rates, {c: st.column_config.NumberColumn(format="%.1f%%")
+                             for c in ("failing", "passing", "difference")})
+    with right:
+        if not runs.empty:
+            st.markdown("**Most anomalous runs**")
+            ui.table(runs, {"anomaly_score": st.column_config.NumberColumn(format="%.3f")})
     with st.expander("Method"):
         for name, text in summary["method"].items():
             st.markdown(f"- **{name}:** {text}")

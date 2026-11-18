@@ -164,6 +164,44 @@ def test_exception_inside_a_stage_fails_gracefully(monkeypatch):
     assert "disk full" in (Path(state.run_dir) / "failure_report.md").read_text()
 
 
+def test_crashed_run_continues_from_where_it_stopped(monkeypatch):
+    import foresight.flow as flow_module
+    from foresight.progress import ProgressTracker
+
+    investigate = flow_module.run_investigate
+
+    def broken(*_args):
+        raise RuntimeError("connection reset")
+
+    monkeypatch.setattr(flow_module, "run_investigate", broken)
+    first = run_pipeline()
+    run_dir = Path(first.run_dir)
+    progress = load_progress(run_dir)
+    assert progress.can_continue
+    assert [s.status for s in progress.stages] == ["done", "done", "done", "failed", "skipped"]
+    assert [s.crew_status for s in progress.stages[1:3]] == ["done", "done"]
+
+    def must_not_run(*_args):
+        raise AssertionError("a finished stage was redone")
+
+    monkeypatch.setattr(flow_module, "run_analyze", must_not_run)
+    monkeypatch.setattr(flow_module, "run_model", must_not_run)
+    monkeypatch.setattr(flow_module, "run_investigate", investigate)
+    tracker = ProgressTracker.create(run_dir, first.run_id)
+    tracker.prepare_resume()
+    state = run_pipeline(run_id=first.run_id, tracker=tracker, resume=True)
+    assert state.status == "success"
+    assert state.stages_completed == ALL_STAGES
+    assert [g.gate for g in state.gates] == ["data_contract", "features_present",
+                                             "evidence_present"]
+    assert set(state.crew_usage) == {"analyst", "scientist", "investigation", "report"}
+    progress = load_progress(run_dir)
+    assert progress.status == "success" and len(progress.resumed_at) == 1
+    assert all(s.crew_status in (None, "done") for s in progress.stages)
+    manifest = json.loads((run_dir / "run_manifest.json").read_text())
+    assert "model.joblib" in manifest["artifacts"]
+
+
 def test_report_crew_failure_fails_the_run_gracefully(monkeypatch):
     import foresight.flow as flow_module
 

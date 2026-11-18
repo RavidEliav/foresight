@@ -95,6 +95,8 @@ Three extensions from requirements §18. Embeddings use a fixed local model (**a
 
 A question costs about 600–1,100 tokens (well under 0.1 cent).
 
+**Cross-run memory (pgvector).** When the registry records a successful run, it also stores the run's chat chunks with their embeddings (already computed for the run's own index, so nothing is embedded twice) in `foresight.chunks` (`vector(384)`, HNSW cosine index, same private schema and RLS). "Ask Foresight" in **All runs** mode embeds the question, takes the 40 nearest chunks across all runs from Postgres, re-ranks them with the same section-title bonus as a single run, and answers from the best 6 (`rag.all_runs_k`) with the same refusal threshold and citation checks; each excerpt's header names its run, and the prompt lists the runs (start time and data). Without Supabase, the successful runs' own indexes on the server are merged instead. Questions about all runs are logged as `chat_logs/all_runs.jsonl`.
+
 ## The app
 
 | Page | What it shows |
@@ -105,7 +107,7 @@ A question costs about 600–1,100 tokens (well under 0.1 cent).
 | Model | Test metrics with 95% CIs vs random, the selected model and its alarms, interactive risk over time, precision-recall curve, alarms vs outcomes and sensor importance; model comparison, evaluation report and model card under Extended data |
 | Investigation & Report | Headline numbers (failing runs caught, alarm precision, anomaly lift, sensors out of limits, similar runs that failed), key findings and one card per hypothesis (confidence, evidence, how to verify), the anomaly timeline and the run map (2D/3D); the engineering report (download), full investigation, risk ranking, similar runs, anomalies and the safety checks under Extended data |
 | Trends | Every recorded run over time, from the run registry: runs, median run time and tokens, latest PR-AUC; model quality over runs (PR-AUC and fail recall against random guessing), where the run time goes (seconds per stage, crews included), LLM tokens per run, run outcomes with their reasons; the full run table under Extended data. A filter picks the data source (SECOM, upload, reference) |
-| Ask Foresight | Chat about the selected run, answered only from its reports, with sources and similarity scores; the assistant's avatar is the Foresight logo. Once the chat is unlocked, the sidebar lists the run's recent questions (from its chat log); a click opens the answer |
+| Ask Foresight | Chat about the selected run, answered only from its reports, with sources and similarity scores; the assistant's avatar is the Foresight logo. **All runs** switches the chat to every recorded run: the answer says which run each statement is about and cites it (`[source: <run id>/<file> § <section>]`). Once the chat is unlocked, the sidebar lists the run's recent questions (from its chat log); a click opens the answer |
 
 The sidebar starts with the Foresight wordmark (its "o" is the wafer logo) and the page menu. **Results shown** picks which successful run the result pages display (a short label, the full description under it); it follows the newest run until you choose another one, and the committed reference run is always available. Times are shown in the viewer's time zone (from the browser). A run made before a feature existed says so instead of hiding the section.
 

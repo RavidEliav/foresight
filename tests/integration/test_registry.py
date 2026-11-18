@@ -50,7 +50,8 @@ def test_runs_are_recorded_in_postgres_and_read_back():
     settings = load_settings().model_copy(update={"database_url": TEST_DB_URL})
     assert registry.record_run(Path(state.run_dir), settings)
     assert registry.record_run(Path(state.run_dir), settings)  # idempotent upsert
-    assert registry.sync(settings) >= 2  # this run and the reference run
+    assert registry.sync(settings) == 1  # the reference run; this run is unchanged
+    assert registry.sync(settings) == 0
 
     stored = {r["run_id"]: r for r in registry.history(settings)}
     files = {r["run_id"]: r for r in registry.history(
@@ -64,3 +65,16 @@ def test_runs_are_recorded_in_postgres_and_read_back():
                            "on n.oid = c.relnamespace where n.nspname = 'foresight' "
                            "and c.relkind = 'r'").fetchone()[0]
     assert rls  # RLS on every registry table
+
+    # Cross-run memory: the runs' chat chunks in pgvector rank like the run folders' indexes
+    from foresight.rag.cross import retrieve_all
+    from foresight.registry import db
+
+    known = db.recorded(TEST_DB_URL)
+    assert known[state.run_id][1] == len(registry.chunk_records(Path(state.run_dir))) > 0
+    question = "What is the model's test PR-AUC?"
+    stored_hits, runs = retrieve_all(question, settings)
+    file_hits, _ = retrieve_all(question, settings.model_copy(update={"database_url": ""}))
+    assert stored_hits and stored_hits[0].chunk.source == file_hits[0].chunk.source
+    assert stored_hits[0].score == pytest.approx(file_hits[0].score, abs=1e-3)
+    assert set(runs) <= {state.run_id, *known}

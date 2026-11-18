@@ -220,6 +220,26 @@ def ask(question: str, run_dir: Path, settings: Settings) -> dict:
     return result.model_dump()
 
 
+def ask_all(question: str, settings: Settings) -> dict:
+    """Answer and log a question about all recorded runs (logged as "all_runs")."""
+    from foresight.rag.chat import ChatAnswer, log_answer
+    from foresight.rag.chat import ask_all as rag_ask_all
+    from foresight.utils.logging import get_logger
+
+    try:
+        result = rag_ask_all(question, settings)
+    except Exception as exc:
+        get_logger("chat").exception("question about all runs failed")
+        log_answer(settings, Path(ALL_RUNS), ChatAnswer(question=question, answer="",
+                                                        refused=True, reason=f"error: {exc}"))
+        raise
+    log_answer(settings, Path(ALL_RUNS), result)
+    return result.model_dump()
+
+
+ALL_RUNS = "all_runs"  # chat log name of questions about all runs
+
+
 def recent_questions(settings: Settings, run_dir: Path) -> list[dict]:
     from foresight.rag.chat import recent_questions as recent
 

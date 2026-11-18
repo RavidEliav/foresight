@@ -1,0 +1,166 @@
+"""All of the app's access to run data, in one module (ADR-020).
+
+Pages never touch the filesystem or the pipeline's modules directly: they read a run's files,
+list runs, follow progress, start or continue runs and ask the chat through these functions.
+This implementation works on the local runs folder (the Railway volume). A later split into a
+UI service and an API service would only replace this module; a run folder's name is its run
+id.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pandas as pd
+import streamlit as st
+
+from foresight import jobs
+from foresight.progress import RunProgress, load_progress
+from foresight.settings import Settings
+
+RunLimitError = jobs.RunLimitError
+MANIFEST = "run_manifest.json"
+
+
+# --- files of one run -------------------------------------------------------------------------
+
+def exists(run_dir: Path, name: str) -> bool:
+    return (run_dir / name).exists()
+
+
+def read_text(run_dir: Path, name: str) -> str | None:
+    path = run_dir / name
+    return path.read_text(encoding="utf-8") if path.exists() else None
+
+
+def read_bytes(run_dir: Path, name: str) -> bytes | None:
+    path = run_dir / name
+    return path.read_bytes() if path.exists() else None
+
+
+def read_json(run_dir: Path, name: str) -> dict | None:
+    text = read_text(run_dir, name)
+    return json.loads(text) if text is not None else None
+
+
+@st.cache_data(show_spinner=False, max_entries=32)
+def _csv(path: str, mtime: float, columns: tuple[str, ...] | None) -> pd.DataFrame:
+    return pd.read_csv(path, usecols=list(columns) if columns else None)
+
+
+def read_csv(run_dir: Path, name: str,
+             columns: tuple[str, ...] | None = None) -> pd.DataFrame | None:
+    """A run's table, cached per file version (charts redraw on every rerun)."""
+    path = run_dir / name
+    return _csv(str(path), path.stat().st_mtime, columns) if path.exists() else None
+
+
+def figure(run_dir: Path, relative: str | None) -> Path | None:
+    """A figure of the run. Runs made on Windows store "figures\\x.png"; both separators
+    work."""
+    if not relative:
+        return None
+    path = run_dir.joinpath(*relative.replace("\\", "/").split("/"))
+    return path if path.exists() else None
+
+
+def investigation_summary(run_dir: Path):
+    from foresight.crews.summary import load_summary
+
+    return load_summary(run_dir)
+
+
+# --- runs ------------------------------------------------------------------------------------
+
+def runs_folder(settings: Settings) -> Path:
+    return jobs.runs_dir(settings)
+
+
+def run_folder(settings: Settings, run_id: str) -> Path:
+    return jobs.runs_dir(settings) / run_id
+
+
+def viewable_runs(settings: Settings) -> list[Path]:
+    """Successful runs, newest first, then the committed reference run."""
+    folder = runs_folder(settings)
+    found = []
+    if folder.exists():
+        for path in sorted(folder.iterdir(), reverse=True):
+            manifest = read_json(path, MANIFEST) if path.is_dir() else None
+            if manifest and manifest.get("status") == "success":
+                found.append(path)
+    reference = settings.resolve(settings.paths.reference_run_dir)
+    if exists(reference, MANIFEST):
+        found.append(reference)
+    return found
+
+
+def all_runs(settings: Settings) -> list[RunProgress]:
+    """Runs started from the app or the CLI (with their progress), newest first."""
+    return jobs.list_runs(settings)
+
+
+def progress(run_dir: Path) -> RunProgress | None:
+    return load_progress(run_dir)
+
+
+def active_run(settings: Settings) -> RunProgress | None:
+    return jobs.active_run(settings)
+
+
+def start_run(settings: Settings, upload: bytes | None, upload_name: str | None) -> str:
+    return jobs.start_run(settings, upload, upload_name)
+
+
+def resume_run(settings: Settings, run_id: str) -> str:
+    return jobs.resume_run(settings, run_id)
+
+
+@st.cache_data(show_spinner=False)
+def _template(raw_dir: str) -> bytes:
+    from foresight.data.secom import load_raw, to_upload_csv
+
+    return to_upload_csv(load_raw(Path(raw_dir)))
+
+
+def upload_template(settings: Settings) -> bytes | None:
+    """The built-in SECOM data in the upload format (None if the raw files are missing)."""
+    from foresight.data.secom import DATA_FILE, LABELS_FILE
+
+    raw_dir = settings.resolve(settings.paths.data_raw_dir)
+    if not all((raw_dir / name).exists() for name in (DATA_FILE, LABELS_FILE)):
+        return None
+    return _template(str(raw_dir))
+
+
+# --- chat ------------------------------------------------------------------------------------
+
+def ask(question: str, run_dir: Path, settings: Settings) -> dict:
+    """Answer and log a question about the run; a failure is logged too, then raised."""
+    from foresight.rag.chat import ChatAnswer, log_answer
+    from foresight.rag.chat import ask as rag_ask
+    from foresight.utils.logging import get_logger
+
+    try:
+        result = rag_ask(question, run_dir, settings)
+    except Exception as exc:
+        get_logger("chat").exception("question failed for run %s", run_dir.name)
+        log_answer(settings, run_dir, ChatAnswer(question=question, answer="", refused=True,
+                                                 reason=f"error: {exc}"))
+        raise
+    log_answer(settings, run_dir, result)
+    return result.model_dump()
+
+
+def recent_questions(settings: Settings, run_dir: Path) -> list[dict]:
+    from foresight.rag.chat import recent_questions as recent
+
+    return recent(settings, run_dir)
+
+
+def warm_up_chat(settings: Settings) -> None:
+    """Get the chat's embedding model ready in the background (once per server process)."""
+    from foresight.rag.embedding import warm_up
+
+    warm_up(str(settings.resolve(settings.paths.models_dir)))

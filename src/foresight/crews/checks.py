@@ -354,12 +354,15 @@ def known_sensor_names(run_dir: Path) -> set[str]:
     return {c for c in pd.read_csv(path, nrows=0).columns if c.startswith("f_")}
 
 
-def check_outputs(run_dir: Path, names: list[str]) -> ValidationSummary:
+def check_outputs(run_dir: Path, names: list[str],
+                  allowed: set[str] | None = None) -> ValidationSummary:
+    """``allowed`` (numbers that count as traceable) can be given by a background crew, which
+    takes it when it starts, so its checks match a sequential run."""
     from foresight.rag.knowledge import known_sections
     from foresight.settings import load_settings
 
     sensors = known_sensor_names(run_dir)
-    allowed = allowed_numbers(run_dir)
+    allowed = allowed_numbers(run_dir) if allowed is None else allowed
     knowledge = known_sections(load_settings())
     checks: list[Check] = []
     for name in names:

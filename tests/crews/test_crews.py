@@ -74,6 +74,13 @@ def test_crew_configs_are_consistent(crew):
         assert heading in descriptions
 
 
+def test_tools_of_a_background_crew_see_only_the_files_it_started_with(run_dir):
+    seen = frozenset({"eda_summary.json", "validation_summary.json"})
+    stats = build_tools(run_dir, seen)["sensor_stats"]
+    assert "not available yet" in stats.run(feature="f_020")  # model files came later
+    assert "not available yet" not in build_tools(run_dir)["sensor_stats"].run(feature="f_020")
+
+
 def test_official_crews_have_at_least_three_agents():
     assert len(load_config("analyst")["agents"]) >= 3
     assert len(load_config("scientist")["agents"]) >= 3
@@ -317,7 +324,7 @@ def test_crew_revises_once_when_its_checks_warn(run_dir, tmp_path, monkeypatch):
                        "Confidence: high (risk scores).\n")
     calls = []
 
-    def fake_run_crew(name, settings, run_dir, extra_inputs=None):
+    def fake_run_crew(name, settings, run_dir, extra_inputs=None, visible=None):
         calls.append(extra_inputs.get("revision_notes", ""))
         path = run_dir / "engineering_report.md"
         path.write_text(bad if len(calls) == 1 else good)
@@ -340,7 +347,7 @@ def test_crew_is_not_revised_more_than_configured(run_dir, tmp_path, monkeypatch
     shutil.copytree(run_dir, run)
     calls = []
 
-    def always_bad(name, settings, run_dir, extra_inputs=None):
+    def always_bad(name, settings, run_dir, extra_inputs=None, visible=None):
         calls.append(name)
         path = run_dir / "model_card.md"
         path.write_text("# Model card\nNo sections.\n")

@@ -121,6 +121,27 @@ The sidebar starts with the Foresight wordmark (its "o" is the wafer logo) and t
 
 From a terminal: `python -m foresight.cli run [--dataset file.csv] [--timeout 600]`, or `python -m foresight.cli run --run-id <id> --resume` to continue a run.
 
+## Performance
+
+Measured, then changed without changing any result: `scripts/compare_runs.py <run>` compares every number in a run's analytics outputs (JSON summaries and CSV tables) with the reference run and must report 0 differences.
+
+| | Before (Phase 6) | After (Phase 7) |
+|---|---|---|
+| Mock run, local (deterministic work only) | 168 s | 87 s |
+| Model stage, local | 118 s | 57 s |
+| Peak memory of a run process | 973 MB | 640 MB |
+| App server after visiting every page and asking the (mock) chat | 521 MB | 323 MB (the real chat adds about 30 MB for the OpenAI SDK) |
+
+What changed:
+- **Crews in the background:** the Data Analyst crew writes its insights while the models train, and the Data Scientist crew writes the model card while the investigation runs; the Flow waits for both before the report. Each takes its fact sheets and the numbers its checks accept when it starts, from the same files a sequential run would see.
+- **Bootstrap confidence intervals** use the same metrics in plain NumPy (tested equal to scikit-learn), about 28 s faster.
+- **Permutation importance** scores its (pre-drawn) shuffles in parallel threads.
+- **Embeddings** are computed in batches of 8: ONNX Runtime keeps memory for the largest batch it has seen (100 chunks at once cost about 430 MB).
+- **The app no longer imports the pipeline:** run ids come from `progress.py` instead of the Flow (CrewAI and scikit-learn stayed out of the app: about 270 MB), the chat calls the OpenAI SDK directly instead of CrewAI's LLM wrapper (about 70 MB and 3 s on the first question), and the precision-recall chart is computed with NumPy.
+- **Data access in one module:** every page reads runs, starts and continues runs and asks the chat through `app/store.py` (a test enforces it), so a later split into a UI service and an API service only replaces that module.
+
+Measure yourself: `python scripts/measure_run.py [--real]` (time and peak memory per stage) and `python scripts/measure_app.py` (app memory per page); both need `psutil` (in `requirements-dev.txt`).
+
 ## Quick start
 
 Requires **Python 3.11** (CrewAI supports 3.10–3.13).
@@ -180,13 +201,13 @@ Code changes deploy automatically when a branch is merged (`dev` → dev environ
 ## Project structure
 
 ```
-app/            Streamlit app (entry point: app/streamlit_app.py; ui.py style, charts.py Plotly, messages.py plain-language errors, assets/ logo)
+app/            Streamlit app (entry point: app/streamlit_app.py; store.py all access to run data, ui.py style, charts.py Plotly, stepper.py stage tiles, messages.py plain-language errors, assets/ logo)
 .streamlit/     theme (config.toml)
 config/         settings.yaml (seed, LLM model, paths)
 src/foresight/  flow.py, jobs.py + cli.py (background runs), progress.py, data/, analytics/, crews/, rag/, tools/, validation/, utils/
 knowledge/      background documents for the Investigation crew (+ SOURCES.md)
 tests/          unit/, integration/, app/, smoke/, e2e/
-scripts/        data download and helper scripts
+scripts/        data download, helper scripts, measure_run.py / measure_app.py / compare_runs.py (performance)
 data/           raw/ and processed/ (not committed)
 artifacts/      committed reference run
 docs/           Obsidian vault: requirements, decisions, results, lessons learned

@@ -254,3 +254,18 @@ def test_evidence_checks_flag_a_ranking_that_is_no_better_than_random():
     statuses = {c.name: c.status for c in summary.checks}
     assert statuses["risk_ranking_adds_value"] == GateStatus.WARNING
     assert statuses["model_beats_baseline"] == GateStatus.PASS
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_fast_bootstrap_metrics_equal_scikit_learn(seed):
+    from foresight.analytics.modeling import budget_flags, classification_metrics, fast_metrics
+
+    rng = np.random.default_rng(seed)
+    y = (rng.random(400) < 0.07).astype(int)
+    scores = np.round(rng.random(400) * 0.3 + 0.2 * y, 3)  # ties included
+    for pred in (budget_flags(scores, 0.1), (scores > 0.4).astype(int), np.zeros(400, int)):
+        expected = classification_metrics(y, scores, pred)
+        got = fast_metrics(y, scores, pred)
+        assert got.keys() == expected.keys()
+        for key in expected:
+            assert got[key] == pytest.approx(expected[key], abs=1e-12), key

@@ -229,10 +229,10 @@ def recent_questions(run_dir: Path | None, settings: Settings, ask_page) -> None
     answer on the Ask Foresight page."""
     if run_dir is None or not st.session_state.get("chat_unlocked"):
         return
+    from app import store
     from app.runs import local_time
-    from foresight.rag.chat import recent_questions as recent
 
-    items = recent(settings, run_dir)
+    items = store.recent_questions(settings, run_dir)
     if not items:
         return
     st.sidebar.html('<div class="fs-side-label">Recent questions</div>')

@@ -160,3 +160,18 @@ def test_failed_upload_run_lists_the_failed_data_checks(monkeypatch, secom_env, 
     assert any("upload it again" in i.value for i in at.info)
     failed = at.dataframe[0].value  # technical details: the failed checks by name
     assert "raw_label_values" in set(failed["name"])
+
+
+def test_only_the_store_touches_run_data():
+    """ADR-020: pages read runs, start runs and ask the chat through app/store.py only."""
+    import re
+
+    forbidden = re.compile(r"(?<!store\.)read_text\(|(?<!store\.)read_bytes\(|\.exists\(\)|"
+                           r"pd\.read_csv|json\.loads|iterdir|from foresight import jobs|"
+                           r"foresight\.rag|load_progress")
+    app_dir = Path(APP).parent
+    offenders = [f"{path.name}: {line.strip()}" for path in app_dir.glob("*.py")
+                 if path.name != "store.py"
+                 for line in path.read_text(encoding="utf-8").splitlines()
+                 if forbidden.search(line) and "LOGO" not in line]
+    assert offenders == []

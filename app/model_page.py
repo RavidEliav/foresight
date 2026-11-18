@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app import charts, ui
+from app import charts, store, ui
 from app.runs import no_run, read_json, run_label, show_markdown_file
 
 METRICS = [("pr_auc", "PR-AUC"), ("recall_fail", "Fail recall"),
@@ -82,10 +82,10 @@ def render(run_dir: Path | None) -> None:
         rules = (metrics["selection_rule"], op["rule"])
         st.caption(" ".join(f"{rule[:1].upper()}{rule[1:]}." for rule in rules))
     with evaluation:
-        report = run_dir / "evaluation_report.md"
-        if report.exists():
-            st.markdown(report.read_text(encoding="utf-8"))
-            st.download_button("Download evaluation_report.md", report.read_bytes(),
+        report = store.read_text(run_dir, "evaluation_report.md")
+        if report is not None:
+            st.markdown(report)
+            st.download_button("Download evaluation_report.md", report.encode("utf-8"),
                                file_name="evaluation_report.md", mime="text/markdown")
     with card:
         if not show_markdown_file(run_dir, "model_card.md", "Download model_card.md"):

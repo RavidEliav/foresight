@@ -15,8 +15,7 @@ import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from foresight.flow import new_run_id
-from foresight.progress import ACTIVE, ProgressTracker, RunProgress, load_progress
+from foresight.progress import ACTIVE, ProgressTracker, RunProgress, load_progress, new_run_id
 from foresight.settings import PROJECT_ROOT, Settings
 
 UPLOAD_FILE = "upload.csv"

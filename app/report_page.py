@@ -9,9 +9,9 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app import charts, ui
+from app import charts, store, ui
 from app.runs import no_run, read_json, run_label, show_markdown_file
-from foresight.crews.summary import SUMMARY_FILE, InvestigationSummary, load_summary
+from foresight.crews.summary import SUMMARY_FILE, InvestigationSummary
 
 STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:",
                "ERROR": ":material/cancel:"}
@@ -32,10 +32,10 @@ def render(run_dir: Path | None) -> None:
     similar = read_json(run_dir, "similar_runs.json")
     _status_line(checks)
     ui.kpis(_headline_numbers(summary, risk, similar))
-    overview = load_summary(run_dir)
+    overview = store.investigation_summary(run_dir)
     if overview:
         _render_overview(overview)
-    elif (run_dir / SUMMARY_FILE).exists():
+    elif store.exists(run_dir, SUMMARY_FILE):
         st.warning("The short summary of this run did not pass its format check, so there are "
                    "no hypothesis cards. The full investigation is under Extended data below; "
                    "the Safety checks tab says what was wrong.", icon=":material/warning:")
@@ -64,7 +64,7 @@ def render(run_dir: Path | None) -> None:
     with report:
         _render_report(run_dir)
     with investigation:
-        _render_investigation(run_dir / "investigation.md")
+        _render_investigation(run_dir)
     with risk_tab:
         if risk:
             _render_risk(risk)
@@ -161,7 +161,7 @@ def _escape(text: str) -> str:
 
 
 def _render_report(run_dir: Path) -> None:
-    if not (run_dir / "engineering_report.md").exists():
+    if not store.exists(run_dir, "engineering_report.md"):
         st.info("No engineering report in this run.")
         return
     with st.container(border=True):
@@ -176,14 +176,14 @@ INVESTIGATION_SECTIONS = [
 ]
 
 
-def _render_investigation(path: Path) -> None:
+def _render_investigation(run_dir: Path) -> None:
     """Facts, assumptions and hypotheses in separate, colour-labelled blocks."""
     from foresight.crews.checks import section
 
-    if not path.exists():
+    text = store.read_text(run_dir, "investigation.md")
+    if text is None:
         st.info("No investigation in this run.")
         return
-    text = path.read_text(encoding="utf-8")
     for title, color, meaning in INVESTIGATION_SECTIONS:
         body = section(text, title).strip()
         if not body:
@@ -191,7 +191,7 @@ def _render_investigation(path: Path) -> None:
         with st.container(border=True):
             st.markdown(f":{color}-badge[{title}] :gray[{meaning}]")
             st.markdown(body)
-    st.download_button("Download investigation.md", path.read_bytes(),
+    st.download_button("Download investigation.md", text.encode("utf-8"),
                        file_name="investigation.md", mime="text/markdown",
                        key="download-investigation.md")
 

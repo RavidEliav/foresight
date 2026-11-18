@@ -53,6 +53,7 @@ class StageProgress(BaseModel):
     status: str = "pending"  # pending, running, done, failed, skipped
     crew_status: str | None = None  # running, done, skipped, failed
     seconds: float | None = None
+    crew_seconds: float | None = None  # a background crew's time, after `seconds`
     # Kept so that a resumed run can reuse a finished stage instead of redoing it
     artifacts: dict[str, str] = Field(default_factory=dict)
     checks: dict | None = None
@@ -182,6 +183,7 @@ class ProgressTracker(BaseModel):
             stage.artifacts = {**stage.artifacts, **artifacts}
             stage.crew_usage = {**stage.crew_usage, **crew_usage}
             stage.crew_status = "done"
+            stage.crew_seconds = round(sum(u.get("seconds") or 0 for u in crew_usage.values()), 1)
         self.save()
 
     def finished_stage(self, name: str) -> StageProgress | None:
@@ -199,6 +201,7 @@ class ProgressTracker(BaseModel):
         for stage in progress.stages:
             if stage.status != "done" or not stage.reusable:
                 stage.status, stage.crew_status, stage.seconds = "pending", None, None
+                stage.crew_seconds = None
                 stage.artifacts, stage.checks, stage.crew_usage = {}, None, {}
         self.save()
 

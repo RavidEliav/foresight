@@ -235,3 +235,21 @@ def test_pr_points_match_scikit_learn():
     precision, recall = pr_points(labels, scores)
     expected_p, expected_r, _ = precision_recall_curve(labels, scores)
     assert np.allclose(precision, expected_p) and np.allclose(recall, expected_r)
+
+
+def test_pr_curve_fits_the_precision_axis_and_charts_zoom_on_scroll(monkeypatch, tmp_path):
+    import pandas as pd
+
+    from app import charts
+
+    pd.DataFrame({"label": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0] * 5,
+                  "fail_probability": [i / 50 for i in range(50)]}).to_csv(
+        tmp_path / "predictions.csv", index=False)
+    shown, configs = [], []
+    monkeypatch.setattr(charts.st, "plotly_chart", lambda fig, **kw: (shown.append(fig),
+                                                                      configs.append(kw)))
+    charts.pr_curve(tmp_path, baseline=0.2)
+    curve = shown[0].data[0]
+    assert max(curve.y) < 1  # no made-up (recall 0, precision 1) point
+    assert shown[0].layout.yaxis.range[1] == pytest.approx(max(max(curve.y), 0.2) * 1.15)
+    assert configs[0]["config"]["scrollZoom"] is True

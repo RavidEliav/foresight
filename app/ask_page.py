@@ -67,11 +67,15 @@ def _unlock(settings: Settings) -> None:
 
 
 def _ask(question: str, run_dir: Path, settings: Settings) -> dict | None:
-    from foresight.rag.chat import ask, log_answer
+    from foresight.rag.chat import ChatAnswer, ask, log_answer
+    from foresight.utils.logging import get_logger
 
     try:
         result = ask(question, run_dir, settings)
-    except Exception as exc:  # friendly message, never a stack trace
+    except Exception as exc:  # friendly message, never a stack trace; the failure is logged
+        get_logger("chat").exception("question failed for run %s", run_dir.name)
+        log_answer(settings, run_dir, ChatAnswer(question=question, answer="", refused=True,
+                                                 reason=f"error: {exc}"))
         ui.friendly_error(f"The question could not be answered: {exc}")
         return None
     log_answer(settings, run_dir, result)

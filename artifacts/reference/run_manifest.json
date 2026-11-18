@@ -123,9 +123,10 @@
       "model_card.md",
       "investigation.md",
       "engineering_report.md",
-      "validation_summary.json"
+      "validation_summary.json",
+      "run_data.md"
     ],
-    "chunks": 41
+    "chunks": 102
   },
   "data_sha256": {
     "secom.data": "20f0e7ee434f7dcbae0eea9ffff009a2b57f42d6b0dc9a5bd4f00782c0a3374c",
@@ -157,6 +158,7 @@
     "report_checks.json",
     "risk_scores.csv",
     "risk_summary.json",
+    "run_data.md",
     "run_embeddings.csv",
     "similar_runs.csv",
     "similar_runs.json",

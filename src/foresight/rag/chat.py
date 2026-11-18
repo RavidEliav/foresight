@@ -80,7 +80,13 @@ def citation_problem(answer: str, hits: list[Hit]) -> str | None:
     # that is only a citation cites the block before it
     joined = re.sub(r"\n\s*\n(?=\s*(?:\d+[.)]|[-*])\s|\s*\[source:)", "\n", answer)
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", joined) if p.strip()]
-    if any(not CITATION.search(p) and not p.endswith(":") for p in paragraphs):
+    for i, paragraph in enumerate(paragraphs):
+        if CITATION.search(paragraph) or paragraph.endswith(":"):
+            continue
+        # a list whose closing sentence (the next paragraph) cites the excerpt it came from
+        is_list = re.search(r"^\s*(?:\d+[.)]|[-*])\s", paragraph, re.MULTILINE)
+        if is_list and i + 1 < len(paragraphs) and CITATION.search(paragraphs[i + 1]):
+            continue
         return "part of it has no citation"
     return None
 

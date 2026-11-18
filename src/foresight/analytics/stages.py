@@ -23,6 +23,7 @@ from foresight.crews.runner import run_crew
 from foresight.crews.summary import SUMMARY_FILE
 from foresight.progress import ProgressTracker
 from foresight.rag.index import CHUNKS_FILE, VECTORS_FILE, build_run_index
+from foresight.rag.run_data import RUN_DATA_FILE
 from foresight.settings import Settings
 from foresight.utils.logging import get_logger
 from foresight.validation.contract import Check, ValidationSummary
@@ -230,6 +231,8 @@ def run_report(settings: Settings, run_dir: Path,
     build_run_index(run_dir, settings)  # "Ask Foresight" answers from this index (§18.3)
     result.artifacts.update({"rag_index": str(run_dir / VECTORS_FILE),
                              "rag_chunks": str(run_dir / CHUNKS_FILE)})
+    if (run_dir / RUN_DATA_FILE).exists():
+        result.artifacts["run_data"] = str(run_dir / RUN_DATA_FILE)
     result.checks = checks
     return result
 

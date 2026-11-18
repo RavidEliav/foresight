@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 ENV_VARS = ("LLM_MODEL", "OPENAI_API_KEY", "RUN_PASSCODE", "RAILWAY_ENVIRONMENT_NAME",
-            "RAILWAY_GIT_COMMIT_SHA")
+            "RAILWAY_GIT_COMMIT_SHA", "SUPABASE_DB_URL", "SUPABASE_DB_URL_DEV")
 # The embedding model (about 80 MB) is downloaded once into a stable cache, not per test folder
 MODELS_DIR = os.getenv("FORESIGHT_TEST_MODELS_DIR",
                        str(Path.home() / ".cache" / "foresight" / "models"))

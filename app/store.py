@@ -171,7 +171,11 @@ def _stages(key: str, run_ids: tuple[str, ...], _settings: Settings) -> list[dic
                                       list(run_ids))
 
 
-def stage_history(settings: Settings, run_ids: list[str]) -> pd.DataFrame:
+def stage_history(settings: Settings, run_ids: list[str], source: str) -> pd.DataFrame:
+    """Stage rows from the same source as the history (no second wait on an unreachable
+    database)."""
+    if source != "supabase":
+        settings = settings.model_copy(update={"database_url": ""})
     return pd.DataFrame(_stages(settings.model_dump_json(), tuple(run_ids), settings))
 
 

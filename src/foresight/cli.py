@@ -26,8 +26,11 @@ def stop_on_timeout(tracker: ProgressTracker, timeout_s: int, settings=None) -> 
     tracker.finish("timeout", reason)
     (tracker.run_dir / "failure_report.md").write_text(
         f"# Run {tracker.progress.run_id} stopped\n\n**Reason:** {reason}\n", encoding="utf-8")
-    if settings is not None:
-        record_run(tracker.run_dir, settings)
+    if settings is not None:  # at most 3 s: the guard must stop the run whatever the database does
+        writer = threading.Thread(target=record_run, args=(tracker.run_dir, settings),
+                                  daemon=True)
+        writer.start()
+        writer.join(timeout=3)
     os._exit(TIMEOUT_EXIT_CODE)  # the Flow may be inside an LLM call; stop the process now
 
 

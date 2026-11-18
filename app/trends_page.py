@@ -100,7 +100,7 @@ def render(settings: Settings) -> None:
     with right, st.container(key="card-trend-time", height="stretch"):
         ui.label("Where the run time goes")
         recent = frame.sort_values("when").tail(15)
-        charts.run_time_trend(recent, store.stage_history(settings, list(recent.run_id)))
+        charts.run_time_trend(recent, store.stage_history(settings, list(recent.run_id), source))
     left, right = st.columns(2, gap="medium")
     with left, st.container(key="card-trend-tokens", height="stretch"):
         ui.label("LLM tokens per run")

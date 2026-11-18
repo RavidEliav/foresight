@@ -23,8 +23,11 @@ LIST_COLUMNS = tuple(c for c in RUN_COLUMNS if c != "manifest")
 
 @contextmanager
 def connect(url: str):
+    """Bounded: no registry call may hang a run or a page (statement timeout, keepalives)."""
     with psycopg.connect(url, connect_timeout=8, prepare_threshold=None,
-                         application_name="foresight") as conn:
+                         application_name="foresight", keepalives=1, keepalives_idle=10,
+                         keepalives_interval=5, keepalives_count=2) as conn:
+        conn.execute("set statement_timeout = 10000")
         yield conn
 
 

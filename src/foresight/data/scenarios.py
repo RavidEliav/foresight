@@ -126,8 +126,10 @@ def generate(raw: pd.DataFrame, scenario: Scenario, config: CleaningConfig,
         data.loc[train, features] = values + noise.normal(size=values.shape) * (
             intensity * std.to_numpy())
 
+    changed = (data[features].fillna(-1e300) != raw[features].fillna(-1e300)).any(axis=1)
     truth = {"kind": scenario.kind, "title": title, "sensors": sensors, "intensity": intensity,
-             "seed": scenario.seed, "training_runs_changed": int(train.sum()),
+             "seed": scenario.seed, "training_runs": int(train.sum()),
+             "training_runs_changed": int(changed.sum()),
              "test_runs_untouched": int((~train).sum()), "synthetic": True,
              "evaluated_on": "the original SECOM test period (unchanged)"}
     return data, scenario, truth

@@ -26,11 +26,12 @@ def test_scenarios_change_only_the_training_period(setup, kind):
     raw, config, fraction = setup
     data, scenario, truth = generate(raw, Scenario(kind=kind, seed=3), config, fraction)
     assert check_test_period(raw, data, config, fraction).status == GateStatus.PASS
-    test = data.run_id >= truth["training_runs_changed"]  # synthetic data is time-ordered
+    test = data.run_id >= truth["training_runs"]  # synthetic data is time-ordered
     changed = (data.drop(columns="timestamp").fillna(-1e9)
                != raw.drop(columns="timestamp").fillna(-1e9)).any(axis=1)
     assert changed[~test].any() and not changed[test].any()
     assert truth["synthetic"] and truth["test_runs_untouched"] == int(test.sum())
+    assert truth["training_runs_changed"] == int(changed.sum())
     if KINDS[kind][3]:
         assert len(scenario.sensors) == KINDS[kind][3] and "f_020" not in scenario.sensors
     again, _, _ = generate(raw, Scenario(kind=kind, seed=3), config, fraction)

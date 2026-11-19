@@ -328,7 +328,8 @@ def test_a_synthetic_run_is_labeled_and_shows_its_ground_truth(run_dir, tmp_path
         "dataset": "Scenario (synthetic): planted fault on f_031"}))
     (scenario_run / "scenario_check.json").write_text(json.dumps({
         "kind": "planted_fault", "title": "Planted fault", "sensors": ["f_031"],
-        "intensity": 3.0, "seed": 7, "training_runs_changed": 112, "test_runs_untouched": 38,
+        "intensity": 3.0, "seed": 7, "training_runs": 112, "training_runs_changed": 11,
+        "test_runs_untouched": 38,
         "found": ["f_031"], "sensors_checked": [{"sensor": "f_031", "eda_rank": 2,
                                                  "eda_listed": 15, "model_rank": None,
                                                  "in_reports": True}]}))
@@ -336,5 +337,6 @@ def test_a_synthetic_run_is_labeled_and_shows_its_ground_truth(run_dir, tmp_path
     assert not at.exception
     assert "SYNTHETIC" in at.caption[0].value  # every result page's run line
     assert any("named **1 of 1**" in m.value for m in at.markdown)
+    assert any("11 of 112 training runs changed" in m.value for m in at.markdown)
     table = next(d.value for d in at.dataframe if "EDA rank" in d.value.columns)
     assert table.iloc[0]["EDA rank"] == "2 of 15"

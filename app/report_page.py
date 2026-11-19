@@ -169,9 +169,11 @@ def _render_scenario(scenario: dict) -> None:
         ui.label("Synthetic scenario: ground truth")
         found = len(scenario["found"])
         total = len(scenario["sensors"])
+        period = scenario.get("training_runs")  # runs recorded before 8.3's fix lack it
+        changed = (f"{scenario['training_runs_changed']} of {period} training runs changed"
+                   if period else "training period changed")
         st.markdown(f":orange-badge[SYNTHETIC] **{scenario['title']}** · strength "
-                    f"{scenario['intensity']:g} · seed {scenario['seed']} · "
-                    f"{scenario['training_runs_changed']} training runs changed, "
+                    f"{scenario['intensity']:g} · seed {scenario['seed']} · {changed}, "
                     f"{scenario['test_runs_untouched']} test runs untouched")
         if total:
             st.markdown(f"The analysis named **{found} of {total}** changed "

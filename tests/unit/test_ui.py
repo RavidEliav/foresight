@@ -32,6 +32,24 @@ def test_failure_reasons_are_in_plain_language():
     assert explain_failure(crashed, 0.25)[0] == ["Something went wrong in the model step."]
 
 
+def test_recorded_failure_reasons_read_as_plain_language():
+    """The registry keeps the technical reason; Trends lists it in plain words."""
+    from app.messages import explain_reason
+
+    assert explain_reason("failed", "features_present: test_fails: 4 failing runs in the test "
+                          "period (minimum 5)", 0.25) == ("Not enough failing runs in the newest "
+                                                          "25% of the runs (used to test the "
+                                                          "model): found 4, need 5.")
+    assert explain_reason("failed", "data_contract: raw_label_values: unexpected label values "
+                          "[2]; raw_timestamps: 3 unreadable", 0.25) == (
+        "Some labels are not -1 (pass) or 1 (fail). Some timestamps are missing or are not "
+        "readable dates.")
+    assert explain_reason("interrupted", None, 0.25).startswith("Interrupted")
+    assert explain_reason("interrupted", float("nan"), 0.25).startswith("Interrupted")  # pandas
+    assert explain_reason("timeout", "stopped by the timeout guard after 1200 s", 0.25) \
+        == "Took longer than the time limit and was stopped."
+
+
 def test_times_are_shown_in_the_viewers_time_zone(monkeypatch):
     from zoneinfo import ZoneInfo
 

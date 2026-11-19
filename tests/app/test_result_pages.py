@@ -288,3 +288,30 @@ def test_trends_page_reads_the_run_folders_without_supabase():
     assert "trend-quality" in [c.key for c in at.get("plotly_chart")]
     assert any("No stage times recorded yet." in c.value for c in at.caption)
     assert at.dataframe[0].value.iloc[0]["source"] == "Reference"
+    assert any("Every recorded run completed." in c.value for c in at.caption)
+
+
+def test_trends_lists_stopped_runs_with_plain_reasons():
+    from foresight.progress import ProgressTracker
+    from foresight.settings import load_settings
+
+    runs = load_settings().paths.runs_dir
+    failed = ProgressTracker.create(runs / "20260101T000000000000Z", "20260101T000000000000Z")
+    failed.running()
+    failed.finish("failed", "features_present: test_fails: 4 failing runs in the test period "
+                            "(minimum 5)")
+    stopped = ProgressTracker.create(runs / "20260102T000000000000Z", "20260102T000000000000Z")
+    stopped.running()
+    stopped.finish("timeout")  # no reason recorded: NaN in the frame
+
+    def page():
+        from app import trends_page
+        from foresight.settings import load_settings
+
+        trends_page.render(load_settings())
+
+    at = AppTest.from_function(page, default_timeout=60).run()
+    assert not at.exception
+    listing = next(m.value for m in at.markdown if m.value.startswith("- :"))
+    assert "Not enough failing runs in the newest 25%" in listing
+    assert "Took longer than the time limit" in listing

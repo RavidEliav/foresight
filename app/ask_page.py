@@ -74,9 +74,10 @@ def _unlock(settings: Settings) -> None:
     if not settings.run_passcode:
         st.info("The chat is disabled: RUN_PASSCODE is not configured.")
         return
-    with st.form("unlock"):
-        entered = st.text_input("Passcode", type="password", key="chat_passcode")
-        if st.form_submit_button("Unlock the chat", type="primary"):
+    with st.container(key="card-unlock"):
+        ui.label("Unlock the chat")
+        entered = st.text_input("Passcode", type="password", key="chat_passcode", width=360)
+        if st.button("Unlock the chat", key="unlock", type="primary"):
             if ui.passcode_ok(settings, entered):
                 st.session_state[UNLOCKED] = True
                 st.rerun()

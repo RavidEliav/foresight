@@ -9,10 +9,12 @@ progress.json and a timeout guard that stops the run and records why.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import threading
 from pathlib import Path
 
+from foresight.data.scenarios import Scenario
 from foresight.flow import run_pipeline
 from foresight.progress import ProgressTracker, new_run_id
 from foresight.registry import record_run, sync
@@ -35,13 +37,18 @@ def stop_on_timeout(tracker: ProgressTracker, timeout_s: int, settings=None) -> 
 
 
 def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None,
-                resume: bool = False) -> int:
+                resume: bool = False, scenario_path: Path | None = None) -> int:
     settings = load_settings()
     if resume and not run_id:
         raise SystemExit("--resume needs --run-id")
+    scenario = None
+    if scenario_path is not None:
+        recipe = json.loads(scenario_path.read_text(encoding="utf-8"))
+        scenario = Scenario(**recipe.get("scenario", recipe))  # a request, or a resolved recipe
     run_id = run_id or new_run_id()
     run_dir = settings.resolve(settings.paths.runs_dir) / run_id
-    tracker = ProgressTracker.create(run_dir, run_id, "Uploaded CSV" if dataset else None)
+    label = "Uploaded CSV" if dataset else scenario.label() if scenario else None
+    tracker = ProgressTracker.create(run_dir, run_id, label)
     if resume and tracker.progress.status != "queued":  # the app prepares it before starting
         tracker.prepare_resume()
     timeout_s = timeout_s or settings.app.run_timeout_s
@@ -57,7 +64,7 @@ def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None,
     guard.daemon = True
     guard.start()
     try:
-        state = run_pipeline(settings, run_id, dataset, tracker, resume=resume)
+        state = run_pipeline(settings, run_id, dataset, tracker, resume=resume, scenario=scenario)
     except Exception as exc:  # the Flow handles stage errors; this is a last resort
         tracker.finish("failed", f"unexpected error: {exc}")
         record_run(run_dir, settings)
@@ -79,6 +86,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--timeout", type=int, help="seconds before the timeout guard stops the run")
     run.add_argument("--resume", action="store_true",
                      help="continue the interrupted run --run-id, reusing its finished stages")
+    run.add_argument("--scenario", type=Path,
+                     help="scenario.json: a synthetic variation of SECOM's training period")
     commands.add_parser("registry-sync",
                         help="record every run on disk and the reference run in Supabase")
     commands.add_parser("db-migrate",
@@ -91,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         from foresight.registry.migrate import main as migrate_main
 
         return migrate_main()
-    return run_command(args.run_id, args.dataset, args.timeout, args.resume)
+    return run_command(args.run_id, args.dataset, args.timeout, args.resume, args.scenario)
 
 
 if __name__ == "__main__":

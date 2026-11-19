@@ -101,7 +101,7 @@ A question costs about 600–1,100 tokens (well under 0.1 cent).
 
 | Page | What it shows |
 |---|---|
-| Run Pipeline | Dataset choice (built-in SECOM or an uploaded CSV), passcode, live progress as five stage tiles (green done, red failed, gray skipped, amber interrupted, cyan with a small animation of the stage's work while it runs; each tile also shows its crew's status) joined by the gates; **Continue run** for an interrupted, timed-out or crashed run; a stopped run says why in plain language and what to do, with the technical details collapsed; run history in local time (status, duration, tokens, report checks, why it stopped) |
+| Run Pipeline | Dataset choice (built-in SECOM, an uploaded CSV, or a synthetic **Scenario**), passcode, live progress as five stage tiles (green done, red failed, gray skipped, amber interrupted, cyan with a small animation of the stage's work while it runs; each tile also shows its crew's status) joined by the gates; **Continue run** for an interrupted, timed-out or crashed run; a stopped run says why in plain language and what to do, with the technical details collapsed; run history in local time (status, duration, tokens, report checks, why it stopped) |
 | Data Quality | Headline numbers, Data Contract validation (the checksum warning every upload gets is explained as expected), cleaning decisions; all checks and the contract under Extended data |
 | EDA & Insights | Headline numbers (with a weekly fail-rate sparkline), the Data Analyst crew's summary, interactive fail rate over time and sensor differences; sensor statistics, missing data and the full insights under Extended data |
 | Model | Test metrics with 95% CIs vs random, the selected model and its alarms, interactive risk over time, precision-recall curve, alarms vs outcomes and sensor importance; model comparison, evaluation report and model card under Extended data |
@@ -123,6 +123,27 @@ The sidebar starts with the Foresight wordmark (its "o" is the wafer logo) and t
 **Uploading data.** A CSV with `timestamp` (`dd/mm/yyyy HH:MM:SS` or ISO 8601), `label` (-1 pass, 1 fail) and the 590 sensor columns in SECOM order. The page offers SECOM itself in this format as a template. Uploads are cleaned with the committed Data Contract's feature list (so a smaller or newer batch stays comparable) and validated like the built-in data; a broken file stops at the contract gate with the failed checks listed.
 
 From a terminal: `python -m foresight.cli run [--dataset file.csv] [--timeout 600]`, or `python -m foresight.cli run --run-id <id> --resume` to continue a run.
+
+**Scenario Lab (synthetic data).** The third dataset choice builds a synthetic variation of SECOM, reproducible from its seed:
+- **planted fault:** one sensor shifted on the failing runs, a known cause
+- **sensor drift:** a few sensors ramp up over time
+- **sensor outage:** a few sensors missing for a stretch
+- **noisy line:** extra noise on every sensor
+
+A scenario changes **only the training period**. The test period stays the original SECOM runs, so every evaluation metric, PR-AUC included, is computed on real data only and is comparable with a run on the real data. The ingest stage enforces this: a Data Contract check (`test_period_is_original_secom`) cleans the original data too and stops the run if a single test-period value differs.
+
+Synthetic data is labeled and kept separate:
+- The recipe and ground truth are in `scenario.json`, and the generated data in `scenario_data.csv`, in the run folder. The SECOM files are never modified.
+- The run's dataset reads "Scenario (synthetic): …".
+- Every result page shows a SYNTHETIC badge.
+- The manifest records the scenario, the engineering report opens with a deterministic SYNTHETIC note, and Trends lists the run as Synthetic.
+
+At the end of the run, `scenario_check.json` records whether the analysis found the change:
+- each changed sensor's rank among the sensors that differ most (EDA)
+- its rank in model importance on the real test period
+- whether the investigation or report names it
+
+A planted fault that the analysis misses makes the report check `scenario_ground_truth` a WARNING. On SECOM with the default settings, the planted sensor ranks first in the EDA.
 
 **Run registry (Supabase).** Every finished, failed or timed-out run writes one summary row (status, times, data rows and fail rate, selected model and its test metrics, anomaly lift, tokens, gates, report checks, the full manifest) and one row per stage to **Supabase Postgres**, so the history survives pruning and redeploys and the Trends page can chart it. Each Railway environment has its own Supabase project (`foresight-dev`, `foresight-main`). The app connects from the server only, through the **Session pooler** (`SUPABASE_DB_URL`, IPv4); no key reaches the browser. The tables live in a private schema `foresight` that is not exposed to Supabase's REST API, the client roles get no privileges, and Row Level Security is enabled with no policies (deny by default). The schema is a versioned migration in [`supabase/migrations`](supabase/migrations). Without `SUPABASE_DB_URL` (tests, a local checkout), the same rows are built from the run folders, and a database problem never fails a run (it is logged). `python -m foresight.cli registry-sync` records every run still on disk and the reference run (backfill).
 

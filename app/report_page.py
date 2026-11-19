@@ -32,6 +32,9 @@ def render(run_dir: Path | None) -> None:
     similar = read_json(run_dir, "similar_runs.json")
     _status_line(checks)
     ui.kpis(_headline_numbers(summary, risk, similar))
+    scenario = read_json(run_dir, "scenario_check.json")
+    if scenario:
+        _render_scenario(scenario)
     overview = store.investigation_summary(run_dir)
     if overview:
         _render_overview(overview)
@@ -158,6 +161,31 @@ def _render_overview(overview: InvestigationSummary) -> None:
 
 def _escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _render_scenario(scenario: dict) -> None:
+    """Scenario Lab: what was changed (ground truth) and what the analysis found."""
+    with st.container(key="card-scenario"):
+        ui.label("Synthetic scenario: ground truth")
+        found = len(scenario["found"])
+        total = len(scenario["sensors"])
+        st.markdown(f":orange-badge[SYNTHETIC] **{scenario['title']}** · strength "
+                    f"{scenario['intensity']:g} · seed {scenario['seed']} · "
+                    f"{scenario['training_runs_changed']} training runs changed, "
+                    f"{scenario['test_runs_untouched']} test runs untouched")
+        if total:
+            st.markdown(f"The analysis named **{found} of {total}** changed "
+                        f"sensor{'s' if total != 1 else ''}.")
+            rows = [{"sensor": r["sensor"],
+                     "EDA rank": (f"{r['eda_rank']} of {r['eda_listed']}" if r["eda_rank"]
+                                  else f"not in the top {r['eda_listed']}"),
+                     "model importance rank": r["model_rank"] or "not listed",
+                     "named in the reports": "yes" if r["in_reports"] else "no"}
+                    for r in scenario["sensors_checked"]]
+            ui.table(pd.DataFrame(rows))
+        st.caption("The model is evaluated on the original SECOM test period, where the "
+                   "synthetic change does not exist: every metric on these pages is computed "
+                   "on real runs only.")
 
 
 def _render_report(run_dir: Path) -> None:

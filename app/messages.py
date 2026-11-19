@@ -28,8 +28,8 @@ HINTS = {
 }
 # Warnings that are expected for every uploaded file, with the reason.
 EXPECTED_FOR_UPLOADS = {
-    "data_checksums": "Expected for uploads: the checksums identify the original SECOM files, "
-                      "so an uploaded file never matches them.",
+    "data_checksums": "Expected for uploads and synthetic scenarios: the checksums identify "
+                      "the original SECOM files, so any other data never matches them.",
 }
 
 

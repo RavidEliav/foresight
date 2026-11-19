@@ -264,3 +264,30 @@ def test_report_crew_failure_fails_the_run_gracefully(monkeypatch):
     assert state.status == "failed"
     assert state.stages_completed == ["ingest", "analyze", "model", "investigate"]
     assert state.failure_reason == "report stage error: LLM provider unavailable"
+
+
+def test_a_synthetic_scenario_runs_end_to_end_labeled_and_evaluated_on_real_data():
+    """Phase 8.3: training period changed, test period original; labeled everywhere."""
+    from foresight.data.scenarios import Scenario
+    from foresight.registry import run_record
+    from foresight.settings import load_settings
+
+    state = run_pipeline(scenario=Scenario(kind="planted_fault", intensity=3.0))
+    assert state.status == "success"
+    run_dir = Path(state.run_dir)
+    checks = {c["name"]: c for c in state.validation["checks"]}
+    assert checks["test_period_is_original_secom"]["status"] == "PASS"
+    assert (run_dir / "scenario_data.csv").exists()
+    manifest = json.loads((run_dir / "run_manifest.json").read_text())
+    planted = manifest["scenario"]["ground_truth"]["sensors"]
+    assert manifest["scenario"]["ground_truth"]["synthetic"] is True and len(planted) == 1
+    assert load_progress(run_dir).dataset.startswith("Scenario (synthetic): planted fault on ")
+
+    evaluation = json.loads((run_dir / "scenario_check.json").read_text())
+    assert evaluation["sensors_checked"][0]["eda_rank"] is not None  # the EDA finds it
+    report_checks = {c["name"]: c for c in json.loads(
+        (run_dir / "report_checks.json").read_text())["checks"]}
+    assert report_checks["scenario_ground_truth"]["status"] == "PASS"
+    report = (run_dir / "engineering_report.md").read_text(encoding="utf-8")
+    assert "SYNTHETIC SCENARIO: Planted fault." in report.split("\n\n")[1]
+    assert run_record(run_dir, load_settings())["source"] == "scenario"

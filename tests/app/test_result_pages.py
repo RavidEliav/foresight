@@ -315,3 +315,26 @@ def test_trends_lists_stopped_runs_with_plain_reasons():
     listing = next(m.value for m in at.markdown if m.value.startswith("- :"))
     assert "Not enough failing runs in the newest 25%" in listing
     assert "Took longer than the time limit" in listing
+
+
+def test_a_synthetic_run_is_labeled_and_shows_its_ground_truth(run_dir, tmp_path):
+    import json
+    import shutil
+
+    scenario_run = tmp_path / "20260105T000000000000Z"
+    shutil.copytree(run_dir, scenario_run)
+    (scenario_run / "progress.json").write_text(json.dumps({
+        "run_id": scenario_run.name, "status": "success",
+        "dataset": "Scenario (synthetic): planted fault on f_031"}))
+    (scenario_run / "scenario_check.json").write_text(json.dumps({
+        "kind": "planted_fault", "title": "Planted fault", "sensors": ["f_031"],
+        "intensity": 3.0, "seed": 7, "training_runs_changed": 112, "test_runs_untouched": 38,
+        "found": ["f_031"], "sensors_checked": [{"sensor": "f_031", "eda_rank": 2,
+                                                 "eda_listed": 15, "model_rank": None,
+                                                 "in_reports": True}]}))
+    at = _render("app.report_page", scenario_run)
+    assert not at.exception
+    assert "SYNTHETIC" in at.caption[0].value  # every result page's run line
+    assert any("named **1 of 1**" in m.value for m in at.markdown)
+    table = next(d.value for d in at.dataframe if "EDA rank" in d.value.columns)
+    assert table.iloc[0]["EDA rank"] == "2 of 15"

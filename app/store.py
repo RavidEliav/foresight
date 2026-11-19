@@ -109,8 +109,16 @@ def active_run(settings: Settings) -> RunProgress | None:
     return jobs.active_run(settings)
 
 
-def start_run(settings: Settings, upload: bytes | None, upload_name: str | None) -> str:
-    return jobs.start_run(settings, upload, upload_name)
+def start_run(settings: Settings, upload: bytes | None, upload_name: str | None,
+              scenario: dict | None = None) -> str:
+    return jobs.start_run(settings, upload, upload_name, scenario)
+
+
+def scenario_kinds() -> dict[str, tuple[str, str, float, int]]:
+    """Scenario Lab kinds: title, description, default intensity, sensors changed."""
+    from foresight.data.scenarios import KINDS
+
+    return KINDS
 
 
 def resume_run(settings: Settings, run_id: str) -> str:

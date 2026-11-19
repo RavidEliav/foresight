@@ -72,8 +72,9 @@ def prune_runs(settings: Settings) -> list[str]:
 
 
 def start_run(settings: Settings, upload: bytes | None = None,
-              upload_name: str | None = None) -> str:
-    """Create the run folder and start the pipeline in a background process."""
+              upload_name: str | None = None, scenario: dict | None = None) -> str:
+    """Create the run folder and start the pipeline in a background process. ``scenario``
+    (kind, intensity, seed) runs a synthetic variation of SECOM instead (Phase 8.3)."""
     with _START_LOCK:
         check_can_start(settings)
         prune_runs(settings)
@@ -86,6 +87,13 @@ def start_run(settings: Settings, upload: bytes | None = None,
             (run_dir / UPLOAD_FILE).write_bytes(upload)
             command += ["--dataset", str(run_dir / UPLOAD_FILE)]
             label = f"Uploaded CSV ({upload_name or UPLOAD_FILE})"
+        elif scenario is not None:
+            from foresight.data.scenarios import SCENARIO_FILE, Scenario
+
+            request = Scenario(**scenario)
+            (run_dir / SCENARIO_FILE).write_text(request.model_dump_json(), encoding="utf-8")
+            command += ["--scenario", str(run_dir / SCENARIO_FILE)]
+            label = request.label()
         ProgressTracker.create(run_dir, run_id, label)
     _launch(command, run_dir)
     return run_id
@@ -102,6 +110,8 @@ def resume_run(settings: Settings, run_id: str) -> str:
         command = [sys.executable, "-m", "foresight.cli", "run", "--run-id", run_id, "--resume"]
         if (run_dir / UPLOAD_FILE).exists():
             command += ["--dataset", str(run_dir / UPLOAD_FILE)]
+        elif (run_dir / "scenario.json").exists():  # resolved recipe: same data again
+            command += ["--scenario", str(run_dir / "scenario.json")]
         ProgressTracker(run_dir=run_dir, progress=progress).prepare_resume()
     _launch(command, run_dir)
     return run_id

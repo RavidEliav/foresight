@@ -39,7 +39,9 @@ def _seconds(start: str | None, end: str | None) -> float | None:
 def _source(run_dir: Path, manifest: dict, dataset: str | None, settings: Settings) -> str:
     if run_dir.resolve() == settings.resolve(settings.paths.reference_run_dir).resolve():
         return "reference"
-    if manifest.get("scenario"):
+    # a timed-out or crashed scenario run has no manifest, but its label and recipe say so
+    if manifest.get("scenario") or (dataset or "").startswith("Scenario") or \
+            (run_dir / "scenario.json").exists():
         return "scenario"
     return "upload" if dataset and dataset.startswith("Uploaded") else "secom"
 

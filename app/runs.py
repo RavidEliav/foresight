@@ -48,13 +48,23 @@ def is_upload(run_dir: Path) -> bool:
     return _dataset(run_dir).startswith("Uploaded")
 
 
+def is_scenario(run_dir: Path) -> bool:
+    """A synthetic Scenario Lab run (training period changed; test period original SECOM)."""
+    return _dataset(run_dir).startswith("Scenario")
+
+
+SYNTHETIC = (":orange-badge[SYNTHETIC: training data changed · metrics on the original SECOM "
+             "test period]")
+
+
 def describe_run(run_dir: Path) -> str:
     """Short label for the run selector, e.g. '16 Nov, 23:17 · SECOM' (local time)."""
     if run_dir.name == "reference":
         return "Reference run"
     started = run_started(run_dir)
     when = local_time(started, "%d %b, %H:%M") if started else run_dir.name
-    return f"{when} · {'Upload' if is_upload(run_dir) else 'SECOM'}"
+    kind = "Upload" if is_upload(run_dir) else "SYNTHETIC" if is_scenario(run_dir) else "SECOM"
+    return f"{when} · {kind}"
 
 
 def run_details(run_dir: Path) -> str:
@@ -70,8 +80,9 @@ def run_label(run_dir: Path) -> str:
     if run_dir.name == "reference":
         return "Reference run · SECOM (UCI), committed with the app"
     started = run_started(run_dir)
-    return (f"Run started {local_time(started)} · {_dataset(run_dir)}" if started
-            else f"Run `{run_dir.name}`")
+    label = (f"Run started {local_time(started)} · {_dataset(run_dir)}" if started
+             else f"Run `{run_dir.name}`")
+    return f"{SYNTHETIC} {label}" if is_scenario(run_dir) else label
 
 
 def show_markdown_file(run_dir: Path, name: str, download_label: str | None = None) -> bool:

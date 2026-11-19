@@ -107,14 +107,33 @@ def render(settings: Settings) -> None:
         charts.tokens_trend(frame)
     with right, st.container(key="card-trend-outcomes", height="stretch"):
         ui.label("Run outcomes")
-        counts = frame.status.value_counts()
-        colors = {"success": "green", "failed": "red", "timeout": "orange",
-                  "interrupted": "orange"}
-        st.markdown(" ".join(f":{colors.get(status, 'gray')}-badge[{status}: {n}]"
-                             for status, n in counts.items()))
-        failed = frame[frame.failure_reason.notna() & frame.status.ne("success")]
-        for row in failed.sort_values("when", ascending=False).head(4).itertuples():
-            st.caption(f"{row.label} · {row.status}: {row.failure_reason}")
+        _outcomes(frame, settings.analytics.test_fraction)
 
     ui.section_label("Extended data")
     _table(frame.sort_values("when", ascending=False))
+
+
+STATUS_COLORS = {"success": "green", "failed": "red", "timeout": "orange",
+                 "interrupted": "orange"}
+
+
+def _outcomes(frame: pd.DataFrame, test_fraction: float, limit: int = 6) -> None:
+    """How many runs ended how, then a list of the runs that stopped, newest first, each with
+    its reason in plain words (the technical reason is in the run table)."""
+    from app.messages import explain_reason
+
+    counts = frame.status.value_counts()
+    st.markdown(" ".join(f":{STATUS_COLORS.get(status, 'gray')}-badge[{n} {status}]"
+                         for status, n in counts.items()))
+    stopped = frame[frame.status.ne("success")].sort_values("when", ascending=False)
+    if stopped.empty:
+        st.caption("Every recorded run completed.")
+        return
+    items = []
+    for row in stopped.head(limit).itertuples():
+        reason = explain_reason(row.status, row.failure_reason, test_fraction)
+        items.append(f"- :{STATUS_COLORS.get(row.status, 'gray')}-badge[{row.status}] "
+                     f"**{row.label}** · {row.source_name}  \n  {ui.md(reason)}")
+    st.markdown("\n".join(items))
+    if len(stopped) > limit:
+        st.caption(f"{len(stopped) - limit} more in the run table under Extended data.")

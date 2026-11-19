@@ -43,6 +43,28 @@ def plain(gate: str, check: str, detail: str, test_fraction: float) -> str:
     return CONTRACT.get(check, f"{check.replace('_', ' ').capitalize()}: {detail}")
 
 
+def explain_reason(status: str, reason: str | None, test_fraction: float) -> str:
+    """A stopped run's recorded failure reason ("gate: check: detail; ...") in plain words."""
+    reason = reason if isinstance(reason, str) else ""  # a missing reason may arrive as NaN
+    gate, _, rest = reason.partition(": ")
+    if gate in HINTS:
+        plain_parts = []
+        for message in rest.split("; "):
+            check, _, detail = message.partition(": ")
+            text = plain(gate, check, detail, test_fraction)
+            if text not in plain_parts:
+                plain_parts.append(text)
+        return " ".join(plain_parts)
+    if status == "timeout":
+        return "Took longer than the time limit and was stopped."
+    if status == "interrupted" and not reason:
+        return "Interrupted, for example because the app restarted."
+    if stage := re.match(r"(\w+) (stage|crew) error", reason):
+        what = "step" if stage.group(2) == "stage" else "step's crew"
+        return f"Something went wrong in the {stage.group(1)} {what}."
+    return reason or "Stopped."
+
+
 def explain_failure(progress: RunProgress, test_fraction: float) -> tuple[list[str], str | None]:
     """Why a run stopped, in plain words, and what to do about it."""
     reasons: list[str] = []

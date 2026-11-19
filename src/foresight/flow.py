@@ -34,6 +34,7 @@ from foresight.analytics.stages import (
 from foresight.data.ingest import run_ingest
 from foresight.progress import ProgressTracker, new_run_id
 from foresight.rag.index import CHUNKS_FILE
+from foresight.registry import record_run
 from foresight.settings import Settings, load_settings
 from foresight.utils.logging import get_logger, setup_logging
 from foresight.utils.manifest import build_manifest, write_manifest
@@ -248,6 +249,7 @@ class ForesightFlow(Flow[ForesightState]):
         self.state.status = "success"
         self._write_manifest()
         self.tracker.finish("success")
+        record_run(Path(self.state.run_dir), self.settings)
 
     @listen(or_(FAILED))
     def handle_failure(self):
@@ -264,6 +266,7 @@ class ForesightFlow(Flow[ForesightState]):
         log.error("run %s failed: %s", self.state.run_id, self.state.failure_reason)
         self._write_manifest()
         self.tracker.finish("failed", self.state.failure_reason)
+        record_run(Path(self.state.run_dir), self.settings)
 
     def _write_manifest(self) -> None:
         chunks = Path(self.state.run_dir) / CHUNKS_FILE

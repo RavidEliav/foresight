@@ -30,6 +30,20 @@ Answer the question using ONLY the excerpts from this run's artifacts given belo
 - Say "is associated with", never "causes".
 - If the excerpts do not contain the answer, reply exactly: {REFUSAL}
 - Keep the answer short: at most about 120 words."""
+REFUSAL_ALL = "Not found in the recorded runs."
+SYSTEM_ALL = f"""You are Foresight, an assistant for semiconductor process engineers.
+Answer the question using ONLY the excerpts below. They come from several pipeline runs,
+listed under "Runs"; an excerpt's header starts with its run id.
+- Say which run every statement is about (by its start date and data), and compare runs only
+  through what the excerpts say. Prefer one line per run, each with its citation.
+- After every statement, cite the excerpt it comes from with the excerpt's header exactly as
+  shown above it, for example [source: 20261118T201632841000Z/model_card.md § Limitations].
+  A closing comparison may only restate what the cited lines say, with their numbers.
+- Use only numbers that appear in the excerpts. Do not use general knowledge.
+- Sensor names are anonymized; never say what a sensor physically measures.
+- Say "is associated with", never "causes".
+- If the excerpts do not contain the answer, reply exactly: {REFUSAL_ALL}
+- Keep the answer short: at most about 150 words."""
 
 
 class Source(BaseModel):
@@ -37,6 +51,7 @@ class Source(BaseModel):
     section: str
     score: float
     text: str
+    run: str = ""  # the run it comes from (All runs mode)
 
 
 class ChatAnswer(BaseModel):
@@ -55,11 +70,13 @@ def _prompt(question: str, hits: list[Hit]) -> str:
     return f"Excerpts:\n\n{excerpts}\n\nQuestion: {question}"
 
 
-def citation_problem(answer: str, hits: list[Hit]) -> str | None:
+def citation_problem(answer: str, hits: list[Hit], grounded_summaries: bool = False) -> str | None:
     """At least one citation must be traceable, no citation may point outside what was
     retrieved, and every paragraph (except an introduction ending with ':') must cite.
     Traceable = a retrieved excerpt (file § section) or a source tag quoted inside the
-    retrieved text (the reports cite their own data files)."""
+    retrieved text (the reports cite their own data files). With ``grounded_summaries`` (All
+    runs mode), a paragraph without a citation is allowed when every number in it appears in
+    the retrieved excerpts or their run ids: a comparison across runs sums up cited lines."""
     excerpts = {(h.chunk.source, h.chunk.section.lower()) for h in hits}
     files = {h.chunk.source for h in hits}
     quoted = {m.group(1).strip() for h in hits for m in CITATION.finditer(h.chunk.text)}
@@ -87,8 +104,19 @@ def citation_problem(answer: str, hits: list[Hit]) -> str | None:
         is_list = re.search(r"^\s*(?:\d+[.)]|[-*])\s", paragraph, re.MULTILINE)
         if is_list and i + 1 < len(paragraphs) and CITATION.search(paragraphs[i + 1]):
             continue
+        if grounded_summaries and _numbers(paragraph) <= _numbers(
+                " ".join(f"{h.chunk.source} {h.chunk.text}" for h in hits)):
+            continue
         return "part of it has no citation"
     return None
+
+
+def _numbers(text: str) -> set[str]:
+    """Numbers as written (0.085, 95, 20261118), without trailing zeros of decimals."""
+    found = set()
+    for number in re.findall(r"\d+(?:\.\d+)?", text):
+        found.add(number.rstrip("0").rstrip(".") if "." in number else number)
+    return found
 
 
 def cited_sources(answer: str, hits: list[Hit]) -> set[str]:
@@ -127,8 +155,33 @@ def ask(question: str, run_dir: Path, settings: Settings) -> ChatAnswer:
     hits = retrieve(run_index(run_dir, settings), question, settings)
     sources = [Source(file=h.chunk.source, section=h.chunk.section, score=h.score,
                       text=h.chunk.text) for h in hits]
+    return _answer(question, hits, sources, settings, SYSTEM, _prompt(question, hits), REFUSAL,
+                   start)
+
+
+def ask_all(question: str, settings: Settings) -> ChatAnswer:
+    """A question about all recorded runs (Supabase pgvector, else this server's runs)."""
+    from foresight.rag.cross import retrieve_all, split_source
+
+    start = time.perf_counter()
+    question = question.strip()
+    hits, runs = retrieve_all(question, settings)
+    sources = []
+    for h in hits:
+        run_id, file = split_source(h.chunk.source)
+        sources.append(Source(file=file, section=h.chunk.section, score=h.score,
+                              text=h.chunk.text, run=runs[run_id].label))
+    listing = "\n".join(f"- {info.label}" for info in runs.values())
+    prompt = f"Runs:\n{listing}\n\n{_prompt(question, hits)}"
+    return _answer(question, hits, sources, settings, SYSTEM_ALL, prompt, REFUSAL_ALL, start,
+                   grounded_summaries=True)
+
+
+def _answer(question: str, hits: list[Hit], sources: list[Source], settings: Settings,
+            system: str, prompt: str, refusal: str, start: float,
+            grounded_summaries: bool = False) -> ChatAnswer:
     if not hits:
-        return ChatAnswer(question=question, answer=REFUSAL, refused=True,
+        return ChatAnswer(question=question, answer=refusal, refused=True,
                           reason=f"no excerpt reached similarity {settings.rag.min_similarity}",
                           seconds=round(time.perf_counter() - start, 2), mock=settings.mock_llm)
 
@@ -136,13 +189,14 @@ def ask(question: str, run_dir: Path, settings: Settings) -> ChatAnswer:
     if settings.mock_llm:
         answer = mock_answer(question, hits)
     else:
-        answer, usage = complete(settings, SYSTEM, _prompt(question, hits))
+        answer, usage = complete(settings, system, prompt)
 
     refused, reason = False, ""
-    if REFUSAL.lower().rstrip(".") in answer.lower():
-        answer, refused, reason = REFUSAL, True, "the excerpts do not contain the answer"
-    elif problem := citation_problem(answer, hits):
-        answer, refused, reason = REFUSAL, True, f"answer withheld: {problem}"
+    if refusal.lower().rstrip(".") in answer.lower() or \
+            REFUSAL.lower().rstrip(".") in answer.lower():
+        answer, refused, reason = refusal, True, "the excerpts do not contain the answer"
+    elif problem := citation_problem(answer, hits, grounded_summaries):
+        answer, refused, reason = refusal, True, f"answer withheld: {problem}"
     return ChatAnswer(question=question, answer=answer, refused=refused, reason=reason,
                       sources=sources, usage=usage, mock=settings.mock_llm,
                       seconds=round(time.perf_counter() - start, 2))

@@ -194,6 +194,24 @@ def test_ask_page_needs_the_passcode_then_answers_with_citations(run_dir):
     answers = [m for m in at.chat_message if m.name == "assistant"]
     assert answers[-1].markdown[0].value == "Not found in this run's artifacts."
 
+    # All runs: no Supabase in tests, so the run folders' indexes (here the reference run)
+    at.segmented_control(key="chat_scope").set_value("All runs").run()
+    assert not [m for m in at.chat_message if m.name == "assistant"]  # its own history
+    at.chat_input[0].set_value("What is the model's test PR-AUC?").run()
+    assert not at.exception
+    answer = [m for m in at.chat_message if m.name == "assistant"][-1]
+    assert "/" in answer.markdown[0].value and "[source: " in answer.markdown[0].value
+    assert any(e.label.startswith("Sources") for e in answer.expander)
+
+    # a question opened from the sidebar's history belongs to this run: the scope follows
+    at.session_state["chat_open"] = {"run": run_dir.name, "question": "Opened from history?",
+                                     "answer": "An answer.", "refused": False, "sources": [],
+                                     "time": "2026-11-18T10:00:00+00:00"}
+    at.run()
+    assert at.segmented_control(key="chat_scope").value == "This run"
+    assert any(m.markdown[0].value == "Opened from history?" for m in at.chat_message
+               if m.name == "user")
+
 
 def test_viewable_runs_are_successful_runs_then_the_reference(tmp_path, run_dir):
     import json
@@ -253,3 +271,47 @@ def test_pr_curve_fits_the_precision_axis_and_charts_zoom_on_scroll(monkeypatch,
     assert max(curve.y) < 1  # no made-up (recall 0, precision 1) point
     assert shown[0].layout.yaxis.range[1] == pytest.approx(max(max(curve.y), 0.2) * 1.15)
     assert configs[0]["config"]["scrollZoom"] is True
+
+
+def test_trends_page_reads_the_run_folders_without_supabase():
+    """No database and no new runs: the committed reference run is the history."""
+    def page():
+        from app import trends_page
+        from foresight.settings import load_settings
+
+        trends_page.render(load_settings())
+
+    at = AppTest.from_function(page, default_timeout=60).run()
+    assert not at.exception
+    assert at.metric[0].label == "Runs recorded" and at.metric[0].value == "1"
+    assert any("run folders on this server" in c.value for c in at.caption)
+    assert "trend-quality" in [c.key for c in at.get("plotly_chart")]
+    assert any("No stage times recorded yet." in c.value for c in at.caption)
+    assert at.dataframe[0].value.iloc[0]["source"] == "Reference"
+    assert any("Every recorded run completed." in c.value for c in at.caption)
+
+
+def test_trends_lists_stopped_runs_with_plain_reasons():
+    from foresight.progress import ProgressTracker
+    from foresight.settings import load_settings
+
+    runs = load_settings().paths.runs_dir
+    failed = ProgressTracker.create(runs / "20260101T000000000000Z", "20260101T000000000000Z")
+    failed.running()
+    failed.finish("failed", "features_present: test_fails: 4 failing runs in the test period "
+                            "(minimum 5)")
+    stopped = ProgressTracker.create(runs / "20260102T000000000000Z", "20260102T000000000000Z")
+    stopped.running()
+    stopped.finish("timeout")  # no reason recorded: NaN in the frame
+
+    def page():
+        from app import trends_page
+        from foresight.settings import load_settings
+
+        trends_page.render(load_settings())
+
+    at = AppTest.from_function(page, default_timeout=60).run()
+    assert not at.exception
+    listing = next(m.value for m in at.markdown if m.value.startswith("- :"))
+    assert "Not enough failing runs in the newest 25%" in listing
+    assert "Took longer than the time limit" in listing

@@ -34,6 +34,18 @@ def _warm_embedding_model(models_dir: str) -> bool:
 _warm_embedding_model(str(settings.resolve(settings.paths.models_dir)))
 
 
+@st.cache_resource(show_spinner=False)
+def _sync_registry(database_url: str) -> bool:
+    """Once per server process: record the runs on this server in the Supabase registry."""
+    from app import store
+
+    store.sync_registry_in_background(settings)
+    return True
+
+
+_sync_registry(settings.database_url)
+
+
 def run_pipeline_page() -> None:
     from app import run_page
 
@@ -101,6 +113,12 @@ def ask_page() -> None:
     page.render(_latest("engineering_report.md"), settings)
 
 
+def trends_page() -> None:
+    from app import trends_page as page
+
+    page.render(settings)
+
+
 DATA_QUALITY = st.Page(data_quality_page, title="Data Quality", icon=":material/verified:",
                        url_path="data-quality")
 ASK = st.Page(ask_page, title="Ask Foresight", icon=":material/forum:", url_path="ask")
@@ -111,6 +129,7 @@ PAGES = [
     st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),
     st.Page(report_page, title="Investigation & Report", icon=":material/description:",
             url_path="report"),
+    st.Page(trends_page, title="Trends", icon=":material/trending_up:", url_path="trends"),
     ASK,
 ]
 # Streamlit draws its own page menu above everything else in the sidebar; it is hidden so that

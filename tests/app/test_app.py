@@ -21,7 +21,7 @@ def test_app_loads_with_brand_menu_and_environment_badge():
     assert "Semiconductor yield intelligence" in brand and "data:image/svg+xml" in brand
     links = [link.proto.label for link in at.sidebar.get("page_link")]
     assert links == ["Run Pipeline", "Data Quality", "EDA & Insights", "Model",
-                     "Investigation & Report", "Ask Foresight"]
+                     "Investigation & Report", "Trends", "Ask Foresight"]
 
 
 def test_runs_disabled_message_without_passcode():
@@ -191,7 +191,7 @@ def test_only_the_store_touches_run_data():
 
     forbidden = re.compile(r"(?<!store\.)read_text\(|(?<!store\.)read_bytes\(|\.exists\(\)|"
                            r"pd\.read_csv|json\.loads|iterdir|from foresight import jobs|"
-                           r"foresight\.rag|load_progress")
+                           r"foresight\.rag|foresight\.registry|load_progress")
     app_dir = Path(APP).parent
     offenders = [f"{path.name}: {line.strip()}" for path in app_dir.glob("*.py")
                  if path.name != "store.py"

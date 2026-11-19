@@ -18,12 +18,24 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Throwaway Postgres with pgvector (same major version as Supabase) for the registry tests
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s
+          --health-retries 10
     env:
       MOCK_LLM: "true"
       FORESIGHT_SKIP_DOTENV: "true"
       CREWAI_DISABLE_TELEMETRY: "true"
       OTEL_SDK_DISABLED: "true"
       RUN_PASSCODE: ci-passcode
+      FORESIGHT_TEST_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
       # One embedding-model cache for the tests and the app under test (RAG, §18)
       FORESIGHT_MODELS_DIR: /home/runner/.cache/foresight/models
       FORESIGHT_TEST_MODELS_DIR: /home/runner/.cache/foresight/models

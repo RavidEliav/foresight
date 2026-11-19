@@ -221,3 +221,40 @@ def test_a_list_may_be_cited_by_its_closing_sentence():
     assert chat.citation_problem(f"{listed}They are ordered by risk. {cite}", hits) is None
     assert chat.citation_problem(f"An uncited claim.\n\n{listed}Ordered. {cite}",
                                  hits) == "part of it has no citation"
+
+
+def test_questions_about_all_runs_search_every_run_and_cite_the_run(tmp_path, settings):
+    """All runs mode without Supabase: the successful runs' own indexes, merged."""
+    settings.paths.reference_run_dir = tmp_path / "no-reference"
+    for run_id, pr_auc in (("20260101T000000000000Z", "0.085"), ("20260102T000000000000Z",
+                                                                  "0.120")):
+        run = tmp_path / "runs" / run_id
+        run.mkdir(parents=True)
+        (run / "engineering_report.md").write_text(REPORT.replace("0.085", pr_auc),
+                                                   encoding="utf-8")
+        (run / "run_manifest.json").write_text(json.dumps({"run_id": run_id,
+                                                           "status": "success"}))
+        build_run_index(run, settings)
+    (tmp_path / "runs" / "20260103T000000000000Z").mkdir()  # a failed run without an index
+
+    result = chat.ask_all("How did the model's PR-AUC differ between runs?", settings)
+    assert not result.refused
+    assert len({s.run for s in result.sources}) == 2  # excerpts from both runs
+    assert all(s.run.startswith("run 2026010") for s in result.sources)
+    assert "Supporting statistical evidence]" in result.answer and "Z/engineering_report.md" \
+        in result.answer  # the citation names the run
+    refused = chat.ask_all("What is the capital of France?", settings)
+    assert refused.refused and refused.answer == chat.REFUSAL_ALL
+
+
+def test_all_runs_answers_may_sum_up_cited_lines_only_with_grounded_numbers():
+    hits = [chat.Hit(Chunk("r1/model_card.md", "Metrics", "Test PR-AUC 0.085 (95% CI)."), 0.6),
+            chat.Hit(Chunk("r2/model_card.md", "Metrics", "Test PR-AUC 0.120 (95% CI)."), 0.6)]
+    lines = ("- r1: 0.085 [source: r1/model_card.md § Metrics]\n"
+             "- r2: 0.120 [source: r2/model_card.md § Metrics]")
+    grounded = f"{lines}\n\nOverall, the PR-AUC rose from 0.085 to 0.12."
+    assert chat.citation_problem(grounded, hits) == "part of it has no citation"  # one run
+    assert chat.citation_problem(grounded, hits, grounded_summaries=True) is None
+    invented = f"{lines}\n\nOverall, the PR-AUC rose by 41%."
+    assert chat.citation_problem(invented, hits, grounded_summaries=True) \
+        == "part of it has no citation"

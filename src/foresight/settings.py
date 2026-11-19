@@ -36,6 +36,7 @@ class RagSettings(BaseModel):
     top_k: int = 4
     min_similarity: float = 0.25     # below this the chat refuses without calling the LLM
     knowledge_k: int = 3
+    all_runs_k: int = 6              # excerpts for a question about all runs (Phase 8.2)
 
 
 class DataSettings(BaseModel):
@@ -81,6 +82,7 @@ class Settings(BaseModel):
     mock_llm: bool = False
     run_passcode: str = ""
     environment: str = "local"
+    database_url: str = ""  # Supabase Postgres (Session pooler); empty = run folders only
 
     def resolve(self, path: Path) -> Path:
         return path if path.is_absolute() else PROJECT_ROOT / path
@@ -112,4 +114,6 @@ def load_settings(config_path: Path | None = None) -> Settings:
     settings.mock_llm = _as_bool(os.getenv("MOCK_LLM"))
     settings.run_passcode = os.getenv("RUN_PASSCODE", "")
     settings.environment = os.getenv("RAILWAY_ENVIRONMENT_NAME", "local")
+    # Railway sets SUPABASE_DB_URL per environment (ADR-026); empty = the run folders only
+    settings.database_url = os.getenv("SUPABASE_DB_URL", "")
     return settings

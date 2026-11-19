@@ -10,7 +10,8 @@ from app import charts, store, ui
 from app.runs import local_zone
 from foresight.settings import Settings
 
-SOURCES = {"secom": "SECOM", "upload": "Upload", "scenario": "Scenario", "reference": "Reference"}
+SOURCES = {"secom": "SECOM", "upload": "Upload", "scenario": "Synthetic",
+           "reference": "Reference"}
 
 
 def _prepare(frame: pd.DataFrame) -> pd.DataFrame:

@@ -14,6 +14,7 @@ from foresight.settings import Settings
 
 SECOM = "SECOM (UCI, built in)"
 UPLOAD = "Upload a CSV"
+SCENARIO = "Scenario (synthetic)"
 STATUS_TEXT = {"queued": "is starting", "running": "is running", "success": "completed",
                "failed": "stopped", "timeout": "was stopped by the time limit",
                "interrupted": "was interrupted"}
@@ -29,8 +30,10 @@ def render(settings: Settings, results_page=None) -> None:
 
     with st.container(key="card-launch"):
         ui.label("Start a run")
-        source = st.radio("Dataset", [SECOM, UPLOAD], key="source", horizontal=True)
-        upload = None
+        source = st.radio("Dataset", [SECOM, UPLOAD, SCENARIO], key="source", horizontal=True)
+        upload = scenario = None
+        if source == SCENARIO:
+            scenario = _scenario_inputs()
         if source == UPLOAD:
             upload = st.file_uploader("CSV file", type=["csv"], key="upload")
             st.caption("Columns: `timestamp` (dd/mm/yyyy HH:MM:SS or ISO), `label` (-1 pass, "
@@ -42,7 +45,7 @@ def render(settings: Settings, results_page=None) -> None:
                                    file_name="secom_upload_format.csv", mime="text/csv")
         entered = st.text_input("Passcode", type="password", key="passcode", width=360)
         if st.button("Run pipeline", key="run", type="primary"):
-            _start(settings, entered, source, upload)
+            _start(settings, entered, source, upload, scenario)
 
     watched = st.session_state.get("watch_run")
     active = store.active_run(settings) or _continuable(settings)
@@ -54,7 +57,29 @@ def render(settings: Settings, results_page=None) -> None:
     _history(settings)
 
 
-def _start(settings: Settings, entered: str, source: str, upload) -> None:
+def _scenario_inputs() -> dict:
+    """Scenario Lab: which synthetic change, how strong, and the seed that makes it
+    reproducible."""
+    kinds = store.scenario_kinds()
+    kind = st.selectbox("Scenario", list(kinds), format_func=lambda k: kinds[k][0],
+                        key="scenario_kind", width=360)
+    title, description, default, _ = kinds[kind]
+    st.caption(f"{description} **Only the training period changes**: the test period stays "
+               "the original SECOM data, so every metric is computed on real runs. The run is "
+               "labeled SYNTHETIC everywhere.")
+    left, right, _ = st.columns([2, 1, 2])
+    if kind == "sensor_outage":
+        intensity = left.slider("Share of the training period without data", 0.1, 0.6,
+                                default, 0.05, key=f"intensity-{kind}")
+    else:
+        intensity = left.slider("Strength (standard deviations)", 0.25, 4.0, default, 0.25,
+                                key=f"intensity-{kind}")
+    seed = right.number_input("Seed", 0, 9999, 7, key="scenario_seed",
+                              help="The same seed gives the same synthetic data and sensors.")
+    return {"kind": kind, "intensity": float(intensity), "seed": int(seed)}
+
+
+def _start(settings: Settings, entered: str, source: str, upload, scenario=None) -> None:
     if not ui.passcode_ok(settings, entered):
         ui.friendly_error("Not authorized: wrong or missing passcode.")
         return
@@ -63,7 +88,8 @@ def _start(settings: Settings, entered: str, source: str, upload) -> None:
         return
     try:
         run_id = store.start_run(settings, upload.getvalue() if upload else None,
-                                 upload.name if upload else None)
+                                 upload.name if upload else None,
+                                 scenario if source == SCENARIO else None)
     except store.RunLimitError as exc:
         st.warning(str(exc), icon=":material/hourglass_top:")
         return

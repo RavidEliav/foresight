@@ -23,6 +23,8 @@ from foresight.crews.checks import check_outputs
 from foresight.crews.facts import all_facts, allowed_numbers, background_passages
 from foresight.crews.runner import run_crew
 from foresight.crews.summary import SUMMARY_FILE
+from foresight.data.scenarios import CHECK_FILE as SCENARIO_CHECK_FILE
+from foresight.data.scenarios import banner, ground_truth_check
 from foresight.progress import CREW_STAGES, ProgressTracker
 from foresight.rag.index import CHUNKS_FILE, VECTORS_FILE, build_run_index
 from foresight.rag.run_data import RUN_DATA_FILE
@@ -262,6 +264,20 @@ def run_report(settings: Settings, run_dir: Path,
                   message="revised after: " + "; ".join(problems))
             for crew, problems in revised.items())])
         result.artifacts["crew_revisions"] = str(revisions_path)
+    scenario = ground_truth_check(run_dir)  # synthetic runs: did the analysis find the change?
+    if scenario is not None:
+        evaluation, check = scenario
+        checks = ValidationSummary.from_checks([*checks.checks, check])
+        report_path = run_dir / "engineering_report.md"
+        if report_path.exists():  # the SYNTHETIC note opens the report (after its checks)
+            report, note = report_path.read_text(encoding="utf-8"), banner(evaluation)
+            if report.startswith("# "):
+                title, _, body = report.partition("\n")
+                report = f"{title}\n\n{note}{body.lstrip()}"
+            else:
+                report = note + report
+            report_path.write_text(report, encoding="utf-8")
+        result.artifacts["scenario_check"] = str(run_dir / SCENARIO_CHECK_FILE)
     (run_dir / "report_checks.json").write_text(checks.model_dump_json(indent=2),
                                                 encoding="utf-8")
     result.artifacts["report_checks"] = str(run_dir / "report_checks.json")

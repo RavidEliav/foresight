@@ -198,3 +198,17 @@ def test_only_the_store_touches_run_data():
                  for line in path.read_text(encoding="utf-8").splitlines()
                  if forbidden.search(line) and "LOGO" not in line]
     assert offenders == []
+
+
+def test_a_scenario_run_is_started_with_its_recipe(monkeypatch):
+    monkeypatch.setenv("RUN_PASSCODE", "s3cret")
+    started = []
+    monkeypatch.setattr(jobs, "start_run", lambda *a: started.append(a) or "r1")
+    at = _app()
+    at.radio(key="source").set_value("Scenario (synthetic)").run()
+    assert any("Only the training period changes" in c.value for c in at.caption)
+    at.selectbox(key="scenario_kind").set_value("drift").run()
+    at.text_input(key="passcode").input("s3cret")
+    at.button(key="run").click().run()
+    assert started and started[0][1] is None  # no upload
+    assert started[0][3] == {"kind": "drift", "intensity": 2.0, "seed": 7}

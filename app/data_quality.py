@@ -10,7 +10,7 @@ import streamlit as st
 
 from app import ui
 from app.messages import EXPECTED_FOR_UPLOADS
-from app.runs import is_upload, run_label
+from app.runs import is_scenario, is_upload, run_label
 from app.store import read_json
 
 STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:",
@@ -25,7 +25,7 @@ def render(run_dir: Path | None) -> None:
 
     summary = read_json(run_dir, "validation_summary.json")
     st.caption(run_label(run_dir))
-    _status(summary, is_upload(run_dir))
+    _status(summary, is_upload(run_dir) or is_scenario(run_dir))
 
     profile = read_json(run_dir, "data_profile.json")
     report = read_json(run_dir, "cleaning_report.json")

@@ -78,3 +78,14 @@ def test_runs_are_recorded_in_postgres_and_read_back():
     assert stored_hits and stored_hits[0].chunk.source == file_hits[0].chunk.source
     assert stored_hits[0].score == pytest.approx(file_hits[0].score, abs=1e-3)
     assert set(runs) <= {state.run_id, *known}
+
+
+def test_a_stopped_scenario_run_without_a_manifest_is_still_synthetic(tmp_path):
+    from foresight.progress import ProgressTracker
+    from foresight.registry import run_record
+    from foresight.settings import load_settings
+
+    run = tmp_path / "20260101T000000000000Z"
+    tracker = ProgressTracker.create(run, run.name, "Scenario (synthetic): sensor drift")
+    tracker.finish("timeout", "stopped by the timeout guard after 1200 s")
+    assert run_record(run, load_settings())["source"] == "scenario"

@@ -35,6 +35,8 @@ def test_scenarios_change_only_the_training_period(setup, kind):
         assert len(scenario.sensors) == KINDS[kind][3] and "f_020" not in scenario.sensors
     again, _, _ = generate(raw, Scenario(kind=kind, seed=3), config, fraction)
     assert again.equals(data)  # reproducible from its recipe
+    resumed, _, _ = generate(raw, scenario, config, fraction)  # the saved, resolved recipe
+    assert resumed.equals(data)  # Continue regenerates exactly the same data
 
 
 def test_a_planted_fault_shifts_only_failing_training_runs(setup):

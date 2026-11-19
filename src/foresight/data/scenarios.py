@@ -92,7 +92,9 @@ def generate(raw: pd.DataFrame, scenario: Scenario, config: CleaningConfig,
              test_fraction: float) -> tuple[pd.DataFrame, Scenario, dict]:
     """The scenario's dataset (same runs and timestamps; only training rows changed), the
     scenario with its sensors resolved, and the ground truth to record."""
-    rng = np.random.default_rng(scenario.seed)
+    # one generator per random step, so a saved recipe (sensors already chosen) gives the same
+    # data again: picking the sensors must not shift the outage window or the noise
+    pick, window, noise = (np.random.default_rng([scenario.seed, step]) for step in range(3))
     features = config.contract_features or [c for c in raw.columns if c.startswith("f_")]
     train_ids = _training_ids(raw, config, test_fraction)
     train = raw.run_id.isin(train_ids)
@@ -100,7 +102,7 @@ def generate(raw: pd.DataFrame, scenario: Scenario, config: CleaningConfig,
     sensors = scenario.sensors
     if not sensors and count:
         pool = _candidates(raw, train, features)
-        sensors = sorted(rng.choice(pool, size=min(count, len(pool)), replace=False).tolist())
+        sensors = sorted(pick.choice(pool, size=min(count, len(pool)), replace=False).tolist())
     scenario = scenario.model_copy(update={"sensors": sensors})
     intensity = scenario.resolved_intensity()
     data = raw.copy()
@@ -117,11 +119,11 @@ def generate(raw: pd.DataFrame, scenario: Scenario, config: CleaningConfig,
             data.loc[order, sensor] += ramp * intensity * std[sensor]
     elif scenario.kind == "sensor_outage":
         length = max(1, int(len(order) * min(intensity, 0.9)))
-        start = int(rng.integers(0, len(order) - length + 1))
+        start = int(window.integers(0, len(order) - length + 1))
         data.loc[order[start:start + length], sensors] = np.nan
     elif scenario.kind == "noise":
         values = data.loc[train, features]
-        data.loc[train, features] = values + rng.normal(size=values.shape) * (
+        data.loc[train, features] = values + noise.normal(size=values.shape) * (
             intensity * std.to_numpy())
 
     truth = {"kind": scenario.kind, "title": title, "sensors": sensors, "intensity": intensity,

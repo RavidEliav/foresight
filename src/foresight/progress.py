@@ -18,7 +18,8 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 PROGRESS_FILE = "progress.json"
 ACTIVE = ("queued", "running")
-FINISHED = ("success", "failed", "timeout", "interrupted")
+FINISHED = ("success", "failed", "timeout", "interrupted", "stopped")
+STOP_FILE = "stop.requested"  # written by the app to stop a run (Phase 8.5)
 STALE_AFTER_S = 90
 
 # (stage, what the deterministic part does, the crew that interprets it)
@@ -94,12 +95,12 @@ class RunProgress(BaseModel):
 
     @property
     def can_continue(self) -> bool:
-        """An interrupted, timed-out or crashed run can continue where it stopped; a run that a
-        gate stopped would stop again on the same data."""
+        """An interrupted, timed-out, stopped or crashed run can continue where it stopped; a
+        run that a gate stopped would stop again on the same data."""
         status = self.effective_status()
         crashed = status == "failed" and any(
             marker in (self.failure_reason or "") for marker in ("stage error", "crew error"))
-        return status in ("interrupted", "timeout") or crashed
+        return status in ("interrupted", "timeout", "stopped") or crashed
 
 
 def load_progress(run_dir: Path) -> RunProgress | None:
@@ -213,11 +214,12 @@ class ProgressTracker(BaseModel):
         self.progress.status = status
         self.progress.failure_reason = reason
         self.progress.finished_at = now()
+        cut = "stopped" if status == "stopped" else "failed"  # what the unfinished work became
         for stage in self.progress.stages:
             if stage.status == "running":
-                stage.status = "failed"
-                if stage.crew_status == "running":
-                    stage.crew_status = "failed"
+                stage.status = cut
+            if stage.crew_status == "running":  # also a background crew of a finished stage
+                stage.crew_status = cut
             elif stage.status == "pending" and status != "success":
                 stage.status = "skipped"
         self.save()

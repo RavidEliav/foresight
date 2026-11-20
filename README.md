@@ -101,7 +101,7 @@ A question costs about 600–1,100 tokens (well under 0.1 cent).
 
 | Page | What it shows |
 |---|---|
-| Run Pipeline | Dataset choice (built-in SECOM, an uploaded CSV, or a synthetic **Scenario**), passcode, live progress as five stage tiles (green done, red failed, gray skipped, amber interrupted, cyan with a small animation of the stage's work while it runs; each tile also shows its crew's status) joined by the gates; **Continue run** for an interrupted, timed-out or crashed run; a stopped run says why in plain language and what to do, with the technical details collapsed; run history in local time (status, duration, tokens, report checks, why it stopped) |
+| Run Pipeline | Dataset choice (built-in SECOM, an uploaded CSV, or a synthetic **Scenario**), passcode, live progress as five stage tiles (green done, red failed, gray skipped, amber interrupted or stopped, cyan with a small animation of the stage's work while it runs; each tile also shows its crew's status) joined by the gates; **Stop run** while a run is going (it stops within a few seconds, so a different run can start); **Resume run** for a stopped, interrupted, timed-out or crashed run; a stopped run says why in plain language and what to do, with the technical details collapsed; run history in local time (status, duration, tokens, report checks, why it stopped) |
 | Data Quality | Headline numbers, Data Contract validation (the checksum warning every upload gets is explained as expected), cleaning decisions; all checks and the contract under Extended data |
 | EDA & Insights | Headline numbers (with a weekly fail-rate sparkline), the Data Analyst crew's summary, interactive fail rate over time and sensor differences; sensor statistics, missing data and the full insights under Extended data |
 | Model | Test metrics with 95% CIs vs random, the selected model and its alarms, interactive risk over time, precision-recall curve, alarms vs outcomes and sensor importance; model comparison, evaluation report and model card under Extended data |
@@ -117,12 +117,13 @@ The sidebar starts with the Foresight wordmark (its "o" is the wafer logo) and t
 
 - one run at a time and at most 6 runs per hour (cost control),
 - a timeout guard stops a run after 20 minutes and records why,
-- a run whose heartbeat stopped (for example after a redeploy) is shown as interrupted and can be **continued**: the stages it had finished are reused (their files, gate checks and crew usage are kept in `progress.json`), the data is re-read, and the rest runs again; a continue needs the passcode and counts toward the hourly limit. A run stopped by a gate is not offered a continue (the same data would stop again),
+- **Stop run** writes `stop.requested` into the run folder; the run's process checks every second, records the run as stopped (in the history and the registry, with `failure_report.md`) and exits, keeping the stages it had finished. A stop needs the passcode,
+- a run that was stopped, or whose heartbeat stopped (for example after a redeploy, shown as interrupted), can be **resumed**: the stages it had finished are reused (their files, gate checks and crew usage are kept in `progress.json`), the data is re-read, and the rest runs again; a resume needs the passcode and counts toward the hourly limit. A run stopped by a gate is not offered a resume (the same data would stop again),
 - only the newest 20 finished runs are kept.
 
 **Uploading data.** A CSV with `timestamp` (`dd/mm/yyyy HH:MM:SS` or ISO 8601), `label` (-1 pass, 1 fail) and the 590 sensor columns in SECOM order. The page offers SECOM itself in this format as a template. Uploads are cleaned with the committed Data Contract's feature list (so a smaller or newer batch stays comparable) and validated like the built-in data; a broken file stops at the contract gate with the failed checks listed.
 
-From a terminal: `python -m foresight.cli run [--dataset file.csv] [--timeout 600]`, or `python -m foresight.cli run --run-id <id> --resume` to continue a run.
+From a terminal: `python -m foresight.cli run [--dataset file.csv] [--timeout 600]`, or `python -m foresight.cli run --run-id <id> --resume` to resume a run.
 
 **Scenario Lab (synthetic data).** The third dataset choice builds a synthetic variation of SECOM, reproducible from its seed:
 - **planted fault:** one sensor shifted on the failing runs, a known cause

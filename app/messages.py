@@ -59,6 +59,8 @@ def explain_reason(status: str, reason: str | None, test_fraction: float) -> str
         return "Took longer than the time limit and was stopped."
     if status == "interrupted" and not reason:
         return "Interrupted, for example because the app restarted."
+    if status == "stopped":
+        return "Stopped from the Run Pipeline page."
     if stage := re.match(r"(\w+) (stage|crew) error", reason):
         what = "step" if stage.group(2) == "stage" else "step's crew"
         return f"Something went wrong in the {stage.group(1)} {what}."
@@ -83,12 +85,15 @@ def explain_failure(progress: RunProgress, test_fraction: float) -> tuple[list[s
     status, reason = progress.effective_status(), progress.failure_reason or ""
     if status == "timeout":
         return ["The run took longer than the time limit and was stopped."], \
-            "Continue the run below; if it keeps happening, the LLM service may be slow."
+            "Resume the run below; if it keeps happening, the LLM service may be slow."
     if status == "interrupted":
         return ["The run was interrupted, for example because the app restarted."], \
-            "Continue the run below: the stages it had finished are reused."
+            "Resume the run below: the stages it had finished are reused."
+    if status == "stopped":
+        return ["The run was stopped from this page."], \
+            "Resume it below (the stages it had finished are reused), or start a different run."
     if stage := re.match(r"(\w+) (stage|crew) error", reason):
         what = "step" if stage.group(2) == "stage" else "step's crew"
         return [f"Something went wrong in the {stage.group(1)} {what}."], \
-            "Technical details are below. Continue the run to try that step again."
+            "Technical details are below. Resume the run to try that step again."
     return [reason or "The run stopped."], None

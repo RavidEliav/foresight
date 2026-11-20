@@ -125,6 +125,14 @@ def resume_run(settings: Settings, run_id: str) -> str:
     return jobs.resume_run(settings, run_id)
 
 
+def stop_run(settings: Settings, run_id: str) -> None:
+    jobs.stop_run(settings, run_id)
+
+
+def stop_requested(run_dir: Path) -> bool:
+    return jobs.stop_requested(run_dir)
+
+
 @st.cache_data(show_spinner=False)
 def _template(raw_dir: str) -> bytes:
     from foresight.data.secom import load_raw, to_upload_csv

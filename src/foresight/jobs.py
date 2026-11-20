@@ -15,7 +15,14 @@ import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from foresight.progress import ACTIVE, ProgressTracker, RunProgress, load_progress, new_run_id
+from foresight.progress import (
+    ACTIVE,
+    STOP_FILE,
+    ProgressTracker,
+    RunProgress,
+    load_progress,
+    new_run_id,
+)
 from foresight.settings import PROJECT_ROOT, Settings
 
 UPLOAD_FILE = "upload.csv"
@@ -112,9 +119,26 @@ def resume_run(settings: Settings, run_id: str) -> str:
             command += ["--dataset", str(run_dir / UPLOAD_FILE)]
         elif (run_dir / "scenario.json").exists():  # resolved recipe: same data again
             command += ["--scenario", str(run_dir / "scenario.json")]
+        (run_dir / STOP_FILE).unlink(missing_ok=True)  # an earlier stop request is done
         ProgressTracker(run_dir=run_dir, progress=progress).prepare_resume()
     _launch(command, run_dir)
     return run_id
+
+
+def stop_run(settings: Settings, run_id: str) -> None:
+    """Ask a running run to stop (Phase 8.5). The run's process checks every second, records
+    the run as stopped (the stages it finished stay reusable, so it can be resumed) and
+    exits."""
+    run_dir = runs_dir(settings) / run_id
+    progress = load_progress(run_dir)
+    if progress is None or progress.effective_status() not in ACTIVE:
+        raise RunLimitError(f"Run {run_id} is not running.")
+    (run_dir / STOP_FILE).write_text(datetime.now(UTC).isoformat(timespec="seconds"),
+                                     encoding="utf-8")
+
+
+def stop_requested(run_dir: Path) -> bool:
+    return (run_dir / STOP_FILE).exists()
 
 
 def _launch(command: list[str], run_dir: Path) -> None:

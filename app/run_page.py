@@ -17,7 +17,7 @@ UPLOAD = "Upload a CSV"
 SCENARIO = "Scenario (synthetic)"
 STATUS_TEXT = {"queued": "is starting", "running": "is running", "success": "completed",
                "failed": "stopped", "timeout": "was stopped by the time limit",
-               "interrupted": "was interrupted"}
+               "interrupted": "was interrupted", "stopped": "was stopped"}
 NEW_RUN_KEY = "new_run"  # read by the sidebar run selector
 
 
@@ -104,7 +104,7 @@ def _continuable(settings: Settings) -> RunProgress | None:
 
 def _continue(settings: Settings, run_id: str) -> None:
     if not ui.passcode_ok(settings, st.session_state.get("passcode", "")):
-        ui.friendly_error("Not authorized: enter the passcode above to continue the run.")
+        ui.friendly_error("Not authorized: enter the passcode above to resume the run.")
         return
     try:
         store.resume_run(settings, run_id)
@@ -121,18 +121,44 @@ def _show_run(settings: Settings, run_id: str, results_page) -> None:
     if progress is None:
         return
     if progress.effective_status() in ACTIVE:
-        _live(str(run_dir))
+        _live(settings, str(run_dir))
     else:
         _render_progress(progress, run_dir, results_page,
                          on_continue=lambda: _continue(settings, run_id))
 
 
+STOP_ERROR = "stop_error"
+
+
+def _stop(settings: Settings, run_id: str) -> None:
+    """Button callback: ask the running run to stop (Phase 8.5); it can be resumed
+    afterwards. It runs before the redraw, so "Stopping" shows at once."""
+    if not ui.passcode_ok(settings, st.session_state.get("passcode", "")):
+        st.session_state[STOP_ERROR] = "Not authorized: enter the passcode above to stop the run."
+        return
+    try:
+        store.stop_run(settings, run_id)
+    except store.RunLimitError as exc:  # it finished in the meantime
+        st.session_state[STOP_ERROR] = str(exc)
+
+
 @st.fragment(run_every=2)
-def _live(run_dir: str) -> None:
+def _live(settings: Settings, run_dir: str) -> None:
     progress = store.progress(Path(run_dir))
     if progress is None:
         return
     _render_progress(progress, Path(run_dir))
+    if progress.effective_status() in ACTIVE:
+        if store.stop_requested(Path(run_dir)):
+            st.caption("Stopping the run: it records what it has finished and stops within a "
+                       "few seconds.")
+        else:
+            st.button("Stop run", key="stop", icon=":material/stop_circle:", on_click=_stop,
+                      args=(settings, progress.run_id))
+            if error := st.session_state.pop(STOP_ERROR, None):
+                ui.friendly_error(error)
+            st.caption("Stopping keeps the stages that have finished, so the run can be resumed "
+                       "later. You can then start a different run.")
     if progress.effective_status() not in ACTIVE:
         if progress.status == "success":
             st.session_state[NEW_RUN_KEY] = progress.run_id
@@ -164,6 +190,8 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
         text = f"{message}\n\n" + "\n".join(f"- {r}" for r in reasons)
         if status == "interrupted":
             st.warning(text, icon=":material/pause_circle:")
+        elif status == "stopped":
+            st.warning(text, icon=":material/stop_circle:")
         else:
             ui.friendly_error(text)
         if hint:
@@ -172,10 +200,10 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
             done = sum(s.reusable for s in progress.stages)
             reused = f"the {done} finished stage{'s' if done != 1 else ''}" if done else \
                 "nothing (no stage had finished)"
-            if st.button("Continue run", key="continue", type="primary",
+            if st.button("Resume run", key="continue", type="primary",
                          icon=":material/play_circle:"):
                 on_continue()
-            st.caption(f"Continue reuses {reused} and runs the rest. It uses the passcode "
+            st.caption(f"Resume reuses {reused} and runs the rest. It uses the passcode "
                        "above and counts toward the hourly run limit.")
 
     from app.stepper import stepper_html

@@ -129,7 +129,7 @@ section[data-testid="stSidebar"] {
   background: linear-gradient(135deg, rgba(34,211,238,.16), rgba(255,255,255,.02));
   animation: fs-glow 2s ease-in-out infinite; }
 .fs-stage.fs-skipped { --c: #64748B; opacity: .55; }
-.fs-stage.fs-interrupted { --c: #FBBF24; border-color: rgba(251,191,36,.5);
+.fs-stage.fs-interrupted, .fs-stage.fs-stopped { --c: #FBBF24; border-color: rgba(251,191,36,.5);
   background: linear-gradient(135deg, rgba(251,191,36,.14), rgba(255,255,255,.02)); }
 .fs-stage.fs-pending { opacity: .75; }
 .fs-stage-title { font-weight: 600; font-size: .9rem; line-height: 1.25; color: #E2E8F0;
@@ -140,7 +140,8 @@ section[data-testid="stSidebar"] {
   margin-right: .35rem; background: #475569; vertical-align: middle; }
 .fs-dot.fs-done { background: #34D399; } .fs-dot.fs-failed { background: #F87171; }
 .fs-dot.fs-running { background: #22D3EE; animation: fs-blink 1s infinite; }
-.fs-dot.fs-skipped { background: #64748B; } .fs-dot.fs-interrupted { background: #FBBF24; }
+.fs-dot.fs-skipped { background: #64748B; } .fs-dot.fs-interrupted,
+.fs-dot.fs-stopped { background: #FBBF24; }
 .fs-badge { position: absolute; top: .6rem; right: .65rem; width: 20px; height: 20px;
   border-radius: 50%; display: grid; place-items: center; font-size: .72rem;
   font-weight: 800; color: #070B14; background: var(--c); }

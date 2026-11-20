@@ -62,6 +62,8 @@ def render(run_dir: Path | None) -> None:
         else:
             _older_run("Similar-run search")
 
+    _render_wafer(run_dir)
+
     ui.section_label("Extended data")
     report, investigation, risk_tab, similar_tab, anomalies, safety = st.tabs(TABS)
     with report:
@@ -117,6 +119,33 @@ def _headline_numbers(summary: dict, risk: dict | None,
                       f"failing and for passing test runs (training fail rate "
                       f"{similar['train_fail_rate']:.1%}). Close values mean weak evidence."))
     return items
+
+
+def _render_wafer(run_dir: Path) -> None:
+    """A simulated wafer of one test-period run, the riskiest first (Phase 8.4)."""
+    from app.replay_page import load, wafer_view
+
+    frame = load(run_dir)
+    if frame is None or frame.empty:
+        return
+    ranked = frame.sort_values("risk_score", ascending=False, kind="mergesort")
+    rows = {int(r.run_id): r for r in ranked.itertuples(index=False)}
+
+    def describe(run_id: int) -> str:
+        r = rows[run_id]
+        return (f"Run {run_id} · {'failed' if r.label == 1 else 'passed'} · risk "
+                f"{r.risk_score:.3f}{' · alarm' if r.flagged == 1 else ''}")
+
+    with st.container(key="card-wafer"):
+        ui.label("Simulated wafer of a test-period run")
+        left, right = st.columns([1, 2], gap="medium")
+        with left:
+            run_id = st.selectbox("Run (riskiest first)", list(rows), format_func=describe,
+                                  key="wafer-run")
+            st.caption("The Line Replay page plays the whole test period with a wafer for "
+                       "each run.")
+        with right:
+            wafer_view(ranked[ranked.run_id == run_id].iloc[0], "report-wafer")
 
 
 def _older_run(feature: str) -> None:

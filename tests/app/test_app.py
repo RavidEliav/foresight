@@ -21,7 +21,7 @@ def test_app_loads_with_brand_menu_and_environment_badge():
     assert "Semiconductor yield intelligence" in brand and "data:image/svg+xml" in brand
     links = [link.proto.label for link in at.sidebar.get("page_link")]
     assert links == ["Run Pipeline", "Data Quality", "EDA & Insights", "Model",
-                     "Investigation & Report", "Trends", "Ask Foresight"]
+                     "Investigation & Report", "Line Replay", "Trends", "Ask Foresight"]
 
 
 def test_runs_disabled_message_without_passcode():

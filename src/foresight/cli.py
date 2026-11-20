@@ -16,24 +16,47 @@ from pathlib import Path
 
 from foresight.data.scenarios import Scenario
 from foresight.flow import run_pipeline
-from foresight.progress import ProgressTracker, new_run_id
+from foresight.progress import ACTIVE, STOP_FILE, ProgressTracker, new_run_id
 from foresight.registry import record_run, sync
 from foresight.settings import load_settings
 
 TIMEOUT_EXIT_CODE = 3
+STOPPED_EXIT_CODE = 4
+STOP_POLL_S = 1.0
+_END_LOCK = threading.Lock()  # the timeout guard and a stop request never both end a run
+
+
+def _end(tracker: ProgressTracker, status: str, reason: str, exit_code: int,
+         settings=None) -> None:
+    """Record why the run ended, write it to the registry (at most 3 s) and exit now: the Flow
+    may be inside an LLM call."""
+    with _END_LOCK:
+        if tracker.progress.status not in ACTIVE:  # the run finished in the meantime
+            return
+        tracker.finish(status, reason)
+        (tracker.run_dir / "failure_report.md").write_text(
+            f"# Run {tracker.progress.run_id} stopped\n\n**Reason:** {reason}\n",
+            encoding="utf-8")
+        if settings is not None:  # the database must not keep the run alive
+            writer = threading.Thread(target=record_run, args=(tracker.run_dir, settings),
+                                      daemon=True)
+            writer.start()
+            writer.join(timeout=3)
+        os._exit(exit_code)
 
 
 def stop_on_timeout(tracker: ProgressTracker, timeout_s: int, settings=None) -> None:
-    reason = f"stopped by the timeout guard after {timeout_s} s"
-    tracker.finish("timeout", reason)
-    (tracker.run_dir / "failure_report.md").write_text(
-        f"# Run {tracker.progress.run_id} stopped\n\n**Reason:** {reason}\n", encoding="utf-8")
-    if settings is not None:  # at most 3 s: the guard must stop the run whatever the database does
-        writer = threading.Thread(target=record_run, args=(tracker.run_dir, settings),
-                                  daemon=True)
-        writer.start()
-        writer.join(timeout=3)
-    os._exit(TIMEOUT_EXIT_CODE)  # the Flow may be inside an LLM call; stop the process now
+    _end(tracker, "timeout", f"stopped by the timeout guard after {timeout_s} s",
+         TIMEOUT_EXIT_CODE, settings)
+
+
+def watch_for_stop(tracker: ProgressTracker, done: threading.Event, settings=None) -> None:
+    """Stop the run when the app asks (Phase 8.5): the app writes stop.requested into the run
+    folder."""
+    while not done.wait(STOP_POLL_S):
+        if (tracker.run_dir / STOP_FILE).exists():
+            _end(tracker, "stopped", "stopped by the user", STOPPED_EXIT_CODE, settings)
+            return
 
 
 def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None,
@@ -60,6 +83,7 @@ def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None,
             tracker.save()
 
     threading.Thread(target=heartbeat, daemon=True).start()
+    threading.Thread(target=watch_for_stop, args=(tracker, stop, settings), daemon=True).start()
     guard = threading.Timer(timeout_s, stop_on_timeout, args=(tracker, timeout_s, settings))
     guard.daemon = True
     guard.start()

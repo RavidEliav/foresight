@@ -115,7 +115,7 @@ def render(settings: Settings) -> None:
 
 
 STATUS_COLORS = {"success": "green", "failed": "red", "timeout": "orange",
-                 "interrupted": "orange"}
+                 "interrupted": "orange", "stopped": "orange"}
 
 
 def _outcomes(frame: pd.DataFrame, test_fraction: float, limit: int = 6) -> None:

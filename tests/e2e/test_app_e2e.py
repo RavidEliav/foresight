@@ -81,6 +81,22 @@ def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
 
 
 @deployed
+def test_e8_line_replay_plays_the_reference_test_period(app_page: Page):
+    _show_reference_run(app_page)
+    _goto(app_page, "Line Replay")
+    replayed = app_page.get_by_test_id("stMetric").filter(has_text="Runs replayed")
+    expect(replayed).to_contain_text("0 of 392")
+    app_page.get_by_role("button", name="Play", exact=True).click()
+    expect(replayed).not_to_contain_text("0 of 392", timeout=15_000)  # the line is moving
+    app_page.get_by_role("button", name="End", exact=True).click()
+    expect(replayed).to_contain_text("392 of 392", timeout=15_000)
+    expect(app_page.get_by_test_id("stMetric").filter(has_text="Failing runs caught")
+           ).to_contain_text("5 of 24")
+    expect(app_page.get_by_text("Simulated wafer: SECOM has no die positions")).to_be_visible()
+    expect(app_page.get_by_test_id("stException")).to_have_count(0)
+
+
+@deployed
 def test_e4_wrong_passcode_is_rejected(app_page: Page):
     app_page.get_by_label("Passcode").fill("definitely-wrong-passcode")
     app_page.get_by_role("button", name="Run pipeline").click()

@@ -118,8 +118,7 @@ def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
     assert text.startswith("# Engineering report") and "## Hypotheses" in text
 
 
-@deployed
-def test_e8_line_replay_plays_the_reference_test_period(app_page: Page):
+def test_e8_line_replay_plays_the_reference_test_period(app_page: Page):  # needs sign-in: CI
     _show_reference_run(app_page)
     _goto(app_page, "Line Replay")
     replayed = app_page.get_by_test_id("stMetric").filter(has_text="Runs replayed")

@@ -43,9 +43,7 @@ def main() -> int:
                 page.locator('[data-testid="stMain"] h1').first.wait_for(timeout=120_000)
                 page.wait_for_timeout(4000)
                 print(f"{'page /' + name:<28}{rss_mb(process):>6}")
-            if passcode := os.environ.get("FS_PASS"):
-                page.get_by_label("Passcode").fill(passcode)
-                page.get_by_role("button", name="Unlock the chat").click()
+            if os.environ.get("FS_ASK"):  # also ask one chat question (spends LLM tokens)
                 chat = page.get_by_test_id("stChatInputTextArea")
                 chat.wait_for(timeout=30_000)
                 chat.fill("What is the model's test PR-AUC?")

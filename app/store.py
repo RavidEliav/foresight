@@ -110,8 +110,8 @@ def active_run(settings: Settings) -> RunProgress | None:
 
 
 def start_run(settings: Settings, upload: bytes | None, upload_name: str | None,
-              scenario: dict | None = None) -> str:
-    return jobs.start_run(settings, upload, upload_name, scenario)
+              scenario: dict | None = None, user: str = "") -> str:
+    return jobs.start_run(settings, upload, upload_name, scenario, user=user)
 
 
 def scenario_kinds() -> dict[str, tuple[str, str, float, int]]:
@@ -121,12 +121,12 @@ def scenario_kinds() -> dict[str, tuple[str, str, float, int]]:
     return KINDS
 
 
-def resume_run(settings: Settings, run_id: str) -> str:
-    return jobs.resume_run(settings, run_id)
+def resume_run(settings: Settings, run_id: str, user: str = "") -> str:
+    return jobs.resume_run(settings, run_id, user=user)
 
 
-def stop_run(settings: Settings, run_id: str) -> None:
-    jobs.stop_run(settings, run_id)
+def stop_run(settings: Settings, run_id: str, user: str = "") -> None:
+    jobs.stop_run(settings, run_id, user=user)
 
 
 def stop_requested(run_dir: Path) -> bool:
@@ -219,7 +219,7 @@ def sync_registry_in_background(settings: Settings) -> None:
 
 # --- chat ------------------------------------------------------------------------------------
 
-def ask(question: str, run_dir: Path, settings: Settings) -> dict:
+def ask(question: str, run_dir: Path, settings: Settings, user: str = "") -> dict:
     """Answer and log a question about the run; a failure is logged too, then raised."""
     from foresight.rag.chat import ChatAnswer, log_answer
     from foresight.rag.chat import ask as rag_ask
@@ -230,13 +230,13 @@ def ask(question: str, run_dir: Path, settings: Settings) -> dict:
     except Exception as exc:
         get_logger("chat").exception("question failed for run %s", run_dir.name)
         log_answer(settings, run_dir, ChatAnswer(question=question, answer="", refused=True,
-                                                 reason=f"error: {exc}"))
+                                                 reason=f"error: {exc}"), user)
         raise
-    log_answer(settings, run_dir, result)
+    log_answer(settings, run_dir, result, user)
     return result.model_dump()
 
 
-def ask_all(question: str, settings: Settings) -> dict:
+def ask_all(question: str, settings: Settings, user: str = "") -> dict:
     """Answer and log a question about all recorded runs (logged as "all_runs")."""
     from foresight.rag.chat import ChatAnswer, log_answer
     from foresight.rag.chat import ask_all as rag_ask_all
@@ -247,19 +247,103 @@ def ask_all(question: str, settings: Settings) -> dict:
     except Exception as exc:
         get_logger("chat").exception("question about all runs failed")
         log_answer(settings, Path(ALL_RUNS), ChatAnswer(question=question, answer="",
-                                                        refused=True, reason=f"error: {exc}"))
+                                                        refused=True, reason=f"error: {exc}"),
+                   user)
         raise
-    log_answer(settings, Path(ALL_RUNS), result)
+    log_answer(settings, Path(ALL_RUNS), result, user)
     return result.model_dump()
 
 
 ALL_RUNS = "all_runs"  # chat log name of questions about all runs
 
 
-def recent_questions(settings: Settings, run_dir: Path) -> list[dict]:
+def recent_questions(settings: Settings, run_dir: Path, user: str | None = None) -> list[dict]:
     from foresight.rag.chat import recent_questions as recent
 
-    return recent(settings, run_dir)
+    return recent(settings, run_dir, user=user)
+
+
+def questions_by(settings: Settings, user: str) -> list[dict]:
+    from foresight.rag.chat import questions_by as asked
+
+    return asked(settings, user)
+
+
+# --- accounts and sign-in (Phase 8.6) ----------------------------------------------------------
+
+def account(settings: Settings, email: str, name: str = ""):
+    from foresight import access
+
+    return access.get_account(settings, email, name)
+
+
+def accounts(settings: Settings) -> list:
+    from foresight import access
+
+    return access.accounts(settings)
+
+
+def request_access(settings: Settings, email: str, name: str, message: str) -> bool:
+    """Record the request and email the developers; True when the email went out."""
+    from foresight import access, notify
+
+    return notify.send_access_request(settings, access.request_access(settings, email, name,
+                                                                       message))
+
+
+def decide(settings: Settings, email: str, approve: bool, by: str):
+    from foresight import access
+
+    return access.decide(settings, email, approve, by)
+
+
+def add_account(settings: Settings, email: str, role: str, by: str):
+    from foresight import access
+
+    return access.add_account(settings, email, role, by)
+
+
+def set_role(settings: Settings, email: str, role: str, by: str):
+    from foresight import access
+
+    return access.set_role(settings, email, role, by)
+
+
+def remove_account(settings: Settings, email: str) -> None:
+    from foresight import access
+
+    access.remove_account(settings, email)
+
+
+def review_request(settings: Settings, token: str):
+    """The waiting request an emailed link names (None if the link is not valid)."""
+    from foresight import access
+
+    return access.read_token(settings, token)
+
+
+def accounts_backend(settings: Settings) -> str:
+    from foresight import access
+
+    return access.backend(settings)
+
+
+@st.cache_resource(show_spinner=False)
+def _activity(runs_dir: str, idle_minutes: int, _settings: Settings):
+    from foresight.access import Activity
+
+    return Activity(_settings)
+
+
+def activity(settings: Settings):
+    """The sign-in activity clock, one per server process."""
+    return _activity(str(runs_folder(settings)), settings.auth.idle_minutes, settings)
+
+
+def runs_of(settings: Settings, user: str) -> list[RunProgress]:
+    """Runs on this server that ``user`` started, resumed or stopped, newest first."""
+    return [p for p in all_runs(settings)
+            if user and (p.started_by == user or user in p.resumed_by or p.stopped_by == user)]
 
 
 def warm_up_chat(settings: Settings) -> None:

@@ -44,6 +44,8 @@ def render(run_dir: Path | None) -> None:
             ui.label("Cleaning decisions")
             st.markdown("\n".join(f"- {d}" for d in report["decisions"]))
 
+    if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
+        return
     ui.section_label("Extended data")
     checks, contract_tab = st.tabs(["All validation checks", "Data Contract"])
     with checks:

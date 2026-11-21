@@ -44,6 +44,8 @@ def render(run_dir: Path | None) -> None:
         st.caption("A difference between failing and passing runs is a correlation, not a "
                    "cause. Sensor names are anonymized.")
 
+    if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
+        return
     ui.section_label("Extended data")
     sensors, missing, insights = st.tabs(["Sensor statistics", "Missing data and redundancy",
                                           "Full insights"])

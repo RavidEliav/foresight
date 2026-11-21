@@ -6,8 +6,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Secrets
+# Secrets (the app writes .streamlit/secrets.toml from environment variables, app/auth.py)
 .env
+.streamlit/secrets.toml
 
 # Data (downloaded by scripts/download_data.py)
 data/raw/*

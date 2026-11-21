@@ -16,7 +16,6 @@ EXAMPLES = ["What is the model's test PR-AUC?", "Which sensors differ most betwe
 EXAMPLES_ALL = ["How did the test PR-AUC differ between runs?", "Which sensors were among the "
                 "most important in several runs?", "Did the data pass the Data Contract in "
                 "every run?"]
-UNLOCKED = "chat_unlocked"
 SCOPES = ["This run", "All runs"]
 
 
@@ -38,10 +37,6 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     else:
         st.caption(f"{run_label(run_dir)} · answers come only from this run's reports and cite "
                    "them; anything else gets \"Not found in this run's artifacts.\"")
-
-    if not st.session_state.get(UNLOCKED):
-        _unlock(settings)
-        return
 
     key = "all_runs" if every else str(run_dir)
     history: list[dict] = st.session_state.setdefault("chat", {}).setdefault(key, [])
@@ -70,28 +65,14 @@ def render(run_dir: Path | None, settings: Settings) -> None:
             st.rerun()
 
 
-def _unlock(settings: Settings) -> None:
-    if not settings.run_passcode:
-        st.info("The chat is disabled: RUN_PASSCODE is not configured.")
-        return
-    with st.container(key="card-unlock"):
-        ui.label("Unlock the chat")
-        entered = st.text_input("Passcode", type="password", key="chat_passcode", width=360)
-        if st.button("Unlock the chat", key="unlock", type="primary"):
-            if ui.passcode_ok(settings, entered):
-                st.session_state[UNLOCKED] = True
-                st.rerun()
-            ui.friendly_error("Not authorized: wrong or missing passcode.")
-
-
 def _ask(question: str, run_dir: Path | None, settings: Settings) -> dict | None:
-    """``run_dir`` None: a question about all runs."""
+    """``run_dir`` None: a question about all runs. Logged with who asked (Phase 8.6)."""
     from app import store
 
     try:
         if run_dir is None:
-            return store.ask_all(question, settings)
-        return store.ask(question, run_dir, settings)
+            return store.ask_all(question, settings, ui.user_email())
+        return store.ask(question, run_dir, settings, ui.user_email())
     except Exception as exc:  # friendly message, never a stack trace; the store logs it
         ui.friendly_error(f"The question could not be answered: {exc}")
         return None
@@ -108,7 +89,7 @@ def _show(item: dict) -> None:
             st.caption(f"From the chat history, asked {local_time(item['time'])}")
         if item["refused"]:
             st.caption(f"Why: {item['reason']}")
-        if item["sources"]:
+        if item["sources"] and ui.developer():  # technical details (Phase 8.6)
             with st.expander(f"Sources ({len(item['sources'])})"):
                 for s in item["sources"]:
                     if isinstance(s, str):  # logged answers keep "file § section (score)"

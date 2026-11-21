@@ -25,8 +25,6 @@ def render(settings: Settings, results_page=None) -> None:
     ui.page_header("Run Pipeline")
     st.caption("Validate the data, analyze it, investigate failures and write the report. "
                "Runs continue in the background: you can refresh or leave this page.")
-    if not settings.run_passcode:
-        st.info("Pipeline runs are disabled: RUN_PASSCODE is not configured.")
 
     with st.container(key="card-launch"):
         ui.label("Start a run")
@@ -43,9 +41,8 @@ def render(settings: Settings, results_page=None) -> None:
             if template is not None:
                 st.download_button("Download a template (SECOM in this format)", template,
                                    file_name="secom_upload_format.csv", mime="text/csv")
-        entered = st.text_input("Passcode", type="password", key="passcode", width=360)
         if st.button("Run pipeline", key="run", type="primary"):
-            _start(settings, entered, source, upload, scenario)
+            _start(settings, source, upload, scenario)
 
     watched = st.session_state.get("watch_run")
     active = store.active_run(settings) or _continuable(settings)
@@ -79,17 +76,14 @@ def _scenario_inputs() -> dict:
     return {"kind": kind, "intensity": float(intensity), "seed": int(seed)}
 
 
-def _start(settings: Settings, entered: str, source: str, upload, scenario=None) -> None:
-    if not ui.passcode_ok(settings, entered):
-        ui.friendly_error("Not authorized: wrong or missing passcode.")
-        return
+def _start(settings: Settings, source: str, upload, scenario=None) -> None:
     if source == UPLOAD and upload is None:
         ui.friendly_error("Choose a CSV file to upload first.")
         return
     try:
         run_id = store.start_run(settings, upload.getvalue() if upload else None,
                                  upload.name if upload else None,
-                                 scenario if source == SCENARIO else None)
+                                 scenario if source == SCENARIO else None, ui.user_email())
     except store.RunLimitError as exc:
         st.warning(str(exc), icon=":material/hourglass_top:")
         return
@@ -103,11 +97,8 @@ def _continuable(settings: Settings) -> RunProgress | None:
 
 
 def _continue(settings: Settings, run_id: str) -> None:
-    if not ui.passcode_ok(settings, st.session_state.get("passcode", "")):
-        ui.friendly_error("Not authorized: enter the passcode above to resume the run.")
-        return
     try:
-        store.resume_run(settings, run_id)
+        store.resume_run(settings, run_id, ui.user_email())
     except store.RunLimitError as exc:
         st.warning(str(exc), icon=":material/hourglass_top:")
         return
@@ -133,11 +124,8 @@ STOP_ERROR = "stop_error"
 def _stop(settings: Settings, run_id: str) -> None:
     """Button callback: ask the running run to stop (Phase 8.5); it can be resumed
     afterwards. It runs before the redraw, so "Stopping" shows at once."""
-    if not ui.passcode_ok(settings, st.session_state.get("passcode", "")):
-        st.session_state[STOP_ERROR] = "Not authorized: enter the passcode above to stop the run."
-        return
     try:
-        store.stop_run(settings, run_id)
+        store.stop_run(settings, run_id, ui.user_email())
     except store.RunLimitError as exc:  # it finished in the meantime
         st.session_state[STOP_ERROR] = str(exc)
 
@@ -203,8 +191,8 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
             if st.button("Resume run", key="continue", type="primary",
                          icon=":material/play_circle:"):
                 on_continue()
-            st.caption(f"Resume reuses {reused} and runs the rest. It uses the passcode "
-                       "above and counts toward the hourly run limit.")
+            st.caption(f"Resume reuses {reused} and runs the rest. It counts toward the "
+                       "hourly run limit.")
 
     from app.stepper import stepper_html
 
@@ -218,7 +206,7 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
         if results_page is not None:
             st.page_link(results_page, label="See the results, starting with Data Quality",
                          icon=":material/verified:")
-    elif status not in ACTIVE:
+    elif status not in ACTIVE and ui.developer():
         with st.expander("Technical details"):
             if progress.failure_reason:
                 st.code(progress.failure_reason, language=None, wrap_lines=True)
@@ -248,6 +236,7 @@ def _history(settings: Settings) -> None:
     runs = store.all_runs(settings)
     if not runs:
         return
+    developer = ui.developer()
     with st.expander(f"Run history ({len(runs)})"):
         rows = []
         for p in runs[:30]:
@@ -258,15 +247,18 @@ def _history(settings: Settings) -> None:
             status = p.effective_status()
             reason = ("" if status in (*ACTIVE, "success")
                       else " ".join(explain_failure(p, settings.analytics.test_fraction)[0]))
-            rows.append({
+            row = {
                 "started": local_time(p.started_at, "%d %b, %H:%M"),
                 "dataset": p.dataset,
                 "status": status,
                 "minutes": _minutes(p),
-                "tokens": sum(u.get("total_tokens", 0) for u in usage.values()) or None,
                 "report checks": f"{checks.get('PASS', 0)} PASS" if checks else "",
                 "why it stopped": reason,
-            })
+            }
+            if developer:  # technical details: tokens and who started the run
+                row["tokens"] = sum(u.get("total_tokens", 0) for u in usage.values()) or None
+                row["started by"] = p.started_by or "command line"
+            rows.append(row)
         ui.table(pd.DataFrame(rows), max_rows=30)
 
 

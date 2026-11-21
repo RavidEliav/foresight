@@ -9,6 +9,7 @@ progress.json and a timeout guard that stops the run and records why.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import threading
@@ -54,7 +55,11 @@ def watch_for_stop(tracker: ProgressTracker, done: threading.Event, settings=Non
     """Stop the run when the app asks (Phase 8.5): the app writes stop.requested into the run
     folder."""
     while not done.wait(STOP_POLL_S):
-        if (tracker.run_dir / STOP_FILE).exists():
+        request = tracker.run_dir / STOP_FILE
+        if request.exists():
+            # who asked (Phase 8.6); older requests hold only a time
+            with contextlib.suppress(OSError, ValueError, KeyError, TypeError):
+                tracker.progress.stopped_by = json.loads(request.read_text("utf-8"))["by"] or ""
             _end(tracker, "stopped", "stopped by the user", STOPPED_EXIT_CODE, settings)
             return
 

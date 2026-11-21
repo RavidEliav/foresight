@@ -40,11 +40,16 @@ def render(run_dir: Path | None) -> None:
         _render_overview(overview)
     elif store.exists(run_dir, SUMMARY_FILE):
         st.warning("The short summary of this run did not pass its format check, so there are "
-                   "no hypothesis cards. The full investigation is under Extended data below; "
-                   "the Safety checks tab says what was wrong.", icon=":material/warning:")
+                   "no hypothesis cards. " + (
+                       "The full investigation is under Extended data below; the Safety checks "
+                       "tab says what was wrong." if ui.developer() else
+                       "The engineering report below has the full results."),
+                   icon=":material/warning:")
     else:
         st.info("This run was made before Foresight wrote a short summary, so there are no "
-                "hypothesis cards. The full investigation is under Extended data below.",
+                "hypothesis cards. " + ("The full investigation is under Extended data below."
+                                        if ui.developer() else
+                                        "The engineering report below has the full results."),
                 icon=":material/history:")
 
     left, right = st.columns(2, gap="medium")
@@ -64,6 +69,13 @@ def render(run_dir: Path | None) -> None:
 
     _render_wafer(run_dir)
 
+    if not ui.developer():  # users get the report; Extended data is the developer view
+        report = store.read_bytes(run_dir, "engineering_report.md")
+        if report is not None:
+            st.download_button("Download engineering_report.md", report,
+                               file_name="engineering_report.md", mime="text/markdown",
+                               type="primary", icon=":material/download:")
+        return
     ui.section_label("Extended data")
     report, investigation, risk_tab, similar_tab, anomalies, safety = st.tabs(TABS)
     with report:
@@ -159,9 +171,9 @@ def _status_line(checks: dict | None) -> None:
     status, counts = checks["status"], checks["counts"]
     total = sum(counts.values())
     color = ui.STATUS_COLORS[status]
+    where = " · details in the Safety checks tab" if ui.developer() else ""
     st.markdown(f":{color}-badge[{STATUS_ICON[status]} Report safety checks: {status}] "
-                f":gray[{counts['PASS']} of {total} passed · details in the Safety checks "
-                "tab]")
+                f":gray[{counts['PASS']} of {total} passed{where}]")
 
 
 def _render_overview(overview: InvestigationSummary) -> None:

@@ -80,6 +80,10 @@ class RunProgress(BaseModel):
     gates: list[dict] = Field(default_factory=list)
     failure_reason: str | None = None
     resumed_at: list[str] = Field(default_factory=list)
+    # Who did what (Phase 8.6): the signed-in emails; empty for runs from the command line
+    started_by: str = ""
+    resumed_by: list[str] = Field(default_factory=list)
+    stopped_by: str = ""
 
     def effective_status(self, stale_after_s: int = STALE_AFTER_S) -> str:
         """``interrupted`` when an active run stopped sending heartbeats."""
@@ -119,11 +123,12 @@ class ProgressTracker(BaseModel):
     _lock: threading.Lock = PrivateAttr(default_factory=threading.Lock)
 
     @classmethod
-    def create(cls, run_dir: Path, run_id: str, dataset: str | None = None) -> ProgressTracker:
+    def create(cls, run_dir: Path, run_id: str, dataset: str | None = None,
+               started_by: str = "") -> ProgressTracker:
         """Continue an existing progress.json (the app writes it first), else start one."""
         progress = load_progress(run_dir)
         if progress is None:
-            progress = RunProgress(run_id=run_id)
+            progress = RunProgress(run_id=run_id, started_by=started_by)
             if dataset:
                 progress.dataset = dataset
         tracker = cls(run_dir=run_dir, progress=progress)
@@ -193,12 +198,14 @@ class ProgressTracker(BaseModel):
         stage = self._stage(name)
         return stage if stage is not None and stage.reusable else None
 
-    def prepare_resume(self) -> None:
+    def prepare_resume(self, by: str = "") -> None:
         """Reset what did not finish, so the run can continue from there."""
         progress = self.progress
         progress.status, progress.failure_reason, progress.finished_at = "queued", None, None
-        progress.gates = []
+        progress.gates, progress.stopped_by = [], ""
         progress.resumed_at.append(now())
+        if by:
+            progress.resumed_by.append(by)
         for stage in progress.stages:
             if stage.status != "done" or not stage.reusable:
                 stage.status, stage.crew_status, stage.seconds = "pending", None, None

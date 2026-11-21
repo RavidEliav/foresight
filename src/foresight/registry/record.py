@@ -18,7 +18,7 @@ RUN_COLUMNS = (
     "duration_s", "rows", "fail_rate", "selected_model", "pr_auc", "baseline_pr_auc", "roc_auc",
     "recall", "precision", "balanced_accuracy", "runs_flagged", "flag_lift", "total_tokens",
     "llm_model", "llm_mock", "report_pass", "report_warning", "report_error", "gates",
-    "failure_reason", "git_commit", "manifest",
+    "failure_reason", "git_commit", "manifest", "started_by",
 )
 
 
@@ -96,6 +96,7 @@ def run_record(run_dir: Path, settings: Settings) -> dict | None:
         "failure_reason": (progress.failure_reason if progress else None),
         "git_commit": manifest.get("git_commit"),
         "manifest": manifest or None,
+        "started_by": (progress.started_by if progress else "") or None,
     }
 
 

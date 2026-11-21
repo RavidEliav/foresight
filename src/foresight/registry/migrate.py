@@ -56,6 +56,7 @@ def main() -> int:
     """No database configured, or unreachable: the app falls back to the run folders, so the
     deploy goes on. A failing migration stops the deploy (the old version keeps running)."""
     from foresight.settings import load_settings
+    from foresight.utils.logging import redact
 
     settings = load_settings()
     if not settings.database_url:
@@ -66,5 +67,8 @@ def main() -> int:
     except psycopg.OperationalError as exc:
         print(f"database unreachable, migrations skipped: {type(exc).__name__}", flush=True)
         return 0
+    except Exception as exc:  # stops the deploy; never prints the database password
+        print(f"migration failed: {type(exc).__name__}: {redact(exc)}", flush=True)
+        return 1
     print(f"migrations applied: {', '.join(applied) or 'none (up to date)'}", flush=True)
     return 0

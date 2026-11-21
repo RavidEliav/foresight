@@ -110,9 +110,20 @@ def _as_bool(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _clean_environment() -> None:
+    """Drop a byte-order mark at the start of any environment value. Windows PowerShell can
+    add one when a value is piped to a CLI (2026-11-21: every Railway secret started with
+    U+FEFF and the database URL did not parse). Libraries that read the environment
+    themselves, such as the OpenAI SDK, get the clean value too."""
+    for name, value in list(os.environ.items()):
+        if value.startswith("﻿"):
+            os.environ[name] = value.lstrip("﻿")
+
+
 def load_settings(config_path: Path | None = None) -> Settings:
     if not _as_bool(os.getenv("FORESIGHT_SKIP_DOTENV")):
         load_dotenv(PROJECT_ROOT / ".env", override=False)
+    _clean_environment()
     path = config_path or Path(os.getenv("FORESIGHT_CONFIG", DEFAULT_CONFIG))
     data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
     settings = Settings(**(data or {}))
@@ -143,5 +154,5 @@ def load_settings(config_path: Path | None = None) -> Settings:
     elif domain := os.getenv("RAILWAY_PUBLIC_DOMAIN"):
         auth.public_url = f"https://{domain}"
     # Railway sets SUPABASE_DB_URL per environment (ADR-026); empty = the run folders only
-    settings.database_url = os.getenv("SUPABASE_DB_URL", "")
+    settings.database_url = os.getenv("SUPABASE_DB_URL", "").strip()
     return settings

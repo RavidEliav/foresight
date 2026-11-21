@@ -39,6 +39,39 @@ def test_sign_in_settings_come_from_the_environment_and_never_print(monkeypatch)
     assert "google-secret" not in dumped and "cookie-secret" not in dumped
 
 
+def test_a_byte_order_mark_in_the_environment_is_dropped(monkeypatch):
+    """Windows PowerShell can prepend U+FEFF when piping a value to a CLI (2026-11-21)."""
+    import os
+
+    monkeypatch.setenv("SUPABASE_DB_URL", "﻿postgresql://u:p@db.example:5432/postgres ")
+    monkeypatch.setenv("OPENAI_API_KEY", "﻿sk-test")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "﻿id.apps.googleusercontent.com")
+    settings = load_settings()
+    assert settings.database_url == "postgresql://u:p@db.example:5432/postgres"
+    assert settings.auth.google_client_id == "id.apps.googleusercontent.com"
+    assert os.environ["OPENAI_API_KEY"] == "sk-test"  # read by the OpenAI SDK itself
+
+
+def test_passwords_in_urls_are_redacted():
+    from foresight.utils.logging import redact
+
+    message = ('missing "=" after "﻿postgresql://postgres.ref:s3cr3t!@pooler.example:5432'
+               '/postgres" in connection info string')
+    assert "s3cr3t" not in redact(message)
+    assert "postgresql://postgres.ref:***@pooler.example:5432" in redact(message)
+    assert redact("no url here") == "no url here"
+    assert redact("https://example.com/path") == "https://example.com/path"
+
+
+def test_a_failing_migration_never_prints_the_database_password(monkeypatch, capsys):
+    from foresight.registry import migrate
+
+    monkeypatch.setenv("SUPABASE_DB_URL", "not-a-url postgresql://u:s3cr3t@host:5432/db")
+    assert migrate.main() == 1
+    output = capsys.readouterr().out
+    assert "migration failed" in output and "s3cr3t" not in output
+
+
 def test_resolve_relative_and_absolute(tmp_path):
     settings = load_settings()
     assert settings.resolve(Path("runs")) == PROJECT_ROOT / "runs"

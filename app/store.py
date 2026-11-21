@@ -159,9 +159,9 @@ def _history(key: str, _settings: Settings) -> tuple[list[dict], str | None]:
     try:
         return registry.history(_settings), None
     except Exception as exc:  # database unreachable: the run folders still work
-        from foresight.utils.logging import get_logger
+        from foresight.utils.logging import get_logger, redact
 
-        get_logger("registry").warning("registry read failed: %s", exc)
+        get_logger("registry").warning("registry read failed: %s", redact(exc))
         files = _settings.model_copy(update={"database_url": ""})
         return registry.history(files), f"{type(exc).__name__}"
 
@@ -223,14 +223,15 @@ def ask(question: str, run_dir: Path, settings: Settings, user: str = "") -> dic
     """Answer and log a question about the run; a failure is logged too, then raised."""
     from foresight.rag.chat import ChatAnswer, log_answer
     from foresight.rag.chat import ask as rag_ask
-    from foresight.utils.logging import get_logger
+    from foresight.utils.logging import get_logger, redact
 
     try:
         result = rag_ask(question, run_dir, settings)
     except Exception as exc:
-        get_logger("chat").exception("question failed for run %s", run_dir.name)
+        reason = f"{type(exc).__name__}: {redact(exc)}"
+        get_logger("chat").warning("question failed for run %s: %s", run_dir.name, reason)
         log_answer(settings, run_dir, ChatAnswer(question=question, answer="", refused=True,
-                                                 reason=f"error: {exc}"), user)
+                                                 reason=f"error: {reason}"), user)
         raise
     log_answer(settings, run_dir, result, user)
     return result.model_dump()
@@ -240,14 +241,15 @@ def ask_all(question: str, settings: Settings, user: str = "") -> dict:
     """Answer and log a question about all recorded runs (logged as "all_runs")."""
     from foresight.rag.chat import ChatAnswer, log_answer
     from foresight.rag.chat import ask_all as rag_ask_all
-    from foresight.utils.logging import get_logger
+    from foresight.utils.logging import get_logger, redact
 
     try:
         result = rag_ask_all(question, settings)
     except Exception as exc:
-        get_logger("chat").exception("question about all runs failed")
+        reason = f"{type(exc).__name__}: {redact(exc)}"
+        get_logger("chat").warning("question about all runs failed: %s", reason)
         log_answer(settings, Path(ALL_RUNS), ChatAnswer(question=question, answer="",
-                                                        refused=True, reason=f"error: {exc}"),
+                                                        refused=True, reason=f"error: {reason}"),
                    user)
         raise
     log_answer(settings, Path(ALL_RUNS), result, user)

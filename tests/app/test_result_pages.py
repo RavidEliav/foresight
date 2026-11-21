@@ -35,7 +35,8 @@ def _render(module: str, run_dir: Path | None) -> AppTest:
                                  default_timeout=60).run()
 
 
-@pytest.mark.parametrize("module", ["app.eda_page", "app.model_page", "app.report_page"])
+@pytest.mark.parametrize("module", ["app.eda_page", "app.model_page", "app.report_page",
+                                    "app.replay_page"])
 def test_pages_explain_when_there_is_no_run(module):
     at = _render(module, None)
     assert not at.exception
@@ -77,7 +78,7 @@ def test_report_page_leads_with_headline_numbers_and_puts_details_in_tabs(run_di
     assert [t.label for t in at.tabs] == ["Engineering report", "Full investigation",
                                           "Risk ranking", "Similar past runs", "Anomalies",
                                           "Safety checks"]
-    assert len(at.get("plotly_chart")) == 2  # anomaly timeline, run map
+    assert len(at.get("plotly_chart")) == 3  # anomaly timeline, run map, simulated wafer
     assert "Report safety checks: **PASS**" in at.success[0].value
     assert any("## What was detected" in md.value for md in at.markdown)
     assert not any(md.value.startswith("# Engineering report") for md in at.markdown)
@@ -340,3 +341,47 @@ def test_a_synthetic_run_is_labeled_and_shows_its_ground_truth(run_dir, tmp_path
     assert any("11 of 112 training runs changed" in m.value for m in at.markdown)
     table = next(d.value for d in at.dataframe if "EDA rank" in d.value.columns)
     assert table.iloc[0]["EDA rank"] == "2 of 15"
+
+
+def test_line_replay_plays_the_test_period_and_ends_on_the_runs_own_totals(run_dir):
+    import json
+
+    at = _render("app.replay_page", run_dir)
+    assert not at.exception
+    assert [m.label for m in at.metric] == ["Runs replayed", "Alarms raised",
+                                            "Failing runs caught", "Alarm precision"]
+    total = int(at.metric[0].value.split(" of ")[1])
+    assert at.metric[0].value == f"0 of {total}"
+
+    at.button(key="replay-step").click().run()
+    assert at.metric[0].value == f"1 of {total}"
+    assert len(at.get("plotly_chart")) == 2  # the stream and the newest run's wafer
+    assert any("Simulated wafer" in c.value for c in at.caption)
+
+    at.button(key="replay-play").click().run()  # one tick at the default speed (3 runs/s)
+    assert not at.exception
+    assert at.metric[0].value == f"4 of {total}"
+    at.button(key="replay-pause").click().run()
+    assert at.button(key="replay-play")
+
+    at.button(key="replay-end").click().run()
+    risk = json.loads((run_dir / "risk_summary.json").read_text(encoding="utf-8"))
+    test = risk["test"][risk["recommended_ranking"]]
+    assert at.metric[0].value == f"{total} of {total}"
+    assert at.metric[1].value == str(test["alarms"])
+    assert at.metric[2].value == f"{test['fails_found']} of {test['fails_total']}"
+    assert "Replay finished" in at.success[0].value
+
+    at.button(key="replay-restart").click().run()
+    assert at.metric[0].value == f"0 of {total}"
+
+
+def test_line_replay_explains_a_run_without_the_risk_ranking(run_dir, tmp_path):
+    import shutil
+
+    older = tmp_path / "older"
+    shutil.copytree(run_dir, older)
+    (older / "risk_scores.csv").unlink()
+    at = _render("app.replay_page", older)
+    assert not at.exception
+    assert "added after this run was made" in at.info[0].value

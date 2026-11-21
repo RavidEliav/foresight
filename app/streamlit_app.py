@@ -113,6 +113,12 @@ def ask_page() -> None:
     page.render(_latest("engineering_report.md"), settings)
 
 
+def replay_page() -> None:
+    from app import replay_page as page
+
+    page.render(SELECTED)  # the page explains a run made before the risk ranking
+
+
 def trends_page() -> None:
     from app import trends_page as page
 
@@ -129,6 +135,8 @@ PAGES = [
     st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),
     st.Page(report_page, title="Investigation & Report", icon=":material/description:",
             url_path="report"),
+    st.Page(replay_page, title="Line Replay", icon=":material/slow_motion_video:",
+            url_path="replay"),
     st.Page(trends_page, title="Trends", icon=":material/trending_up:", url_path="trends"),
     ASK,
 ]

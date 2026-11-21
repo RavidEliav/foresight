@@ -212,3 +212,40 @@ def test_a_scenario_run_is_started_with_its_recipe(monkeypatch):
     at.button(key="run").click().run()
     assert started and started[0][1] is None  # no upload
     assert started[0][3] == {"kind": "drift", "intensity": 2.0, "seed": 7}
+
+
+def test_a_running_run_can_be_stopped_with_the_passcode_then_resumed(monkeypatch):
+    """Phase 8.5: Stop run asks the run to stop; a stopped run offers Resume run."""
+    from foresight.progress import ProgressTracker
+    from foresight.settings import load_settings
+
+    monkeypatch.setenv("RUN_PASSCODE", "s3cret")
+    settings = load_settings()
+    run_id = "20260101T000000000000Z"
+    run_dir = jobs.runs_dir(settings) / run_id
+    tracker = ProgressTracker.create(run_dir, run_id)
+    tracker.running()
+    tracker.stage_started("ingest")
+
+    at = _app()
+    assert any("is running" in i.value for i in at.info)
+    at.button(key="stop").click().run()
+    assert any("Not authorized" in e.value for e in at.error)
+    assert not jobs.stop_requested(run_dir)
+
+    at.text_input(key="passcode").input("s3cret")
+    at.button(key="stop").click().run()
+    assert jobs.stop_requested(run_dir)
+    assert any("Stopping the run" in c.value for c in at.caption)
+
+    tracker.finish("stopped", "stopped by the user")  # what the run's process does
+    resumed = []
+    monkeypatch.setattr(jobs, "resume_run", lambda _s, rid: resumed.append(rid))
+    at = _app()
+    assert any("was stopped" in w.value for w in at.warning)
+    stepper = next(h.proto.body for h in at.get("html") if "fs-stepper" in h.proto.body)
+    assert 'class="fs-stage fs-stopped"' in stepper
+    assert at.button(key="continue").label == "Resume run"
+    at.text_input(key="passcode").input("s3cret")
+    at.button(key="continue").click().run()
+    assert resumed == [run_id]

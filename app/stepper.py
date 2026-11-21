@@ -52,15 +52,17 @@ ART = {
 GATE_AFTER = {"ingest": ("data_contract", "Data Contract gate"),
               "analyze": ("features_present", "Features gate"),
               "investigate": ("evidence_present", "Evidence gate")}
-BADGE = {"done": "&#10003;", "failed": "&#10005;", "skipped": "&ndash;", "interrupted": "!"}
+BADGE = {"done": "&#10003;", "failed": "&#10005;", "skipped": "&ndash;", "interrupted": "!",
+         "stopped": "&#9632;"}
 CREW_TEXT = {"running": "working", "done": "done", "skipped": "skipped (not needed)",
-             "failed": "failed", "interrupted": "interrupted"}
+             "failed": "failed", "interrupted": "interrupted",
+             "stopped": "stopped"}
 # What a stage still does after its crew finished
 FINISHING = {"report": "checking + indexing for chat", "investigate": "checking the evidence"}
 
 
 COLORS = {"done": "#34D399", "failed": "#F87171", "running": "#22D3EE", "skipped": "#64748B",
-          "pending": "#475569", "interrupted": "#FBBF24"}
+          "pending": "#475569", "interrupted": "#FBBF24", "stopped": "#FBBF24"}
 BASE_CSS = """*{fill:none;stroke:%s;stroke-width:1.6;stroke-linecap:round}
 .fill,.die{fill:%s;stroke:none;opacity:.85}.grid{stroke-opacity:.35;stroke-width:1}
 .scan{fill:#22D3EE;stroke:none;opacity:0}"""

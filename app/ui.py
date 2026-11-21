@@ -1,10 +1,9 @@
-"""Shared UI helpers: page style, headers, badges, environment badge, passcode check and
+"""Shared UI helpers: page style, headers, badges, environment badge, the developer view and
 friendly errors."""
 
 from __future__ import annotations
 
 import base64
-import hmac
 from pathlib import Path
 
 import streamlit as st
@@ -193,6 +192,11 @@ section[data-testid="stSidebar"] {
   justify-content: flex-start; width: 100%; text-align: left; }
 .st-key-recent button p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-size: .84rem; color: #CBD5E1; }
+/* signed-in person (Phase 8.6): the "Hi, name" menu top right, above the page title.
+   No angle brackets in this style block: the HTML sanitizer drops a style that has them. */
+.st-key-topbar { margin: -1.6rem 0 -1.2rem 0; }
+.st-key-topbar [data-testid="stPopover"] button p { font-weight: 600; color: #E2E8F0; }
+.fs-gap { height: .4rem; }
 </style>
 """
 
@@ -225,15 +229,15 @@ def sidebar_nav(pages: list, current) -> None:
                 st.page_link(page, label=page.title, icon=page.icon, width="stretch")
 
 
-def recent_questions(run_dir: Path | None, settings: Settings, ask_page) -> None:
-    """The selected run's recent chat questions, once the chat is unlocked; a click opens the
+def recent_questions(run_dir: Path | None, settings: Settings, ask_page, user: str) -> None:
+    """The signed-in person's recent questions about the selected run; a click opens the
     answer on the Ask Foresight page."""
-    if run_dir is None or not st.session_state.get("chat_unlocked"):
+    if run_dir is None:
         return
     from app import store
     from app.runs import local_time
 
-    items = store.recent_questions(settings, run_dir)
+    items = store.recent_questions(settings, run_dir, user)
     if not items:
         return
     st.sidebar.html('<div class="fs-side-label">Recent questions</div>')
@@ -287,10 +291,17 @@ def environment_badge(settings: Settings) -> None:
     st.sidebar.markdown(f":{ENV_COLORS.get(env, 'blue')}-badge[Environment: {env}]")
 
 
-def passcode_ok(settings: Settings, entered: str) -> bool:
-    if not settings.run_passcode:
-        return False
-    return hmac.compare_digest(entered.encode(), settings.run_passcode.encode())
+def developer() -> bool:
+    """True for the developer view (Phase 8.6): technical details, Extended data, Trends and
+    Users & access. Closed by default: no signed-in developer, no developer view."""
+    viewer = st.session_state.get("viewer")
+    return bool(viewer is not None and viewer.developer)
+
+
+def user_email() -> str:
+    """The signed-in email (empty for a local checkout without sign-in)."""
+    viewer = st.session_state.get("viewer")
+    return viewer.email if viewer is not None else ""
 
 
 def friendly_error(message: str) -> None:

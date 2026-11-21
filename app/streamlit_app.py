@@ -12,7 +12,7 @@ for path in (ROOT / "src", ROOT):
 
 import streamlit as st  # noqa: E402
 
-from app import ui  # noqa: E402
+from app import auth, legal_page, ui  # noqa: E402
 from foresight.settings import load_settings  # noqa: E402
 
 st.set_page_config(page_title="Foresight", page_icon=str(ui.LOGO), layout="wide")
@@ -125,10 +125,52 @@ def trends_page() -> None:
     page.render(settings)
 
 
+def activity_page() -> None:
+    from app import activity_page as page
+
+    page.render(settings, auth.viewer())
+
+
+def access_page() -> None:
+    from app import access_page as page
+
+    page.render(settings, auth.viewer())
+
+
+def review_page() -> None:
+    from app import review_page as page
+
+    page.render(settings, auth.viewer())
+
+
+def gate_page() -> None:
+    auth.gate_page(settings, SESSION, PRIVACY, TERMS)
+
+
+# Public pages: Google's sign-in screen links to Privacy and Terms, and the access-request
+# email links to Review (a signed link, Phase 8.6)
+PRIVACY = st.Page(legal_page.privacy, title="Privacy", icon=":material/shield:",
+                  url_path="privacy")
+TERMS = st.Page(legal_page.terms, title="Terms", icon=":material/gavel:", url_path="terms")
+REVIEW = st.Page(review_page, title="Access request", icon=":material/how_to_reg:",
+                 url_path="review")
+PUBLIC = [PRIVACY, TERMS, REVIEW]
+
+SESSION = auth.session(settings)
+if SESSION.status != "ok":  # sign in, ask for access or wait for approval
+    navigation = st.navigation([st.Page(gate_page, title="Sign in", icon=":material/login:",
+                                        default=True), *PUBLIC], position="hidden")
+    ui.brand()
+    navigation.run()
+    st.stop()
+
+VIEWER = SESSION.viewer
 DATA_QUALITY = st.Page(data_quality_page, title="Data Quality", icon=":material/verified:",
                        url_path="data-quality")
 ASK = st.Page(ask_page, title="Ask Foresight", icon=":material/forum:", url_path="ask")
-PAGES = [
+ACTIVITY = st.Page(activity_page, title="My activity", icon=":material/history:",
+                   url_path="activity")
+MENU = [
     st.Page(run_pipeline_page, title="Run Pipeline", icon=":material/play_arrow:", default=True),
     DATA_QUALITY,
     st.Page(eda_page, title="EDA & Insights", icon=":material/bar_chart:", url_path="eda"),
@@ -137,15 +179,23 @@ PAGES = [
             url_path="report"),
     st.Page(replay_page, title="Line Replay", icon=":material/slow_motion_video:",
             url_path="replay"),
-    st.Page(trends_page, title="Trends", icon=":material/trending_up:", url_path="trends"),
+    *([st.Page(trends_page, title="Trends", icon=":material/trending_up:", url_path="trends")]
+      if VIEWER.developer else []),
     ASK,
+    ACTIVITY,
+    *([st.Page(access_page, title="Users & access", icon=":material/group:", url_path="users")]
+      if VIEWER.developer else []),
 ]
 # Streamlit draws its own page menu above everything else in the sidebar; it is hidden so that
 # the brand comes first and the menu is drawn with page links (ui.sidebar_nav).
-navigation = st.navigation(PAGES, position="hidden")
+navigation = st.navigation([*MENU, *PUBLIC], position="hidden")
 ui.brand()
-ui.environment_badge(settings)
-ui.sidebar_nav(PAGES, navigation)
+if VIEWER.developer:
+    ui.environment_badge(settings)
+ui.sidebar_nav(MENU, navigation)
 SELECTED = _run_selector()
-ui.recent_questions(SELECTED, settings, ASK)
+ui.recent_questions(SELECTED, settings, ASK, VIEWER.email)
+auth.top_bar(VIEWER, ACTIVITY, PRIVACY, TERMS)
+with st.sidebar:
+    auth.idle_watch(settings)
 navigation.run()

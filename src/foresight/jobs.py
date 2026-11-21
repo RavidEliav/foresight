@@ -79,9 +79,11 @@ def prune_runs(settings: Settings) -> list[str]:
 
 
 def start_run(settings: Settings, upload: bytes | None = None,
-              upload_name: str | None = None, scenario: dict | None = None) -> str:
+              upload_name: str | None = None, scenario: dict | None = None,
+              user: str = "") -> str:
     """Create the run folder and start the pipeline in a background process. ``scenario``
-    (kind, intensity, seed) runs a synthetic variation of SECOM instead (Phase 8.3)."""
+    (kind, intensity, seed) runs a synthetic variation of SECOM instead (Phase 8.3); ``user``
+    is the signed-in email that started it (Phase 8.6)."""
     with _START_LOCK:
         check_can_start(settings)
         prune_runs(settings)
@@ -101,12 +103,12 @@ def start_run(settings: Settings, upload: bytes | None = None,
             (run_dir / SCENARIO_FILE).write_text(request.model_dump_json(), encoding="utf-8")
             command += ["--scenario", str(run_dir / SCENARIO_FILE)]
             label = request.label()
-        ProgressTracker.create(run_dir, run_id, label)
+        ProgressTracker.create(run_dir, run_id, label, started_by=user)
     _launch(command, run_dir)
     return run_id
 
 
-def resume_run(settings: Settings, run_id: str) -> str:
+def resume_run(settings: Settings, run_id: str, user: str = "") -> str:
     """Continue an interrupted (or timed-out, or crashed) run from where it stopped."""
     with _START_LOCK:
         check_can_start(settings)
@@ -120,21 +122,23 @@ def resume_run(settings: Settings, run_id: str) -> str:
         elif (run_dir / "scenario.json").exists():  # resolved recipe: same data again
             command += ["--scenario", str(run_dir / "scenario.json")]
         (run_dir / STOP_FILE).unlink(missing_ok=True)  # an earlier stop request is done
-        ProgressTracker(run_dir=run_dir, progress=progress).prepare_resume()
+        ProgressTracker(run_dir=run_dir, progress=progress).prepare_resume(user)
     _launch(command, run_dir)
     return run_id
 
 
-def stop_run(settings: Settings, run_id: str) -> None:
+def stop_run(settings: Settings, run_id: str, user: str = "") -> None:
     """Ask a running run to stop (Phase 8.5). The run's process checks every second, records
     the run as stopped (the stages it finished stay reusable, so it can be resumed) and
-    exits."""
+    exits. The request names who asked (Phase 8.6)."""
+    import json
+
     run_dir = runs_dir(settings) / run_id
     progress = load_progress(run_dir)
     if progress is None or progress.effective_status() not in ACTIVE:
         raise RunLimitError(f"Run {run_id} is not running.")
-    (run_dir / STOP_FILE).write_text(datetime.now(UTC).isoformat(timespec="seconds"),
-                                     encoding="utf-8")
+    (run_dir / STOP_FILE).write_text(json.dumps(
+        {"at": datetime.now(UTC).isoformat(timespec="seconds"), "by": user}), encoding="utf-8")
 
 
 def stop_requested(run_dir: Path) -> bool:

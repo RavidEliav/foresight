@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = PROJECT_ROOT / "config" / "settings.yaml"
@@ -71,6 +71,24 @@ class AppSettings(BaseModel):
     keep_runs: int = 20              # older finished runs are deleted (the volume is 500 MB)
 
 
+class AuthSettings(BaseModel):
+    """Google sign-in and access requests (Phase 8.6). Secrets come from the environment only."""
+    idle_minutes: int = 60           # signed out after this long without activity
+    request_link_days: int = 7       # an emailed approve/deny link works this long
+    email_from: str = "Foresight <onboarding@resend.dev>"
+    google_client_id: str = ""
+    google_client_secret: SecretStr = SecretStr("")
+    cookie_secret: SecretStr = SecretStr("")  # signs the sign-in cookie and the emailed links
+    resend_api_key: SecretStr = SecretStr("")
+    developers: list[str] = []       # always approved, with the developer view
+    public_url: str = "http://localhost:8501"
+
+    @property
+    def google(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret.get_secret_value()
+                    and self.cookie_secret.get_secret_value())
+
+
 class Settings(BaseModel):
     seed: int = 42
     llm: LLMSettings = LLMSettings()
@@ -79,8 +97,8 @@ class Settings(BaseModel):
     analytics: AnalyticsSettings = AnalyticsSettings()
     app: AppSettings = AppSettings()
     rag: RagSettings = RagSettings()
+    auth: AuthSettings = AuthSettings()
     mock_llm: bool = False
-    run_passcode: str = ""
     environment: str = "local"
     database_url: str = ""  # Supabase Postgres (Session pooler); empty = run folders only
 
@@ -112,8 +130,18 @@ def load_settings(config_path: Path | None = None) -> Settings:
         if value := os.getenv(env_name):
             setattr(settings.paths, field, Path(value))
     settings.mock_llm = _as_bool(os.getenv("MOCK_LLM"))
-    settings.run_passcode = os.getenv("RUN_PASSCODE", "")
     settings.environment = os.getenv("RAILWAY_ENVIRONMENT_NAME", "local")
+    auth = settings.auth
+    auth.google_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    auth.google_client_secret = SecretStr(os.getenv("GOOGLE_CLIENT_SECRET", "").strip())
+    auth.cookie_secret = SecretStr(os.getenv("AUTH_COOKIE_SECRET", "").strip())
+    auth.resend_api_key = SecretStr(os.getenv("RESEND_API_KEY", "").strip())
+    if developers := os.getenv("FORESIGHT_DEVELOPERS"):
+        auth.developers = [e.strip().lower() for e in developers.split(",") if e.strip()]
+    if url := os.getenv("FORESIGHT_PUBLIC_URL"):
+        auth.public_url = url.rstrip("/")
+    elif domain := os.getenv("RAILWAY_PUBLIC_DOMAIN"):
+        auth.public_url = f"https://{domain}"
     # Railway sets SUPABASE_DB_URL per environment (ADR-026); empty = the run folders only
     settings.database_url = os.getenv("SUPABASE_DB_URL", "")
     return settings

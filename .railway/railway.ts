@@ -31,7 +31,12 @@ export default defineRailway((ctx) => {
       OTEL_SDK_DISABLED: "true",
       // Set with scripts/push_secrets_to_railway.ps1 (same values in dev and main).
       OPENAI_API_KEY: preserve(),
-      RUN_PASSCODE: preserve(),
+      // Google sign-in, access-request emails and the developers (Phase 8.6)
+      GOOGLE_CLIENT_ID: preserve(),
+      GOOGLE_CLIENT_SECRET: preserve(),
+      AUTH_COOKIE_SECRET: preserve(),
+      FORESIGHT_DEVELOPERS: preserve(),
+      RESEND_API_KEY: preserve(),
       // Supabase Postgres (Session pooler URL); its own project per environment (ADR-026).
       SUPABASE_DB_URL: preserve(),
     },

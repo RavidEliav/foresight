@@ -224,26 +224,36 @@ def complete(settings: Settings, system: str, prompt: str) -> tuple[str, dict[st
     return (response.choices[0].message.content or "").strip(), tokens
 
 
-def log_answer(settings: Settings, run_dir: Path, result: ChatAnswer) -> None:
+def log_answer(settings: Settings, run_dir: Path, result: ChatAnswer, user: str = "") -> None:
+    """Append the question and answer to the run's chat log, with who asked (Phase 8.6)."""
     path = log_path(settings, run_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {"time": datetime.now(UTC).isoformat(timespec="seconds"), "run": run_dir.name,
-              **result.model_dump(exclude={"sources"}),
+              "user": user, **result.model_dump(exclude={"sources"}),
               "sources": [f"{s.file} § {s.section} ({s.score})" for s in result.sources]}
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record) + "\n")
 
 
-def recent_questions(settings: Settings, run_dir: Path, limit: int = 6) -> list[dict]:
-    """The run's latest distinct questions from its chat log, newest first."""
+def _records(path: Path):
+    """A chat log's records, newest first."""
+    for line in reversed(path.read_text(encoding="utf-8").splitlines()):
+        try:
+            yield json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+
+def recent_questions(settings: Settings, run_dir: Path, limit: int = 6,
+                     user: str | None = None) -> list[dict]:
+    """The run's latest distinct questions from its chat log, newest first; only ``user``'s
+    when given."""
     path = log_path(settings, run_dir)
     if not path.exists():
         return []
     found: dict[str, dict] = {}
-    for line in reversed(path.read_text(encoding="utf-8").splitlines()):
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
+    for record in _records(path):
+        if user is not None and record.get("user", "") != user:
             continue
         key = record.get("question", "").strip().lower()
         if key and key not in found:
@@ -251,3 +261,11 @@ def recent_questions(settings: Settings, run_dir: Path, limit: int = 6) -> list[
         if len(found) == limit:
             break
     return list(found.values())
+
+
+def questions_by(settings: Settings, user: str, limit: int = 100) -> list[dict]:
+    """Every question ``user`` asked, about any run or about all runs, newest first."""
+    folder = settings.resolve(settings.paths.runs_dir) / "chat_logs"
+    found = [r for path in folder.glob("*.jsonl") for r in _records(path)
+             if r.get("user", "") == user] if folder.exists() else []
+    return sorted(found, key=lambda r: r.get("time", ""), reverse=True)[:limit]

@@ -6,13 +6,14 @@ from pathlib import Path
 
 import pytest
 
-ENV_VARS = ("LLM_MODEL", "OPENAI_API_KEY", "RUN_PASSCODE", "RAILWAY_ENVIRONMENT_NAME",
-            "RAILWAY_GIT_COMMIT_SHA", "SUPABASE_DB_URL", "SUPABASE_DB_URL_DEV")
+ENV_VARS = ("LLM_MODEL", "OPENAI_API_KEY", "RAILWAY_ENVIRONMENT_NAME",
+            "RAILWAY_GIT_COMMIT_SHA", "SUPABASE_DB_URL", "SUPABASE_DB_URL_DEV",
+            # sign-in (Phase 8.6): without these the app opens as a local developer
+            "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AUTH_COOKIE_SECRET", "RESEND_API_KEY",
+            "FORESIGHT_DEVELOPERS", "FORESIGHT_PUBLIC_URL", "RAILWAY_PUBLIC_DOMAIN")
 # The embedding model (about 80 MB) is downloaded once into a stable cache, not per test folder
 MODELS_DIR = os.getenv("FORESIGHT_TEST_MODELS_DIR",
                        str(Path.home() / ".cache" / "foresight" / "models"))
-# Read before isolated_env removes RUN_PASSCODE: E5/E6 type it into the app under test
-E2E_PASSCODE = os.getenv("E2E_PASSCODE") or os.getenv("RUN_PASSCODE")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -46,6 +47,7 @@ def isolated_env(monkeypatch, tmp_path):
     monkeypatch.setenv("CREWAI_TRACING_ENABLED", "false")
     monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
     monkeypatch.setenv("FORESIGHT_MODELS_DIR", MODELS_DIR)
+    monkeypatch.setenv("FORESIGHT_SECRETS_FILE", str(tmp_path / "secrets.toml"))
 
 
 def write_synthetic_secom(raw_dir: Path, n_rows: int = 150, fail_rate: float = 0.1,
@@ -131,14 +133,11 @@ def expected_env() -> str | None:
 
 
 @pytest.fixture(scope="session")
-def e2e_passcode(app_url) -> str:
-    """Passcode of the app under test. E5/E6 start pipeline runs, so they only run against a
-    local app (MOCK_LLM=true) unless E2E_ALLOW_RUNS=1 is set explicitly."""
+def e2e_runs(app_url) -> None:
+    """E5-E7 start pipeline runs or ask the chat, so they only run against a local app
+    (MOCK_LLM=true, no sign-in configured) unless E2E_ALLOW_RUNS=1 is set explicitly."""
     from urllib.parse import urlparse
 
     local = urlparse(app_url).hostname in ("localhost", "127.0.0.1")
     if not local and os.getenv("E2E_ALLOW_RUNS") != "1":
-        pytest.skip("E5/E6 start runs: only against a local mock app (or set E2E_ALLOW_RUNS=1)")
-    if not E2E_PASSCODE:
-        pytest.skip("set RUN_PASSCODE (or E2E_PASSCODE) to the passcode of the app under test")
-    return E2E_PASSCODE
+        pytest.skip("E5-E7 start runs: only against a local mock app (or set E2E_ALLOW_RUNS=1)")

@@ -95,5 +95,5 @@ def explain_failure(progress: RunProgress, test_fraction: float) -> tuple[list[s
     if stage := re.match(r"(\w+) (stage|crew) error", reason):
         what = "step" if stage.group(2) == "stage" else "step's crew"
         return [f"Something went wrong in the {stage.group(1)} {what}."], \
-            "Technical details are below. Resume the run to try that step again."
+            "Resume the run to try that step again."
     return [reason or "The run stopped."], None

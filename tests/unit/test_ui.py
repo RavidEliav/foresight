@@ -1,17 +1,10 @@
-from app.ui import passcode_ok
-from foresight.settings import load_settings
+def test_the_style_block_survives_the_html_sanitizer():
+    """st.html's sanitizer drops a whole <style> whose text holds a "<" (all styling is lost:
+    found in a browser in Phase 8.6, where a comment said "Hi, <name>")."""
+    from app.ui import STYLE
 
-
-def test_runs_disabled_without_configured_passcode():
-    assert passcode_ok(load_settings(), "") is False
-    assert passcode_ok(load_settings(), "anything") is False
-
-
-def test_passcode_must_match(monkeypatch):
-    monkeypatch.setenv("RUN_PASSCODE", "s3cret")
-    settings = load_settings()
-    assert passcode_ok(settings, "s3cret") is True
-    assert passcode_ok(settings, "wrong") is False
+    body = STYLE.strip().removeprefix("<style>").removesuffix("</style>")
+    assert "<" not in body  # (">" is fine: CSS uses it as the child combinator)
 
 
 def test_failure_reasons_are_in_plain_language():

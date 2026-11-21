@@ -1,8 +1,9 @@
 """Playwright E2E scenarios (requirements §9.2).
 
-E1-E4 are read-only and also run against the deployed apps (marker ``deployed``).
-E5-E7 start pipeline runs or LLM questions, so they only run against a local app with
-MOCK_LLM=true.
+The deployed apps need Google sign-in (Phase 8.6), which a test browser cannot do: against
+them only the sign-in screen and the public pages are checked (marker ``deployed``). E1-E7
+run in CI against a local app without sign-in, which opens as a local developer; E5-E7 start
+pipeline runs or LLM questions, so they need MOCK_LLM=true.
 """
 
 import csv
@@ -29,7 +30,46 @@ def _show_reference_run(page: Page) -> None:
            ).to_be_visible(timeout=30_000)
 
 
+def _open_signed_out(page: Page, url: str) -> None:
+    """The sign-in screen of an app with sign-in; skips for an app without (local, CI)."""
+    page.goto(url)
+    sign_in = page.get_by_role("button", name="Sign in with Google")
+    expect(sign_in.or_(page.get_by_role("heading", name="Run Pipeline"))).to_be_visible(
+        timeout=60_000)
+    if not sign_in.is_visible():
+        pytest.skip("this app has no sign-in configured (a local checkout)")
+
+
 @deployed
+def test_e0_visitors_see_only_the_sign_in_screen(page: Page, app_url):
+    _open_signed_out(page, app_url)
+    expect(page.get_by_text("ask for access")).to_be_visible()
+    expect(page.get_by_test_id("stSidebar").get_by_role("link", name="Model")).to_have_count(0)
+    page.goto(f"{app_url}/report")  # a deep link shows the sign-in screen, not the page
+    expect(page.get_by_role("button", name="Sign in with Google")).to_be_visible(timeout=60_000)
+    expect(page.get_by_text("Key findings")).to_have_count(0)
+    expect(page.get_by_test_id("stException")).to_have_count(0)
+
+
+@deployed
+@pytest.mark.parametrize(("path", "title", "text"), [
+    ("privacy", "Privacy", "What Foresight stores"),
+    ("terms", "Terms of use", "No warranty"),
+])
+def test_e0_privacy_and_terms_are_public(page: Page, app_url, path, title, text):
+    """Google's sign-in screen links to these pages, so they open without signing in."""
+    page.goto(f"{app_url}/{path}")
+    expect(page.get_by_role("heading", name=title, level=1)).to_be_visible(timeout=60_000)
+    expect(page.get_by_text(text)).to_be_visible()
+
+
+@deployed
+def test_e4_a_forged_review_link_decides_nothing(page: Page, app_url):
+    page.goto(f"{app_url}/review?token=forged.token&action=approve")
+    expect(page.get_by_text("This link does not work any more")).to_be_visible(timeout=60_000)
+    expect(page.get_by_role("button", name="Approve")).to_have_count(0)
+
+
 def test_e1_app_loads_and_shows_environment(app_page: Page, expected_env):
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
     expect(app_page.get_by_test_id("stSidebar")).to_contain_text("Foresight")
@@ -39,7 +79,6 @@ def test_e1_app_loads_and_shows_environment(app_page: Page, expected_env):
         expect(badge).to_contain_text(f"Environment: {expected_env}")
 
 
-@deployed
 def test_e2_every_result_page_shows_its_content(app_page: Page):
     _show_reference_run(app_page)
     _goto(app_page, "Data Quality")
@@ -60,7 +99,6 @@ def test_e2_every_result_page_shows_its_content(app_page: Page):
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
 
 
-@deployed
 def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
     _show_reference_run(app_page)
     _goto(app_page, "Investigation & Report")
@@ -96,19 +134,9 @@ def test_e8_line_replay_plays_the_reference_test_period(app_page: Page):
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
 
 
-@deployed
-def test_e4_wrong_passcode_is_rejected(app_page: Page):
-    app_page.get_by_label("Passcode").fill("definitely-wrong-passcode")
-    app_page.get_by_role("button", name="Run pipeline").click()
-    expect(app_page.get_by_text("Not authorized")).to_be_visible(timeout=30_000)
-    expect(app_page.get_by_test_id("stException")).to_have_count(0)
-
-
-def test_e7_ask_foresight_cites_sources_and_refuses_off_topic(app_page: Page, e2e_passcode):
+def test_e7_ask_foresight_cites_sources_and_refuses_off_topic(app_page: Page, e2e_runs):
     page = app_page
     _goto(page, "Ask Foresight")
-    page.get_by_label("Passcode").fill(e2e_passcode)
-    page.get_by_role("button", name="Unlock the chat").click()
     chat = page.get_by_test_id("stChatInputTextArea")
     expect(chat).to_be_visible(timeout=30_000)
 
@@ -136,14 +164,12 @@ def _broken_csv(path) -> None:
                             + [round(rng.gauss(100, 10), 3) for _ in range(590)])
 
 
-def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_path,
-                                                          e2e_passcode):
+def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_path, e2e_runs):
     upload = tmp_path / "broken.csv"
     _broken_csv(upload)
     app_page.get_by_text("Upload a CSV").click()
     app_page.get_by_test_id("stFileUploaderDropzoneInput").set_input_files(str(upload))
     expect(app_page.get_by_text("broken.csv")).to_be_visible(timeout=30_000)
-    app_page.get_by_label("Passcode").fill(e2e_passcode)
     app_page.get_by_role("button", name="Run pipeline").click()
 
     expect(app_page.get_by_test_id("stAlertContentError").filter(
@@ -162,9 +188,8 @@ def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_pa
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
 
 
-def test_e6_full_run_shows_progress_then_the_new_report(app_page: Page, e2e_passcode):
+def test_e6_full_run_shows_progress_then_the_new_report(app_page: Page, e2e_runs):
     page = app_page
-    page.get_by_label("Passcode").fill(e2e_passcode)
     page.get_by_role("button", name="Run pipeline").click()
 
     expect(page.get_by_text("Data Analyst crew")).to_be_visible(timeout=60_000)

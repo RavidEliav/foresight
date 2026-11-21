@@ -67,6 +67,8 @@ def render(run_dir: Path | None) -> None:
         ui.label("Most important sensors")
         charts.importance(metrics)
 
+    if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
+        return
     ui.section_label("Extended data")
     comparison, evaluation, card = st.tabs(["Model comparison", "Evaluation report",
                                             "Model card"])

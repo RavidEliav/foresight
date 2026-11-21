@@ -44,21 +44,53 @@ foreach ($key in $shared) {
     if (-not $values[$key]) { throw "$key is empty in .env" }
 }
 
+$railway = (Get-Command railway -CommandType Application).Source
+
 function Set-RailwaySecret($key, $value, $environment) {
-    $value | railway variable set $key --stdin --service foresight-app --environment $environment --skip-deploys | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Failed to set $key in $environment" }
+    # Write the exact UTF-8 bytes to the CLI's stdin. Piping a string from Windows PowerShell
+    # can prepend a byte-order mark, which then becomes part of the value (2026-11-21: every
+    # value started with U+FEFF and the database URL no longer parsed).
+    $info = New-Object System.Diagnostics.ProcessStartInfo
+    $info.FileName = $railway
+    $info.Arguments = "variable set $key --stdin --service foresight-app --environment $environment --skip-deploys"
+    $info.WorkingDirectory = $root  # the folder linked to the Railway project
+    $info.UseShellExecute = $false
+    $info.RedirectStandardInput = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($info)
+    $bytes = (New-Object System.Text.UTF8Encoding $false).GetBytes($value)
+    $process.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    $process.StandardInput.Close()
+    $null = $process.StandardOutput.ReadToEnd()
+    $errors = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) { throw "Failed to set $key in $environment`: $($errors.Trim())" }
     Write-Host "set $key in $environment"
 }
 
+function Assert-RailwaySecrets($expected, $environment) {
+    # Read the values back and compare them in memory (nothing is printed)
+    $stored = & $railway variables --service foresight-app --environment $environment --json | Out-String | ConvertFrom-Json
+    foreach ($key in $expected.Keys) {
+        if ($stored.$key -cne $expected[$key]) { throw "$key in $environment does not match .env" }
+    }
+    Write-Host "verified $($expected.Count) values in $environment"
+}
+
 foreach ($environment in "dev", "main") {
+    $expected = @{}
     foreach ($key in $shared) {
         Set-RailwaySecret $key $values[$key] $environment
+        $expected[$key] = $values[$key]
     }
     $database = $values["SUPABASE_DB_URL_$($environment.ToUpper())"]
     if ($database) {
         Set-RailwaySecret "SUPABASE_DB_URL" $database $environment
+        $expected["SUPABASE_DB_URL"] = $database
     } else {
         Write-Host "SUPABASE_DB_URL_$($environment.ToUpper()) not in .env: $environment keeps using the run folders"
     }
+    Assert-RailwaySecrets $expected $environment
 }
 Write-Host "Done. The values take effect with the next deploy of each environment."

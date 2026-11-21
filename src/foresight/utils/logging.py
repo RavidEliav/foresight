@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from pathlib import Path
 
 LOGGER_NAME = "foresight"
 _FORMAT = "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s"
+# scheme://user:password@host: the password part (database errors quote the whole URL)
+_URL_PASSWORD = re.compile(r"([a-z][a-z0-9+.-]*://[^:/@\s]+:)[^@\s]+@", re.IGNORECASE)
+
+
+def redact(text) -> str:
+    """The text with any password inside a URL replaced by ***, for logs and messages.
+    psycopg quotes the whole connection string when it cannot parse it (2026-11-21: a
+    deploy log showed the database password)."""
+    return _URL_PASSWORD.sub(r"\1***@", str(text))
 
 
 def get_logger(name: str | None = None) -> logging.Logger:

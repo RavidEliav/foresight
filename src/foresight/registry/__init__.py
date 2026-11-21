@@ -12,7 +12,7 @@ from pathlib import Path
 
 from foresight.registry.record import RUN_COLUMNS, chunk_records, run_record, stage_records
 from foresight.settings import Settings
-from foresight.utils.logging import get_logger
+from foresight.utils.logging import get_logger, redact
 
 log = get_logger("registry")
 
@@ -42,7 +42,7 @@ def record_run(run_dir: Path, settings: Settings, known: dict | None = None) -> 
         db.upsert_run(settings.database_url, run, stage_records(run_dir), chunks)
         return True
     except Exception as exc:  # a registry problem must never fail the run
-        log.warning("run %s not recorded in the registry: %s", run_dir.name, exc)
+        log.warning("run %s not recorded in the registry: %s", run_dir.name, redact(exc))
         return False
 
 

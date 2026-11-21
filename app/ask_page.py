@@ -74,7 +74,9 @@ def _ask(question: str, run_dir: Path | None, settings: Settings) -> dict | None
             return store.ask_all(question, settings, ui.user_email())
         return store.ask(question, run_dir, settings, ui.user_email())
     except Exception as exc:  # friendly message, never a stack trace; the store logs it
-        ui.friendly_error(f"The question could not be answered: {exc}")
+        from foresight.utils.logging import redact
+
+        ui.friendly_error(f"The question could not be answered: {redact(exc)}")
         return None
 
 

@@ -57,10 +57,11 @@ def _rank(hits: list[Hit], words: set[str], k: int, minimum: float) -> list[Hit]
     return [h for h in hits[:k] if h.score >= minimum]
 
 
-def _from_database(query: np.ndarray, settings: Settings) -> tuple[list[Hit], dict]:
+def _from_database(query: np.ndarray, settings: Settings,
+                   run_ids: list[str] | None) -> tuple[list[Hit], dict]:
     from foresight.registry import db
 
-    rows = db.search_chunks(settings.database_url, query, CANDIDATES)
+    rows = db.search_chunks(settings.database_url, query, CANDIDATES, run_ids)
     runs = {r["run_id"]: RunInfo(r["run_id"], r["started_at"], r["dataset"]) for r in rows}
     hits = [Hit(Chunk(cited_source(r["run_id"], r["source"]), r["section"], r["body"]),
                 float(r["score"])) for r in rows]
@@ -91,31 +92,38 @@ def _merged(folders: tuple[tuple[str, float], ...]) -> tuple[VectorIndex, dict]:
     return VectorIndex(chunks, matrix, {}), runs
 
 
-def _run_folders(settings: Settings) -> list[Path]:
+def _run_folders(settings: Settings, run_ids: list[str] | None = None) -> list[Path]:
     folder = settings.resolve(settings.paths.runs_dir)
     found = [p for p in sorted(folder.iterdir()) if p.is_dir()] if folder.exists() else []
     found.append(settings.resolve(settings.paths.reference_run_dir))
     good = []
     for path in found:
         manifest = path / "run_manifest.json"
-        if manifest.exists() and (path / "rag_chunks.json").exists() and json.loads(
-                manifest.read_text(encoding="utf-8")).get("status") == "success":
+        if not (manifest.exists() and (path / "rag_chunks.json").exists()):
+            continue
+        content = json.loads(manifest.read_text(encoding="utf-8"))
+        if content.get("status") == "success" and (
+                run_ids is None or (content.get("run_id") or path.name) in run_ids):
             good.append(path)
     return good
 
 
-def _from_files(query: np.ndarray, settings: Settings) -> tuple[list[Hit], dict]:
+def _from_files(query: np.ndarray, settings: Settings,
+                run_ids: list[str] | None) -> tuple[list[Hit], dict]:
     folders = tuple((str(p), (p / "rag_index.npz").stat().st_mtime)
-                    for p in _run_folders(settings))
+                    for p in _run_folders(settings, run_ids))
     index, runs = _merged(folders)
     return index.search(query, CANDIDATES), runs
 
 
-def retrieve_all(question: str, settings: Settings) -> tuple[list[Hit], dict[str, RunInfo]]:
-    """The best chunks across all runs (at most ``rag.all_runs_k``, at or above
-    ``rag.min_similarity``) and the runs they come from."""
+def retrieve_all(question: str, settings: Settings,
+                 run_ids: list[str] | None = None) -> tuple[list[Hit], dict[str, RunInfo]]:
+    """The best chunks across the runs (all, or only ``run_ids``: a user's own runs and the
+    reference run; at most ``rag.all_runs_k``, at or above ``rag.min_similarity``) and the
+    runs they come from."""
     query = embed_question(question, settings)
-    hits, runs = (_from_database if settings.database_url else _from_files)(query, settings)
+    search = _from_database if settings.database_url else _from_files
+    hits, runs = search(query, settings, run_ids)
     ranked = _rank(hits, content_words(question), settings.rag.all_runs_k,
                    settings.rag.min_similarity)
     return ranked, {split_source(h.chunk.source)[0]: runs[split_source(h.chunk.source)[0]]

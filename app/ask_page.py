@@ -24,14 +24,18 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     if run_dir is None:
         no_run("report to ask about")
         return
-    if st.session_state.get("chat_open"):  # a question from the sidebar belongs to this run
-        st.session_state["chat_scope"] = SCOPES[0]
+    from app.store import ALL_RUNS
+
+    if opened := st.session_state.get("chat_open"):  # a question from the sidebar: its scope
+        st.session_state["chat_scope"] = SCOPES[1] if opened.get("run") == ALL_RUNS \
+            else SCOPES[0]
     st.session_state.setdefault("chat_scope", SCOPES[0])
     scope = st.segmented_control("Scope", SCOPES, key="chat_scope",
                                  label_visibility="collapsed") or SCOPES[0]
     every = scope == "All runs"
     if every:
-        st.caption("All recorded runs · answers come only from the runs' reports, say which run "
+        runs = "All recorded runs" if ui.developer() else "Your runs and the reference run"
+        st.caption(f"{runs} · answers come only from the runs' reports, say which run "
                    "each statement is about and cite it; anything else gets \"Not found in the "
                    "recorded runs.\"")
     else:
@@ -41,7 +45,7 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     key = "all_runs" if every else str(run_dir)
     history: list[dict] = st.session_state.setdefault("chat", {}).setdefault(key, [])
     opened = st.session_state.pop("chat_open", None)  # picked in the sidebar's history
-    if not every and opened and opened.get("run") == run_dir.name and (
+    if opened and opened.get("run") == (ALL_RUNS if every else run_dir.name) and (
             not history or history[-1]["question"] != opened["question"]):
         history.append({**opened, "from_history": True})
     for item in history:
@@ -70,8 +74,9 @@ def _ask(question: str, run_dir: Path | None, settings: Settings) -> dict | None
     from app import store
 
     try:
-        if run_dir is None:
-            return store.ask_all(question, settings, ui.user_email())
+        if run_dir is None:  # a user's question covers their own runs and the reference run
+            return store.ask_all(question, settings, ui.user_email(), store.visible_run_ids(
+                settings, None if ui.developer() else ui.user_email()))
         return store.ask(question, run_dir, settings, ui.user_email())
     except Exception as exc:  # friendly message, never a stack trace; the store logs it
         from foresight.utils.logging import redact

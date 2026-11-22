@@ -81,19 +81,38 @@ def run_folder(settings: Settings, run_id: str) -> Path:
     return jobs.runs_dir(settings) / run_id
 
 
-def viewable_runs(settings: Settings) -> list[Path]:
-    """Successful runs, newest first, then the committed reference run."""
+def owns(progress: RunProgress | None, user: str) -> bool:
+    """``user`` started, resumed or stopped the run (Phase 8.6)."""
+    return bool(user and progress and (progress.started_by == user or user in progress.resumed_by
+                                       or progress.stopped_by == user))
+
+
+def viewable_runs(settings: Settings, user: str | None = None) -> list[Path]:
+    """Successful runs, newest first, then the committed reference run. With ``user`` (a
+    signed-in user, not a developer): only that person's runs, then the reference run."""
     folder = runs_folder(settings)
     found = []
     if folder.exists():
         for path in sorted(folder.iterdir(), reverse=True):
             manifest = read_json(path, MANIFEST) if path.is_dir() else None
-            if manifest and manifest.get("status") == "success":
+            if manifest and manifest.get("status") == "success" and (
+                    user is None or owns(load_progress(path), user)):
                 found.append(path)
     reference = settings.resolve(settings.paths.reference_run_dir)
     if exists(reference, MANIFEST):
         found.append(reference)
     return found
+
+
+def visible_run_ids(settings: Settings, user: str | None) -> list[str] | None:
+    """The runs a person may see (their own and the reference run) for the All runs chat;
+    None for a developer, who sees every run."""
+    if user is None:
+        return None
+    reference = settings.resolve(settings.paths.reference_run_dir)
+    manifest = read_json(reference, MANIFEST) if exists(reference, MANIFEST) else None
+    return [p.run_id for p in runs_of(settings, user)] + (
+        [manifest.get("run_id") or reference.name] if manifest else [])
 
 
 def all_runs(settings: Settings) -> list[RunProgress]:
@@ -237,14 +256,16 @@ def ask(question: str, run_dir: Path, settings: Settings, user: str = "") -> dic
     return result.model_dump()
 
 
-def ask_all(question: str, settings: Settings, user: str = "") -> dict:
-    """Answer and log a question about all recorded runs (logged as "all_runs")."""
+def ask_all(question: str, settings: Settings, user: str = "",
+            run_ids: list[str] | None = None) -> dict:
+    """Answer and log a question about all recorded runs, or only ``run_ids`` (a user's own
+    runs and the reference run); logged as "all_runs"."""
     from foresight.rag.chat import ChatAnswer, log_answer
     from foresight.rag.chat import ask_all as rag_ask_all
     from foresight.utils.logging import get_logger, redact
 
     try:
-        result = rag_ask_all(question, settings)
+        result = rag_ask_all(question, settings, run_ids)
     except Exception as exc:
         reason = f"{type(exc).__name__}: {redact(exc)}"
         get_logger("chat").warning("question about all runs failed: %s", reason)
@@ -259,10 +280,13 @@ def ask_all(question: str, settings: Settings, user: str = "") -> dict:
 ALL_RUNS = "all_runs"  # chat log name of questions about all runs
 
 
-def recent_questions(settings: Settings, run_dir: Path, user: str | None = None) -> list[dict]:
+def recent_questions(settings: Settings, run_dir: Path, user: str | None = None,
+                     limit: int = 6) -> list[dict]:
+    """The latest questions about the run and about all runs, newest first."""
     from foresight.rag.chat import recent_questions as recent
 
-    return recent(settings, run_dir, user=user)
+    found = recent(settings, run_dir, limit, user) + recent(settings, Path(ALL_RUNS), limit, user)
+    return sorted(found, key=lambda r: r.get("time", ""), reverse=True)[:limit]
 
 
 def questions_by(settings: Settings, user: str) -> list[dict]:
@@ -344,8 +368,7 @@ def activity(settings: Settings):
 
 def runs_of(settings: Settings, user: str) -> list[RunProgress]:
     """Runs on this server that ``user`` started, resumed or stopped, newest first."""
-    return [p for p in all_runs(settings)
-            if user and (p.started_by == user or user in p.resumed_by or p.stopped_by == user)]
+    return [p for p in all_runs(settings) if owns(p, user)]
 
 
 def warm_up_chat(settings: Settings) -> None:

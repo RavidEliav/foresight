@@ -90,6 +90,63 @@ def test_an_approved_user_gets_the_user_view_and_a_greeting():
     assert not at.toast
 
 
+def _finished_run(run_id: str, started_by: str) -> None:
+    """A successful run in the test's runs folder, started by ``started_by``."""
+    import json
+
+    from foresight import jobs
+    from foresight.progress import ProgressTracker
+
+    folder = jobs.runs_dir(load_settings()) / run_id
+    ProgressTracker.create(folder, run_id, started_by=started_by).finish("success")
+    (folder / "run_manifest.json").write_text(json.dumps({"run_id": run_id,
+                                                         "status": "success"}))
+
+
+def test_a_user_sees_only_their_own_runs_and_the_reference_run():
+    settings = load_settings()
+    access.add_account(settings, "ada@example.com", "user", DEVELOPER)
+    _finished_run("20261122T090000000000Z", "ada@example.com")
+    _finished_run("20261122T100000000000Z", "bob@example.com")
+    at = _app("ada@example.com")
+    assert not at.exception
+    picker = at.sidebar.selectbox(key="view_run")
+    assert picker.options == ["22 Nov, 09:00 UTC · SECOM", "Reference run"]  # not bob's run
+    assert [e.label for e in at.expander if "runs" in e.label.lower()] == ["Your runs (1)"]
+
+    at = _app(DEVELOPER, "Ravid Eliav")  # the developer sees every run
+    assert len(at.sidebar.selectbox(key="view_run").options) == 3
+    assert "Run history (2)" in [e.label for e in at.expander]
+
+
+def test_recent_questions_include_questions_about_all_runs():
+    from app import store
+    from foresight.rag.chat import ChatAnswer, log_answer
+
+    settings = load_settings()
+    reference = settings.resolve(settings.paths.reference_run_dir)
+    for run, question in ((reference, "About this run?"), (Path(store.ALL_RUNS), "About all?"),
+                          (reference, "Someone else's?")):
+        user = "bob@example.com" if question.startswith("Someone") else "ada@example.com"
+        log_answer(settings, run, ChatAnswer(question=question, answer="A.", refused=False),
+                   user)
+    found = store.recent_questions(settings, reference, "ada@example.com")
+    assert sorted((r["question"], r["run"]) for r in found) == [
+        ("About all?", store.ALL_RUNS), ("About this run?", reference.name)]
+
+
+def test_a_user_asks_all_runs_only_about_their_runs_and_the_reference():
+    from app import store
+
+    settings = load_settings()
+    _finished_run("20261122T090000000000Z", "ada@example.com")
+    _finished_run("20261122T100000000000Z", "bob@example.com")
+    assert store.visible_run_ids(settings, None) is None  # a developer: every run
+    ids = store.visible_run_ids(settings, "ada@example.com")
+    assert ids[0] == "20261122T090000000000Z" and len(ids) == 2
+    assert "20261122T100000000000Z" not in ids
+
+
 def test_a_developer_gets_the_developer_view():
     at = _app(DEVELOPER, "Ravid Eliav")
     assert _menu(at)[-1] == "Users & access" and "Trends" in _menu(at)

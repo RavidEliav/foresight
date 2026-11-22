@@ -159,13 +159,14 @@ def ask(question: str, run_dir: Path, settings: Settings) -> ChatAnswer:
                    start)
 
 
-def ask_all(question: str, settings: Settings) -> ChatAnswer:
-    """A question about all recorded runs (Supabase pgvector, else this server's runs)."""
+def ask_all(question: str, settings: Settings, run_ids: list[str] | None = None) -> ChatAnswer:
+    """A question about all recorded runs, or only ``run_ids`` (Supabase pgvector, else this
+    server's runs)."""
     from foresight.rag.cross import retrieve_all, split_source
 
     start = time.perf_counter()
     question = question.strip()
-    hits, runs = retrieve_all(question, settings)
+    hits, runs = retrieve_all(question, settings, run_ids)
     sources = []
     for h in hits:
         run_id, file = split_source(h.chunk.source)

@@ -58,7 +58,7 @@ def _run_selector() -> Path | None:
     from app.run_page import NEW_RUN_KEY
     from app.runs import describe_run, run_details
 
-    runs = store.viewable_runs(settings)
+    runs = store.viewable_runs(settings, None if VIEWER.developer else VIEWER.email)
     if not runs:
         return None
     options = [str(p) for p in runs]

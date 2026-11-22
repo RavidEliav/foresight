@@ -230,8 +230,8 @@ def sidebar_nav(pages: list, current) -> None:
 
 
 def recent_questions(run_dir: Path | None, settings: Settings, ask_page, user: str) -> None:
-    """The signed-in person's recent questions about the selected run; a click opens the
-    answer on the Ask Foresight page."""
+    """The signed-in person's recent questions about the selected run and about all runs; a
+    click opens the answer on the Ask Foresight page."""
     if run_dir is None:
         return
     from app import store
@@ -243,8 +243,11 @@ def recent_questions(run_dir: Path | None, settings: Settings, ask_page, user: s
     st.sidebar.html('<div class="fs-side-label">Recent questions</div>')
     with st.sidebar.container(key="recent"):
         for i, item in enumerate(items):
+            every = item.get("run") == store.ALL_RUNS
+            scope = "about all runs, " if every else ""
             if st.button(item["question"], key=f"recent-{i}", type="tertiary", width="stretch",
-                         help=f"{item['question']} (asked {local_time(item['time'])})"):
+                         icon=":material/stacks:" if every else None,
+                         help=f"{item['question']} ({scope}asked {local_time(item['time'])})"):
                 st.session_state["chat_open"] = item
                 st.switch_page(ask_page)
 

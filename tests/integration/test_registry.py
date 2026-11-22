@@ -78,6 +78,9 @@ def test_runs_are_recorded_in_postgres_and_read_back():
     assert stored_hits and stored_hits[0].chunk.source == file_hits[0].chunk.source
     assert stored_hits[0].score == pytest.approx(file_hits[0].score, abs=1e-3)
     assert set(runs) <= {state.run_id, *known}
+    only, runs = retrieve_all(question, settings, run_ids=[state.run_id])  # a user's runs
+    assert only and set(runs) == {state.run_id}
+    assert retrieve_all(question, settings, run_ids=[]) == ([], {})
 
 
 def test_a_stopped_scenario_run_without_a_manifest_is_still_synthetic(tmp_path):

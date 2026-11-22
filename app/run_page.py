@@ -45,7 +45,13 @@ def render(settings: Settings, results_page=None) -> None:
             _start(settings, source, upload, scenario)
 
     watched = st.session_state.get("watch_run")
+    user = None if ui.developer() else ui.user_email()  # a user sees only their own runs
     active = store.active_run(settings) or _continuable(settings)
+    if active and user is not None and not store.owns(active, user):
+        if active.effective_status() in ACTIVE and not watched:
+            st.info("Someone else's run is in progress. You can start yours when it finishes, "
+                    "in a few minutes.", icon=":material/hourglass_top:")
+        active = None
     run_id = watched or (active.run_id if active else None)
     if run_id:
         st.session_state["watch_run"] = run_id  # keep showing it after it finishes
@@ -233,11 +239,11 @@ def _history(settings: Settings) -> None:
     from app.messages import explain_failure
     from app.runs import local_time
 
-    runs = store.all_runs(settings)
+    developer = ui.developer()
+    runs = store.all_runs(settings) if developer else store.runs_of(settings, ui.user_email())
     if not runs:
         return
-    developer = ui.developer()
-    with st.expander(f"Run history ({len(runs)})"):
+    with st.expander(f"Run history ({len(runs)})" if developer else f"Your runs ({len(runs)})"):
         rows = []
         for p in runs[:30]:
             manifest = store.read_json(store.run_folder(settings, p.run_id),

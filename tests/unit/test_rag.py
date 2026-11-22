@@ -246,6 +246,12 @@ def test_questions_about_all_runs_search_every_run_and_cite_the_run(tmp_path, se
     refused = chat.ask_all("What is the capital of France?", settings)
     assert refused.refused and refused.answer == chat.REFUSAL_ALL
 
+    # a user's question covers only their runs (Phase 8.6)
+    only = chat.ask_all("How did the model's PR-AUC differ between runs?", settings,
+                        run_ids=["20260101T000000000000Z"])
+    assert len({s.run for s in only.sources}) == 1
+    assert "20260102" not in only.answer and "0.120" not in only.answer
+
 
 def test_all_runs_answers_may_sum_up_cited_lines_only_with_grounded_numbers():
     hits = [chat.Hit(Chunk("r1/model_card.md", "Metrics", "Test PR-AUC 0.085 (95% CI)."), 0.6),

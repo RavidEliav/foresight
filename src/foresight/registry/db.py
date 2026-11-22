@@ -81,17 +81,19 @@ def recorded(url: str) -> dict[str, tuple[str, int]]:
     return {run_id: (status, n) for run_id, status, n in rows}
 
 
-def search_chunks(url: str, query, limit: int) -> list[dict]:
-    """The chunks nearest to the query across all recorded runs (cosine, HNSW index), with
-    their run's start time and data."""
+def search_chunks(url: str, query, limit: int, run_ids: list[str] | None = None) -> list[dict]:
+    """The chunks nearest to the query across the recorded runs (all of them, or only
+    ``run_ids``; cosine, HNSW index), with their run's start time and data."""
+    only = "where c.run_id = any(%s) " if run_ids is not None else ""
     with connect(url) as conn, conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             "select c.run_id, c.source, c.section, c.body, "
             "1 - (c.embedding operator(extensions.<=>) %s::extensions.vector) as score, "
             "r.started_at, r.dataset, r.source as data_source from foresight.chunks c "
-            "join foresight.runs r on r.run_id = c.run_id "
+            f"join foresight.runs r on r.run_id = c.run_id {only}"
             "order by c.embedding operator(extensions.<=>) %s::extensions.vector limit %s",
-            [_vector(query), _vector(query), limit])
+            [_vector(query), *([list(run_ids)] if run_ids is not None else []),
+             _vector(query), limit])
         rows = cur.fetchall()
     for row in rows:
         if row["started_at"] is not None:

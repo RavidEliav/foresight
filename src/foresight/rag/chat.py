@@ -108,11 +108,23 @@ def citation_problem(answer: str, hits: list[Hit], grounded_summaries: bool = Fa
         is_list = re.search(r"^\s*(?:\d+[.)]|[-*])\s", paragraph, re.MULTILINE)
         if is_list and i + 1 < len(paragraphs) and CITATION.search(paragraphs[i + 1]):
             continue
-        if grounded_summaries and _numbers(paragraph) <= _numbers(
-                " ".join(f"{h.chunk.source} {h.chunk.text}" for h in hits)):
+        if grounded_summaries and _numbers(paragraph) <= _known_numbers(hits):
             continue
         return "part of it has no citation"
     return None
+
+
+RUN_ID = re.compile(r"(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})")
+
+
+def _known_numbers(hits: list[Hit]) -> set[str]:
+    """Numbers a summary may use: those in the excerpts and their sources, and the date and
+    time parts of the run ids ("the run on November 23, 2026" for run 20261123T1215...)."""
+    text = " ".join(f"{h.chunk.source} {h.chunk.text}" for h in hits)
+    found = _numbers(text)
+    for match in RUN_ID.finditer(text):
+        found |= {part for value in match.groups() for part in (value, str(int(value)))}
+    return found
 
 
 def _numbers(text: str) -> set[str]:

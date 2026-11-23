@@ -85,7 +85,10 @@ def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None,
 
     def heartbeat() -> None:
         while not stop.wait(settings.app.heartbeat_s):
-            tracker.save()
+            try:
+                tracker.save()
+            except OSError as exc:  # e.g. a full volume: say so in run.log, keep trying
+                print(f"heartbeat not saved: {exc}", flush=True)
 
     threading.Thread(target=heartbeat, daemon=True).start()
     threading.Thread(target=watch_for_stop, args=(tracker, stop, settings), daemon=True).start()

@@ -128,6 +128,13 @@ def active_run(settings: Settings) -> RunProgress | None:
     return jobs.active_run(settings)
 
 
+def interruption_cause(settings: Settings, run_dir: Path,
+                       progress: RunProgress) -> tuple[str, str]:
+    """Why an interrupted run stopped (storage full, a crash, a restart, memory) and what to
+    do."""
+    return jobs.interruption_cause(settings, run_dir, progress)
+
+
 def start_run(settings: Settings, upload: bytes | None, upload_name: str | None,
               scenario: dict | None = None, user: str = "") -> str:
     return jobs.start_run(settings, upload, upload_name, scenario, user=user)

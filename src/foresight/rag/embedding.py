@@ -1,8 +1,8 @@
 """Fixed local embedding model: all-MiniLM-L6-v2 through ONNX Runtime (via chromadb).
 
-It is downloaded once (about 80 MB) into ``paths.models_dir``; on Railway that folder is on the
-runs volume, so it survives redeploys. Vectors are L2-normalised, so a dot product is the
-cosine similarity.
+It is downloaded once (about 80 MB) into ``paths.models_dir``; on Railway that is the container's
+own disk (/tmp), so the runs volume keeps its space for runs, and each deploy downloads it again.
+Vectors are L2-normalised, so a dot product is the cosine similarity.
 
 Calls are serialised with a lock (with a timeout, so a waiting request fails clearly instead of
 hanging), and a watchdog writes every thread's stack to the log if one call takes too long.

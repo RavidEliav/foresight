@@ -2,7 +2,8 @@
 
 A run is a separate process (``python -m foresight.cli run``), so it keeps going when the
 browser is refreshed or closed. It writes progress.json and run.log into its run folder.
-Limits (D8): one run at a time and ``app.max_runs_per_hour``.
+Limits (D8): one run at a time and ``app.max_runs_per_hour``, and enough free space on the
+runs volume (a full volume killed two runs on 2026-11-22).
 """
 
 from __future__ import annotations
@@ -28,6 +29,9 @@ from foresight.settings import PROJECT_ROOT, Settings
 UPLOAD_FILE = "upload.csv"
 LOG_FILE = "run.log"
 _START_LOCK = threading.Lock()
+SERVER_STARTED = datetime.now(UTC)  # this app process: a run quiet since before was cut off
+MIN_FREE_MB = 50                    # below this a run cannot start (it could not save its files)
+DISK_FULL = "No space left on device"
 
 
 class RunLimitError(RuntimeError):
@@ -68,14 +72,75 @@ def check_can_start(settings: Settings) -> None:
                             "later; the latest results stay available on every page.")
 
 
-def prune_runs(settings: Settings) -> list[str]:
-    """Delete the oldest finished runs beyond ``app.keep_runs``; active runs are never touched."""
-    finished = [p for p in list_runs(settings) if p.effective_status() not in ACTIVE]
+def prune_runs(settings: Settings, keep: set[str] | None = None) -> list[str]:
+    """Delete the oldest finished runs beyond ``app.keep_runs`` (never an active run, nor the
+    runs in ``keep``), and the embedding model's old copy on the volume when the model now
+    lives elsewhere (about 170 MB)."""
+    finished = [p for p in list_runs(settings)
+                if p.effective_status() not in ACTIVE and p.run_id not in (keep or set())]
     removed = []
     for progress in finished[settings.app.keep_runs:]:
         shutil.rmtree(runs_dir(settings) / progress.run_id, ignore_errors=True)
         removed.append(progress.run_id)
+    old_models = runs_dir(settings) / ".models"
+    if old_models.exists() and settings.resolve(settings.paths.models_dir) != old_models:
+        shutil.rmtree(old_models, ignore_errors=True)
     return removed
+
+
+def free_mb(settings: Settings) -> float | None:
+    """Free space on the runs volume, in MB (None if it cannot be read)."""
+    folder = runs_dir(settings)
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        return shutil.disk_usage(folder).free / 1e6
+    except OSError:
+        return None
+
+
+def check_space(settings: Settings) -> None:
+    free = free_mb(settings)
+    if free is not None and free < MIN_FREE_MB:
+        raise RunLimitError(f"The server's storage is full ({free:.0f} MB free), so a run "
+                            "could not save its files. Please tell the developer.")
+
+
+def log_tail(run_dir: Path, size: int = 8000) -> str:
+    """The end of the run's log (its process's own output, errors included)."""
+    path = run_dir / LOG_FILE
+    try:
+        with path.open("rb") as handle:
+            handle.seek(max(0, path.stat().st_size - size))
+            return handle.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def interruption_cause(settings: Settings, run_dir: Path,
+                       progress: RunProgress) -> tuple[str, str]:
+    """Why a run stopped sending updates, in plain words, and what to do: the storage was
+    full, the run crashed (its last error), the app restarted, or the process was killed
+    without a word (usually memory)."""
+    from foresight.utils.logging import redact
+
+    resume = "Resume the run below: the stages it had finished are reused."
+    tail = log_tail(run_dir)
+    free = free_mb(settings)
+    if DISK_FULL in tail or (free is not None and free < MIN_FREE_MB):
+        return ("The server's storage was full, so the run could not save its files.",
+                "Old runs are deleted when a run starts; if Resume fails again, please tell "
+                "the developer.")
+    if "Traceback" in tail:
+        lines = [line.strip() for line in tail.splitlines() if line.strip()]
+        error = next((line for line in reversed(lines)
+                      if ":" in line and line.split(":", 1)[0].replace(".", "").isidentifier()
+                      and not line.startswith("File ")), lines[-1])
+        return f"The run crashed: {redact(error)[:300]}", resume
+    if datetime.fromisoformat(progress.updated_at) < SERVER_STARTED:
+        return ("The app restarted while the run was going (a new version was deployed, or "
+                "the server restarted)."), resume
+    return ("The run's process stopped without an error message, most likely because the "
+            "server ran out of memory."), resume
 
 
 def start_run(settings: Settings, upload: bytes | None = None,
@@ -87,6 +152,7 @@ def start_run(settings: Settings, upload: bytes | None = None,
     with _START_LOCK:
         check_can_start(settings)
         prune_runs(settings)
+        check_space(settings)
         run_id = new_run_id()
         run_dir = runs_dir(settings) / run_id
         run_dir.mkdir(parents=True)
@@ -116,6 +182,8 @@ def resume_run(settings: Settings, run_id: str, user: str = "") -> str:
         progress = load_progress(run_dir)
         if progress is None or not progress.can_continue:
             raise RunLimitError(f"Run {run_id} cannot be continued.")
+        prune_runs(settings, keep={run_id})
+        check_space(settings)
         command = [sys.executable, "-m", "foresight.cli", "run", "--run-id", run_id, "--resume"]
         if (run_dir / UPLOAD_FILE).exists():
             command += ["--dataset", str(run_dir / UPLOAD_FILE)]

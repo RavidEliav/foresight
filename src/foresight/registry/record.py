@@ -46,6 +46,18 @@ def _source(run_dir: Path, manifest: dict, dataset: str | None, settings: Settin
     return "upload" if dataset and dataset.startswith("Uploaded") else "secom"
 
 
+def _failure_reason(run_dir: Path, progress, settings: Settings) -> str | None:
+    """The recorded reason; for a run that stopped sending updates, why (storage, a crash, a
+    restart, memory)."""
+    if progress is None:
+        return None
+    if progress.failure_reason or progress.effective_status() != "interrupted":
+        return progress.failure_reason
+    from foresight.jobs import interruption_cause
+
+    return interruption_cause(settings, run_dir, progress)[0]
+
+
 def run_record(run_dir: Path, settings: Settings) -> dict | None:
     """The run's row (None if the folder holds no run)."""
     manifest = _json(run_dir, "run_manifest.json")
@@ -93,7 +105,7 @@ def run_record(run_dir: Path, settings: Settings) -> dict | None:
         "report_warning": checks.get("WARNING"),
         "report_error": checks.get("ERROR"),
         "gates": [{"gate": g["gate"], "status": g["status"]} for g in gates],
-        "failure_reason": (progress.failure_reason if progress else None),
+        "failure_reason": _failure_reason(run_dir, progress, settings),
         "git_commit": manifest.get("git_commit"),
         "manifest": manifest or None,
         "started_by": (progress.started_by if progress else "") or None,

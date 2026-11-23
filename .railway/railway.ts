@@ -39,6 +39,8 @@ export default defineRailway((ctx) => {
       RESEND_API_KEY: preserve(),
       // Supabase Postgres (Session pooler URL); its own project per environment (ADR-026).
       SUPABASE_DB_URL: preserve(),
+      // Its secret key, for the run files in Supabase Storage (ADR-033)
+      SUPABASE_SECRET_KEY: preserve(),
     },
   });
 

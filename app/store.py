@@ -81,6 +81,20 @@ def run_folder(settings: Settings, run_id: str) -> Path:
     return jobs.runs_dir(settings) / run_id
 
 
+def is_stub(run_dir: Path) -> bool:
+    """Only the run's progress and manifest are on the server; its files are in Supabase."""
+    from foresight.registry.archive import is_stub as stub
+
+    return stub(run_dir)
+
+
+def ensure_full(settings: Settings, run_dir: Path) -> bool:
+    """The run's files on the server, downloaded from Supabase Storage if needed (ADR-033)."""
+    from foresight.registry.archive import ensure_full as load
+
+    return load(settings, run_dir)
+
+
 def owns(progress: RunProgress | None, user: str) -> bool:
     """``user`` started, resumed or stopped the run (Phase 8.6)."""
     return bool(user and progress and (progress.started_by == user or user in progress.resumed_by
@@ -236,7 +250,16 @@ def sync_registry_in_background(settings: Settings) -> None:
         log = get_logger("registry")
         try:
             db.ping(settings.database_url)
+            from foresight.rag.chat import import_chat_logs
+
+            if settings.archive:  # ADR-033: stubs on an empty volume, then archive and slim
+                from foresight.registry.archive import restore_stubs
+
+                log.info("archive: %d run stubs restored", restore_stubs(settings))
             log.info("registry sync: %d runs recorded", registry.sync(settings))
+            if settings.archive:
+                log.info("archive: %d runs kept as stubs", len(jobs.tidy(settings)))
+            log.info("chat: %d logged questions moved to Supabase", import_chat_logs(settings))
         except Exception as exc:
             log.warning("registry sync skipped: %s", type(exc).__name__)
 

@@ -8,6 +8,7 @@ import pytest
 
 ENV_VARS = ("LLM_MODEL", "OPENAI_API_KEY", "RAILWAY_ENVIRONMENT_NAME",
             "RAILWAY_GIT_COMMIT_SHA", "SUPABASE_DB_URL", "SUPABASE_DB_URL_DEV",
+            "SUPABASE_URL", "SUPABASE_SECRET_KEY",
             # sign-in (Phase 8.6): without these the app opens as a local developer
             "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AUTH_COOKIE_SECRET", "RESEND_API_KEY",
             "FORESIGHT_DEVELOPERS", "FORESIGHT_PUBLIC_URL", "RAILWAY_PUBLIC_DOMAIN")

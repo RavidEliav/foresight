@@ -16,9 +16,9 @@ from foresight.registry.record import RUN_COLUMNS
 
 STAGE_COLUMNS = ("run_id", "name", "position", "status", "crew_status", "seconds",
                  "crew_seconds", "tokens")
-JSON_COLUMNS = {"gates", "manifest"}
-# The Trends page needs everything except the full manifest
-LIST_COLUMNS = tuple(c for c in RUN_COLUMNS if c != "manifest")
+JSON_COLUMNS = {"gates", "manifest", "progress"}
+# The Trends page needs everything except the full manifest and progress
+LIST_COLUMNS = tuple(c for c in RUN_COLUMNS if c not in ("manifest", "progress"))
 
 
 @contextmanager
@@ -112,6 +112,49 @@ def fetch_runs(url: str, limit: int = 500) -> list[dict]:
             if row[key] is not None:
                 row[key] = row[key].isoformat()
     return rows
+
+
+def mark_archived(url: str, run_id: str, size: int) -> None:
+    """The run's files are in Supabase Storage (ADR-033)."""
+    with connect(url) as conn:
+        conn.execute("update foresight.runs set archived_at = now(), archive_bytes = %s "
+                     "where run_id = %s", [size, run_id])
+
+
+def fetch_archived(url: str) -> list[dict]:
+    """Archived runs with what their stub needs: run id, progress and manifest."""
+    with connect(url) as conn, conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("select run_id, progress, manifest from foresight.runs "
+                    "where archived_at is not null and progress is not null")
+        return cur.fetchall()
+
+
+def insert_questions(url: str, records: list[dict]) -> None:
+    """Chat questions and answers (``record`` as logged); a record already there is skipped."""
+    with connect(url) as conn, conn.cursor() as cur:
+        cur.executemany(
+            "insert into foresight.questions (asked_at, run, user_email, question, record) "
+            "values (%s, %s, %s, %s, %s) on conflict do nothing",
+            [[r["time"], r["run"], r.get("user") or "", r.get("question") or "", Jsonb(r)]
+             for r in records])
+
+
+def fetch_questions(url: str, run: str | None = None, user: str | None = None,
+                    limit: int = 100) -> list[dict]:
+    """Logged chat records, newest first: about ``run`` and/or by ``user`` when given."""
+    where, params = [], []
+    if run is not None:
+        where.append("run = %s")
+        params.append(run)
+    if user is not None:
+        where.append("user_email = %s")
+        params.append(user)
+    clause = f"where {' and '.join(where)} " if where else ""
+    with connect(url) as conn:
+        rows = conn.execute(f"select record from foresight.questions {clause}"
+                            "order by asked_at desc, id desc limit %s",
+                            [*params, limit]).fetchall()
+    return [row[0] for row in rows]
 
 
 def fetch_stages(url: str, run_ids: list[str]) -> list[dict]:

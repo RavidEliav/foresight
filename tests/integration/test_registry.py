@@ -64,7 +64,22 @@ def test_runs_are_recorded_in_postgres_and_read_back():
         rls = conn.execute("select bool_and(relrowsecurity) from pg_class c join pg_namespace n "
                            "on n.oid = c.relnamespace where n.nspname = 'foresight' "
                            "and c.relkind = 'r'").fetchone()[0]
-    assert rls  # RLS on every registry table
+    assert rls  # RLS on every registry table (the chat history too)
+
+    # ADR-033: the row keeps the progress, archives are marked, chat history is stored once
+    from foresight.registry import db
+
+    assert "progress" not in stored[state.run_id]  # the Trends list stays light
+    db.mark_archived(TEST_DB_URL, state.run_id, 1234)
+    archived = {r["run_id"]: r for r in db.fetch_archived(TEST_DB_URL)}
+    assert archived[state.run_id]["progress"]["run_id"] == state.run_id
+    record = {"time": "2026-11-23T09:00:00+00:00", "run": state.run_id,
+              "user": "ada@example.com", "question": "Which sensor?", "answer": "f_558."}
+    later = {**record, "time": "2026-11-23T09:05:00+00:00", "run": "all_runs"}
+    db.insert_questions(TEST_DB_URL, [record, record, later])  # a repeated record: stored once
+    assert db.fetch_questions(TEST_DB_URL, run=state.run_id) == [record]
+    assert db.fetch_questions(TEST_DB_URL, user="ada@example.com") == [later, record]
+    assert db.fetch_questions(TEST_DB_URL, user="bob@example.com") == []
 
     # Cross-run memory: the runs' chat chunks in pgvector rank like the run folders' indexes
     from foresight.rag.cross import retrieve_all

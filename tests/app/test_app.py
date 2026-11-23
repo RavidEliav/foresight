@@ -241,3 +241,37 @@ def test_a_running_run_can_be_stopped_then_resumed(monkeypatch):
     assert at.button(key="continue").label == "Resume run"
     at.button(key="continue").click().run()
     assert resumed == [run_id]
+
+
+def test_an_archived_run_is_loaded_again_when_picked(monkeypatch):
+    """ADR-033: an older run is only a stub on the server; picking it downloads its files."""
+    import json
+
+    from foresight.progress import ProgressTracker
+    from foresight.registry import archive
+    from foresight.settings import load_settings
+
+    monkeypatch.setenv("SUPABASE_DB_URL",
+                       "postgresql://postgres.abcdefghijklmnopqrst:pw@127.0.0.1:1/x")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_test")
+    settings = load_settings()
+    run_id = "20261123T090000000000Z"
+    folder = jobs.runs_dir(settings) / run_id
+    ProgressTracker.create(folder, run_id, "SECOM (UCI)").finish("success")
+    (folder / "run_manifest.json").write_text(json.dumps({"run_id": run_id, "status": "success"}))
+    (folder / "validation_summary.json").write_text('{"checks": []}')
+    stored = archive.pack(folder)
+
+    class Found:
+        status_code, content, text = 200, stored, ""
+
+    monkeypatch.setattr(archive, "_request", lambda *_a, **_k: Found())
+    archive._write_marker(folder, {"updated_at": "x", "stub": True})
+    archive.make_stub(folder)
+    assert not (folder / "validation_summary.json").exists()
+
+    at = _app()
+    assert not at.exception
+    assert at.sidebar.selectbox(key="view_run").options[0].endswith("SECOM")
+    assert (folder / "validation_summary.json").exists()  # loaded for the result pages
+    assert not archive.is_stub(folder)

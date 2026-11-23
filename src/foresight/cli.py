@@ -104,6 +104,9 @@ def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None,
     finally:
         guard.cancel()
         stop.set()
+    from foresight.registry.archive import archive_run
+
+    archive_run(run_dir, settings)  # its files to Supabase Storage (ADR-033); logged on failure
     print(f"run {state.run_id}: {state.status}"
           + (f" ({state.failure_reason})" if state.failure_reason else ""), flush=True)
     return 0 if state.status == "success" else 1

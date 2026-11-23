@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import yaml
@@ -69,6 +70,7 @@ class AppSettings(BaseModel):
     max_runs_per_hour: int = 6       # cost and abuse control (one run at a time as well)
     heartbeat_s: int = 15            # a run without a heartbeat for 90 s counts as interrupted
     keep_runs: int = 10              # older finished runs are deleted (the volume is 500 MB)
+    keep_full_runs: int = 3          # with Supabase Storage: newest runs kept whole on the volume
 
 
 class AuthSettings(BaseModel):
@@ -101,9 +103,26 @@ class Settings(BaseModel):
     mock_llm: bool = False
     environment: str = "local"
     database_url: str = ""  # Supabase Postgres (Session pooler); empty = run folders only
+    storage_url: str = ""   # https://<project>.supabase.co, for Supabase Storage (ADR-033)
+    storage_key: SecretStr = SecretStr("")  # the project's secret key (server-side only)
 
     def resolve(self, path: Path) -> Path:
         return path if path.is_absolute() else PROJECT_ROOT / path
+
+    @property
+    def archive(self) -> bool:
+        """Run files are kept in Supabase Storage and chat history in Postgres (ADR-033): the
+        volume keeps only the newest runs whole and a small stub of the others."""
+        return bool(self.database_url and self.storage_url
+                    and self.storage_key.get_secret_value())
+
+
+def project_url(database_url: str) -> str:
+    """The Supabase project's API URL from its database URL: the Session pooler's user is
+    ``postgres.<project ref>``, a direct connection's host ``db.<ref>.supabase.co``."""
+    found = (re.search(r"//postgres\.([a-z0-9]{20})[:@]", database_url)
+             or re.search(r"@db\.([a-z0-9]{20})\.supabase\.co", database_url))
+    return f"https://{found.group(1)}.supabase.co" if found else ""
 
 
 def _as_bool(value: str | None) -> bool:
@@ -159,4 +178,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
         auth.public_url = f"https://{domain}"
     # Railway sets SUPABASE_DB_URL per environment (ADR-026); empty = the run folders only
     settings.database_url = os.getenv("SUPABASE_DB_URL", "").strip()
+    settings.storage_url = (os.getenv("SUPABASE_URL", "").strip()
+                            or project_url(settings.database_url)).rstrip("/")
+    settings.storage_key = SecretStr(os.getenv("SUPABASE_SECRET_KEY", "").strip())
     return settings

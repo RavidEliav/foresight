@@ -6,6 +6,8 @@ Copies the secrets from the local .env file to the Railway service foresight-app
   environments (ADR-003). A missing AUTH_COOKIE_SECRET is generated and saved to .env first.
 - SUPABASE_DB_URL: each environment gets its own Supabase project (ADR-026), from
   SUPABASE_DB_URL_DEV and SUPABASE_DB_URL_MAIN in .env (skipped if they are not there yet).
+- SUPABASE_SECRET_KEY: that project's secret key, for the run files in Supabase Storage
+  (ADR-033), from SUPABASE_SECRET_KEY_DEV and SUPABASE_SECRET_KEY_MAIN (skipped if missing).
 
 Values are sent through stdin and never printed. Variables are set without redeploying; they
 take effect with the next deploy.
@@ -20,7 +22,8 @@ if (-not (Test-Path $envFile)) { throw "No .env file found at $envFile" }
 
 $shared = "OPENAI_API_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AUTH_COOKIE_SECRET",
           "FORESIGHT_DEVELOPERS", "RESEND_API_KEY"
-$pattern = '^\s*(' + (($shared + "SUPABASE_DB_URL_DEV", "SUPABASE_DB_URL_MAIN") -join '|') +
+$perEnvironment = "SUPABASE_DB_URL", "SUPABASE_SECRET_KEY"
+$pattern = '^\s*(' + (($shared + ($perEnvironment | ForEach-Object { "$($_)_DEV", "$($_)_MAIN" })) -join '|') +
            ')\s*=\s*(.*)\s*$'
 
 function Read-Values {
@@ -84,12 +87,14 @@ foreach ($environment in "dev", "main") {
         Set-RailwaySecret $key $values[$key] $environment
         $expected[$key] = $values[$key]
     }
-    $database = $values["SUPABASE_DB_URL_$($environment.ToUpper())"]
-    if ($database) {
-        Set-RailwaySecret "SUPABASE_DB_URL" $database $environment
-        $expected["SUPABASE_DB_URL"] = $database
-    } else {
-        Write-Host "SUPABASE_DB_URL_$($environment.ToUpper()) not in .env: $environment keeps using the run folders"
+    foreach ($key in $perEnvironment) {
+        $value = $values["$($key)_$($environment.ToUpper())"]
+        if ($value) {
+            Set-RailwaySecret $key $value $environment
+            $expected[$key] = $value
+        } else {
+            Write-Host "$($key)_$($environment.ToUpper()) not in .env: skipped in $environment"
+        }
     }
     Assert-RailwaySecrets $expected $environment
 }

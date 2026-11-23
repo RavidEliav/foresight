@@ -141,7 +141,8 @@ def _show_run(settings: Settings, run_id: str, results_page) -> None:
         _live(settings, str(run_dir))
     else:
         cause = (store.interruption_cause(settings, run_dir, progress)
-                 if progress.effective_status() == "interrupted" else None)
+                 if progress.effective_status() == "interrupted"
+                 and not progress.failure_reason else None)
         _render_progress(progress, run_dir, results_page,
                          on_continue=lambda: _continue(settings, run_id), cause=cause)
 
@@ -273,8 +274,8 @@ def _history(settings: Settings) -> None:
             usage = manifest.get("crew_usage", {})
             checks = manifest.get("report_checks") or {}
             status = p.effective_status()
-            cause = (store.interruption_cause(settings, folder, p) if status == "interrupted"
-                     else None)
+            cause = (store.interruption_cause(settings, folder, p)
+                     if status == "interrupted" and not p.failure_reason else None)
             reason = ("" if status in (*ACTIVE, "success") else " ".join(
                 explain_failure(p, settings.analytics.test_fraction, cause)[0]))
             row = {

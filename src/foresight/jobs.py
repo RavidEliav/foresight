@@ -73,19 +73,38 @@ def check_can_start(settings: Settings) -> None:
 
 
 def prune_runs(settings: Settings, keep: set[str] | None = None) -> list[str]:
-    """Delete the oldest finished runs beyond ``app.keep_runs`` (never an active run, nor the
-    runs in ``keep``), and the embedding model's old copy on the volume when the model now
-    lives elsewhere (about 170 MB)."""
+    """Free space on the runs volume (never touching an active run, nor the runs in ``keep``).
+
+    With Supabase Storage (ADR-033) every finished run is archived there, and beyond the newest
+    ``app.keep_full_runs`` only its stub stays. Without it, the oldest finished runs beyond
+    ``app.keep_runs`` are deleted. The embedding model's old copy on the volume goes too when
+    the model now lives elsewhere (about 170 MB)."""
     finished = [p for p in list_runs(settings)
                 if p.effective_status() not in ACTIVE and p.run_id not in (keep or set())]
     removed = []
-    for progress in finished[settings.app.keep_runs:]:
-        shutil.rmtree(runs_dir(settings) / progress.run_id, ignore_errors=True)
-        removed.append(progress.run_id)
+    if settings.archive:
+        from foresight.registry.archive import archive_run, is_stub, make_stub
+
+        for position, progress in enumerate(finished):
+            folder = runs_dir(settings) / progress.run_id
+            if not is_stub(folder) and archive_run(folder, settings) \
+                    and position >= settings.app.keep_full_runs:
+                make_stub(folder)
+                removed.append(progress.run_id)
+    else:
+        for progress in finished[settings.app.keep_runs:]:
+            shutil.rmtree(runs_dir(settings) / progress.run_id, ignore_errors=True)
+            removed.append(progress.run_id)
     old_models = runs_dir(settings) / ".models"
     if old_models.exists() and settings.resolve(settings.paths.models_dir) != old_models:
         shutil.rmtree(old_models, ignore_errors=True)
     return removed
+
+
+def tidy(settings: Settings) -> list[str]:
+    """``prune_runs`` from the app's startup thread, never at the same time as a start."""
+    with _START_LOCK:
+        return prune_runs(settings)
 
 
 def free_mb(settings: Settings) -> float | None:
@@ -179,6 +198,11 @@ def resume_run(settings: Settings, run_id: str, user: str = "") -> str:
     with _START_LOCK:
         check_can_start(settings)
         run_dir = runs_dir(settings) / run_id
+        from foresight.registry.archive import ensure_full, is_stub
+
+        if is_stub(run_dir) and not ensure_full(settings, run_dir):
+            raise RunLimitError("The run's files could not be loaded from Supabase. Please try "
+                                "again in a minute.")
         progress = load_progress(run_dir)
         if progress is None or not progress.can_continue:
             raise RunLimitError(f"Run {run_id} cannot be continued.")

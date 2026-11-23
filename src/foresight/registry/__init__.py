@@ -30,6 +30,10 @@ def record_run(run_dir: Path, settings: Settings, known: dict | None = None) -> 
     status and chunk count already recorded) lets a backfill skip unchanged runs."""
     if not settings.database_url:
         return False
+    from foresight.registry.archive import is_stub
+
+    if is_stub(run_dir):  # its files are in Storage; the row was written when it was archived
+        return False
     try:
         from foresight.registry import db
 
@@ -47,9 +51,13 @@ def record_run(run_dir: Path, settings: Settings, known: dict | None = None) -> 
 
 
 def _run_folders(settings: Settings) -> list[Path]:
+    """Run folders with their files (not stubs of archived runs, ADR-033), and the reference
+    run."""
+    from foresight.registry.archive import is_stub
+
     folder = settings.resolve(settings.paths.runs_dir)
     found = [p for p in folder.iterdir() if p.is_dir() and not p.name.startswith(".")
-             and p.name != "chat_logs"] if folder.exists() else []
+             and p.name != "chat_logs" and not is_stub(p)] if folder.exists() else []
     reference = settings.resolve(settings.paths.reference_run_dir)
     return found + ([reference] if reference.exists() else [])
 

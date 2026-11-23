@@ -35,6 +35,8 @@ app:
   max_runs_per_hour: 6                # cost control; one run at a time as well
   heartbeat_s: 15                     # background run heartbeat (stale after 90 s = interrupted)
   keep_runs: 10                       # older finished runs are deleted (runs volume is 500 MB)
+  keep_full_runs: 3                   # with Supabase Storage: the newest runs stay whole on the
+                                      # volume, older ones keep only a small stub (ADR-033)
 
 rag:                                  # similar runs, knowledge base and "Ask Foresight" (§18)
   embedding_model: all-MiniLM-L6-v2   # local ONNX model: fixed, free, no API key

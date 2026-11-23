@@ -73,6 +73,11 @@ def _run_selector() -> Path | None:
                                        "your local time zone.",
                                   on_change=lambda: st.session_state.update({PINNED_KEY: True}))
     st.sidebar.caption(run_details(Path(choice)))
+    if store.is_stub(Path(choice)):  # an older run: its files are in Supabase (ADR-033)
+        with st.sidebar, st.spinner("Loading the run's files..."):
+            if not store.ensure_full(settings, Path(choice)):
+                st.sidebar.warning("This run's files could not be loaded. Please try again in "
+                                   "a minute.", icon=":material/cloud_off:")
     return Path(choice)
 
 

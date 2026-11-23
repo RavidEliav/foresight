@@ -264,3 +264,22 @@ def test_all_runs_answers_may_sum_up_cited_lines_only_with_grounded_numbers():
     invented = f"{lines}\n\nOverall, the PR-AUC rose by 41%."
     assert chat.citation_problem(invented, hits, grounded_summaries=True) \
         == "part of it has no citation"
+
+
+def test_a_summary_may_name_a_run_by_its_date():
+    """2026-11-23 on dev: "In summary, all runs except for the one on November 23, 2026,
+    passed" withheld a correct answer: 23 and 2026 were only inside the run id."""
+    hits = [chat.Hit(Chunk("20261123T121533778551Z/insights.md", "Data quality",
+                           "2 warnings: potential data drift."), 0.45),
+            chat.Hit(Chunk("20261122T065618249595Z/insights.md", "Data quality",
+                           "Passed with 16 checks."), 0.44)]
+    lines = ("- 20261123T121533778551Z: 2 warnings [source: 20261123T121533778551Z/insights.md "
+             "§ Data quality]\n- 20261122T065618249595Z: passed with 16 checks [source: "
+             "20261122T065618249595Z/insights.md § Data quality]")
+    for closing in ("In summary, every run except the one on November 23, 2026, passed.",
+                    "Only the run of 2026-11-23 at 12:15 had warnings; the 22 Nov run at 06:56 "
+                    "passed."):
+        assert chat.citation_problem(f"{lines}\n\n{closing}", hits,
+                                     grounded_summaries=True) is None, closing
+    assert chat.citation_problem(f"{lines}\n\nThe run on November 25 failed.", hits,
+                                 grounded_summaries=True) == "part of it has no citation"

@@ -37,8 +37,10 @@ def test_recorded_failure_reasons_read_as_plain_language():
                           "[2]; raw_timestamps: 3 unreadable", 0.25) == (
         "Some labels are not -1 (pass) or 1 (fail). Some timestamps are missing or are not "
         "readable dates.")
-    assert explain_reason("interrupted", None, 0.25).startswith("Interrupted")
-    assert explain_reason("interrupted", float("nan"), 0.25).startswith("Interrupted")  # pandas
+    assert explain_reason("interrupted", None, 0.25).startswith("Stopped sending updates")
+    assert explain_reason("interrupted", float("nan"), 0.25).startswith("Stopped sending")  # pd
+    assert explain_reason("interrupted", "The app restarted while the run was going.",
+                          0.25) == "The app restarted while the run was going."
     assert explain_reason("timeout", "stopped by the timeout guard after 1200 s", 0.25) \
         == "Took longer than the time limit and was stopped."
 

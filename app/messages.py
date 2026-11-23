@@ -58,7 +58,7 @@ def explain_reason(status: str, reason: str | None, test_fraction: float) -> str
     if status == "timeout":
         return "Took longer than the time limit and was stopped."
     if status == "interrupted" and not reason:
-        return "Interrupted, for example because the app restarted."
+        return "Stopped sending updates; the cause was not recorded."
     if status == "stopped":
         return "Stopped from the Run Pipeline page."
     if stage := re.match(r"(\w+) (stage|crew) error", reason):
@@ -67,8 +67,10 @@ def explain_reason(status: str, reason: str | None, test_fraction: float) -> str
     return reason or "Stopped."
 
 
-def explain_failure(progress: RunProgress, test_fraction: float) -> tuple[list[str], str | None]:
-    """Why a run stopped, in plain words, and what to do about it."""
+def explain_failure(progress: RunProgress, test_fraction: float,
+                    cause: tuple[str, str] | None = None) -> tuple[list[str], str | None]:
+    """Why a run stopped, in plain words, and what to do about it. ``cause`` is why an
+    interrupted run stopped sending updates (jobs.interruption_cause), when known."""
     reasons: list[str] = []
     hint = None
     for gate in progress.gates:
@@ -87,7 +89,9 @@ def explain_failure(progress: RunProgress, test_fraction: float) -> tuple[list[s
         return ["The run took longer than the time limit and was stopped."], \
             "Resume the run below; if it keeps happening, the LLM service may be slow."
     if status == "interrupted":
-        return ["The run was interrupted, for example because the app restarted."], \
+        if cause is not None:
+            return [cause[0]], cause[1]
+        return [reason or "The run stopped sending updates; the cause was not recorded."], \
             "Resume the run below: the stages it had finished are reused."
     if status == "stopped":
         return ["The run was stopped from this page."], \

@@ -26,7 +26,7 @@ class PathSettings(BaseModel):
     data_raw_dir: Path = Path("data/raw")
     contract_path: Path = Path("config/dataset_contract.json")
     knowledge_dir: Path = Path("knowledge")
-    models_dir: Path = Path("runs/.models")  # embedding model + knowledge index cache (volume)
+    models_dir: Path = Path("runs/.models")  # embedding model + knowledge index cache
 
 
 class RagSettings(BaseModel):
@@ -68,7 +68,7 @@ class AppSettings(BaseModel):
     run_timeout_s: int = 1200        # timeout guard for one pipeline run
     max_runs_per_hour: int = 6       # cost and abuse control (one run at a time as well)
     heartbeat_s: int = 15            # a run without a heartbeat for 90 s counts as interrupted
-    keep_runs: int = 20              # older finished runs are deleted (the volume is 500 MB)
+    keep_runs: int = 10              # older finished runs are deleted (the volume is 500 MB)
 
 
 class AuthSettings(BaseModel):
@@ -140,6 +140,10 @@ def load_settings(config_path: Path | None = None) -> Settings:
     for env_name, field in path_overrides.items():
         if value := os.getenv(env_name):
             setattr(settings.paths, field, Path(value))
+    if os.getenv("RAILWAY_ENVIRONMENT_NAME") and not os.getenv("FORESIGHT_MODELS_DIR"):
+        # the container's own disk, not the 500 MB runs volume: downloaded again (80 MB, a few
+        # seconds) after each deploy
+        settings.paths.models_dir = Path("/tmp/foresight-models")
     settings.mock_llm = _as_bool(os.getenv("MOCK_LLM"))
     settings.environment = os.getenv("RAILWAY_ENVIRONMENT_NAME", "local")
     auth = settings.auth

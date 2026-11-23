@@ -85,7 +85,7 @@ If a crew's own output fails a check, the crew gets the findings and revises it 
 
 ## RAG and embeddings
 
-Three extensions from requirements §18. Embeddings use a fixed local model (**all-MiniLM-L6-v2** through ONNX Runtime, 384 dimensions): free, no API key, downloaded once (about 80 MB) into `paths.models_dir`, which is on the runs volume on Railway.
+Three extensions from requirements §18. Embeddings use a fixed local model (**all-MiniLM-L6-v2** through ONNX Runtime, 384 dimensions): free, no API key, downloaded once (about 80 MB) into `paths.models_dir` (on Railway the container's own disk, so the runs volume keeps its space for runs).
 
 | Extension | What it does | Where |
 |---|---|---|

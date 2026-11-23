@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import errno
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +20,7 @@ STATUS_TEXT = {"queued": "is starting", "running": "is running", "success": "com
                "failed": "stopped", "timeout": "was stopped by the time limit",
                "interrupted": "was interrupted", "stopped": "was stopped"}
 NEW_RUN_KEY = "new_run"  # read by the sidebar run selector
+PIN_MINUTES = 30  # an interrupted run stays at the top this long after it went quiet
 
 
 def render(settings: Settings, results_page=None) -> None:
@@ -93,13 +95,28 @@ def _start(settings: Settings, source: str, upload, scenario=None) -> None:
     except store.RunLimitError as exc:
         st.warning(str(exc), icon=":material/hourglass_top:")
         return
+    except OSError as exc:  # e.g. a full volume: a message, not a crash page
+        ui.friendly_error(_not_written(exc, "start"))
+        return
     st.session_state["watch_run"] = run_id
 
 
+def _not_written(exc: OSError, action: str) -> str:
+    if exc.errno == errno.ENOSPC:
+        return (f"The run could not {action}: the server's storage is full. Please tell the "
+                "developer.")
+    return (f"The run could not {action}: the server could not write its files "
+            f"({exc.strerror or type(exc).__name__}).")
+
+
 def _continuable(settings: Settings) -> RunProgress | None:
-    """After a restart nothing is watched any more: show the newest run if it can continue."""
+    """After a restart nothing is watched any more: show the newest run if it can continue
+    and went quiet less than PIN_MINUTES ago (later it waits in the history, with Resume)."""
     runs = store.all_runs(settings)
-    return runs[0] if runs and runs[0].can_continue else None
+    if not runs or not runs[0].can_continue:
+        return None
+    quiet = datetime.now(UTC) - datetime.fromisoformat(runs[0].updated_at)
+    return runs[0] if quiet < timedelta(minutes=PIN_MINUTES) else None
 
 
 def _continue(settings: Settings, run_id: str) -> None:
@@ -107,6 +124,9 @@ def _continue(settings: Settings, run_id: str) -> None:
         store.resume_run(settings, run_id, ui.user_email())
     except store.RunLimitError as exc:
         st.warning(str(exc), icon=":material/hourglass_top:")
+        return
+    except OSError as exc:
+        ui.friendly_error(_not_written(exc, "resume"))
         return
     st.session_state["watch_run"] = run_id
     st.rerun()
@@ -120,8 +140,10 @@ def _show_run(settings: Settings, run_id: str, results_page) -> None:
     if progress.effective_status() in ACTIVE:
         _live(settings, str(run_dir))
     else:
+        cause = (store.interruption_cause(settings, run_dir, progress)
+                 if progress.effective_status() == "interrupted" else None)
         _render_progress(progress, run_dir, results_page,
-                         on_continue=lambda: _continue(settings, run_id))
+                         on_continue=lambda: _continue(settings, run_id), cause=cause)
 
 
 STOP_ERROR = "stop_error"
@@ -164,7 +186,7 @@ GATE_NAMES = {"data_contract": "Data Contract", "features_present": "Features",
 
 
 def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
-                     on_continue=None) -> None:
+                     on_continue=None, cause: tuple[str, str] | None = None) -> None:
     from app.messages import explain_failure
     from app.runs import local_time
 
@@ -180,7 +202,7 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
     elif status == "success":
         st.success(message, icon=":material/check_circle:")
     else:
-        reasons, hint = explain_failure(progress, _test_fraction())
+        reasons, hint = explain_failure(progress, _test_fraction(), cause)
         text = f"{message}\n\n" + "\n".join(f"- {r}" for r in reasons)
         if status == "interrupted":
             st.warning(text, icon=":material/pause_circle:")
@@ -246,13 +268,15 @@ def _history(settings: Settings) -> None:
     with st.expander(f"Run history ({len(runs)})" if developer else f"Your runs ({len(runs)})"):
         rows = []
         for p in runs[:30]:
-            manifest = store.read_json(store.run_folder(settings, p.run_id),
-                                       store.MANIFEST) or {}
+            folder = store.run_folder(settings, p.run_id)
+            manifest = store.read_json(folder, store.MANIFEST) or {}
             usage = manifest.get("crew_usage", {})
             checks = manifest.get("report_checks") or {}
             status = p.effective_status()
-            reason = ("" if status in (*ACTIVE, "success")
-                      else " ".join(explain_failure(p, settings.analytics.test_fraction)[0]))
+            cause = (store.interruption_cause(settings, folder, p) if status == "interrupted"
+                     else None)
+            reason = ("" if status in (*ACTIVE, "success") else " ".join(
+                explain_failure(p, settings.analytics.test_fraction, cause)[0]))
             row = {
                 "started": local_time(p.started_at, "%d %b, %H:%M"),
                 "dataset": p.dataset,

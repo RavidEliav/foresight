@@ -89,11 +89,34 @@ def test_interrupted_run_can_be_resumed(monkeypatch):
                         lambda _s, run_id, user="": continued.append((run_id, user)))
 
     at = _app()
-    assert any("was interrupted" in w.value for w in at.warning)
+    assert any("was interrupted" in w.value and "The app restarted while the run was going"
+               in w.value for w in at.warning)  # the cause, not "for example"
     stepper = next(h.proto.body for h in at.get("html") if "fs-stepper" in h.proto.body)
     assert 'class="fs-stage fs-interrupted"' in stepper  # not animated as running
     at.button(key="continue").click().run()
     assert continued == [("20260101T000000000000Z", "")]  # local checkout: no email
+
+    # Two hours later it no longer takes over the page; it waits in the history, with its cause
+    progress.updated_at = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
+    (run_dir / "progress.json").write_text(progress.model_dump_json())
+    at = _app()
+    assert not any("was interrupted" in w.value for w in at.warning)
+    assert not [b for b in at.button if b.key == "continue"]
+    history = at.dataframe[0].value
+    assert history.iloc[0]["why it stopped"].startswith("The app restarted")
+
+
+def test_a_full_volume_gives_a_message_not_a_crash_page(monkeypatch):
+    import errno
+
+    def full(*_args, **_kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(jobs, "start_run", full)
+    at = _app()
+    at.button(key="run").click().run()
+    assert not at.exception
+    assert any("the server's storage is full" in e.value for e in at.error)
 
 
 def test_stage_tile_matches_its_crew_line(tmp_path):

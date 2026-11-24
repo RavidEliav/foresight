@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 from foresight.settings import Settings
@@ -194,9 +195,33 @@ section[data-testid="stSidebar"] {
   font-size: .84rem; color: #CBD5E1; }
 /* signed-in person (Phase 8.6): the "Hi, name" menu top right, above the page title.
    No angle brackets in this style block: the HTML sanitizer drops a style that has them. */
-.st-key-topbar { margin: -1.6rem 0 -1.2rem 0; }
+/* Phase 8.7: on the title's line, taking no height of its own */
+.st-key-topbar { position: absolute; top: -.2rem; right: 0; width: auto !important;
+  z-index: 10; }
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] {
+  position: relative; }
 .st-key-topbar [data-testid="stPopover"] button p { font-weight: 600; color: #E2E8F0; }
 .fs-gap { height: .4rem; }
+/* Phase 8.7: one screen per page. Less space above the title, compact headline tiles, and
+   tables whose long text wraps instead of being cut off. */
+[data-testid="stMainBlockContainer"] { padding-top: 2.6rem; padding-bottom: 3rem; }
+[data-testid="stMain"] h1 { font-size: 2.15rem; padding: .1rem 0 .35rem 0; }
+.st-key-kpis [data-testid="stMetric"] { padding: .7rem 1rem; }
+.st-key-kpis [data-testid="stMetricValue"] > div { font-size: 1.85rem; }
+[class*="st-key-card-tabs"] [data-baseweb="tab-list"] { margin-top: -.3rem; }
+.st-key-card-replay-controls { padding-top: .7rem; padding-bottom: .5rem; }
+[data-testid="stTable"] table { font-size: .84rem; }
+[data-testid="stTable"] td, [data-testid="stTable"] th { padding: .3rem .55rem;
+  white-space: normal; vertical-align: top; }
+@media (max-width: 640px) {
+  [data-testid="stMainBlockContainer"] { padding: 1.4rem .75rem 2rem .75rem; }
+  [data-testid="stMain"] h1 { font-size: 1.6rem; }
+  .st-key-kpis [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: .5rem; }
+  .st-key-kpis [data-testid="stColumn"] { flex: 1 1 40% !important; min-width: 40% !important; }
+  .st-key-kpis [data-testid="stMetric"] { padding: .55rem .7rem; }
+  .st-key-kpis [data-testid="stMetricValue"] > div { font-size: 1.45rem; }
+  [class*="st-key-card-"] { padding: .75rem .8rem; }
+}
 </style>
 """
 
@@ -272,11 +297,59 @@ def kpis(items: list[tuple[str, str, str | None, str | None]]) -> None:
                           help=note, height="stretch")
 
 
+WRAP_CHARS = 60  # a column with longer text makes the table wrap its cells (Phase 8.7)
+MAX_TABLE_PX = 1000  # wider than a laptop's page: the table wraps its cells instead
+
+
+def _shown(value) -> str:
+    if isinstance(value, float):
+        return f"{value:.4g}"
+    return "" if value is None else str(value)
+
+
+def _formatted(value, config) -> str:
+    """A cell as text with the column's number format ("percent", "%.3f"), when it has one."""
+    fmt = ((config or {}).get("type_config") or {}).get("format") \
+        if isinstance(config, dict) else None
+    try:
+        if fmt and value is not None and not pd.isna(value):
+            return f"{float(value):.1%}" if fmt == "percent" else fmt % float(value)
+    except (TypeError, ValueError):
+        pass
+    return "" if value is None or (isinstance(value, float) and pd.isna(value)) \
+        else _shown(value)
+
+
+def column_widths(frame) -> dict[str, int]:
+    """Each column as wide as its header or its longest value, in pixels, so no header or
+    value is cut off."""
+    return {str(c): int(7.4 * max([len(str(c)), *(len(_shown(v)) for v in frame[c])]) + 30)
+            for c in frame.columns}
+
+
 def table(frame, column_config: dict | None = None, max_rows: int = 12) -> None:
-    """A compact table: columns as wide as their data, height fitted to the rows."""
+    """A compact table that fits its content (Phase 8.7): every column as wide as its header
+    or longest value, height fitted to the rows. A table with long text (more than
+    ``WRAP_CHARS`` characters in a cell), or wider than a laptop's page, is shown with wrapped
+    cells instead, so nothing is hidden behind a cut-off column."""
+    longest = max((len(_shown(v)) for c in frame.columns for v in frame[c]), default=0)
+    widths = column_widths(frame)
+    if longest > WRAP_CHARS or sum(widths.values()) > MAX_TABLE_PX:
+        shown = frame.head(max_rows) if len(frame) > max_rows else frame
+        shown = pd.DataFrame({column: [_formatted(v, (column_config or {}).get(column))
+                                       for v in shown[column]] for column in shown.columns})
+        st.table(shown, hide_index=True)
+        if len(frame) > max_rows:
+            st.caption(f"The first {max_rows} of {len(frame)} rows.")
+        return
+    config = dict(column_config or {})
+    for name, width in widths.items():
+        given = config.get(name, {})
+        if isinstance(given, dict):  # a page's own setting (format, label) keeps the width
+            config[name] = {**given, "width": given.get("width") or width}
     rows = min(len(frame), max_rows)
     st.dataframe(frame, hide_index=True, width="content", row_height=30,
-                 height=38 + 30 * rows + 2, column_config=column_config)
+                 height=38 + 30 * rows + 2, column_config=config)
 
 
 def label(text: str) -> None:

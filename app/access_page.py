@@ -28,14 +28,16 @@ def render(settings: Settings, viewer) -> None:
         return
 
     waiting = [a for a in everyone if a.status == "pending"]
-    with st.container(key="card-requests"):
+    # Phase 8.7: requests and the add form side by side, so the page fits one screen
+    left, right = st.columns(2, gap="medium")
+    with left, st.container(key="card-requests", height="stretch"):
         ui.label(f"Waiting requests ({len(waiting)})")
         if not waiting:
             st.caption("No one is waiting. New requests also arrive by email.")
         for account in waiting:
             _request(settings, viewer, account)
 
-    with st.container(key="card-add-user"):
+    with right, st.container(key="card-add-user", height="stretch"):
         ui.label("Add a person")
         st.caption("They get access at once: they only need to sign in with this Google "
                    "account.")

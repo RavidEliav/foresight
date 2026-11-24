@@ -64,11 +64,10 @@ def render(run_dir: Path | None) -> None:
                     icon=":material/history:")
         return
 
-    st.caption(run_label(run_dir))
-    st.caption("The test period played back run by run, as the line would have seen it. "
-               "Alarms are this run's own: the riskiest share of the test period (its alarm "
-               "budget), so the totals at the end match the Investigation & Report page. "
-               "Nothing is re-scored.")
+    st.caption(f"{run_label(run_dir)} · the test period run by run, with this run's own "
+               "alarms: nothing is re-scored.",
+               help="Alarms are the riskiest share of the test period (the run's alarm "
+                    "budget), so the totals at the end match Investigation & Report.")
     state = st.session_state
     if state.get(SHOWN_RUN) != str(run_dir):  # another run: start from the beginning
         state[SHOWN_RUN], state[POS], state[PLAYING] = str(run_dir), 0, False
@@ -98,10 +97,12 @@ def _controls(n: int) -> None:
                                                    PLAYING: False}), width="stretch")
         end.button("End", key="replay-end", icon=":material/last_page:",
                    on_click=lambda: state.update({POS: n, PLAYING: False}), width="stretch")
-        speed.segmented_control("Speed", list(SPEEDS), key=SPEED, default="3 runs/s")
+        speed.segmented_control("Speed", list(SPEEDS), key=SPEED, default="3 runs/s",
+                                label_visibility="collapsed")
         if not state[PLAYING]:
             state[SCRUB] = state[POS]
             st.slider("Position in the test period", 0, n, key=SCRUB,
+                      label_visibility="collapsed",
                       on_change=lambda: state.update({POS: state[SCRUB]}))
 
 
@@ -153,17 +154,17 @@ def _view(frame: pd.DataFrame, shown: int) -> None:
         ui.label("Risk score of each run as it comes off the line")
         charts.replay_stream(frame, shown, alarm_cutoff(frame), "replay-stream")
         st.caption("Rings: alarms. Amber: runs that failed. Dotted line: the alarm cutoff.")
-    with right, st.container(key="card-replay-wafer", height="stretch"):
-        ui.label("Newest run: simulated wafer")
+    alarms = frame.iloc[:shown]
+    alarms = alarms[alarms.flagged == 1].iloc[::-1].head(8)
+    # Phase 8.7: the wafer and the latest alarms share one card, so the page fits a screen
+    with right, st.container(key="card-tabs-replay-wafer", height="stretch"):
+        wafer_tab, alarms_tab = st.tabs(["Newest run: simulated wafer", "Latest alarms"])
+    with wafer_tab:
         if current is None:
             st.caption("Press Play or Next run to start the line.")
         else:
-            wafer_view(current, "replay-wafer")
-
-    alarms = frame.iloc[:shown]
-    alarms = alarms[alarms.flagged == 1].iloc[::-1].head(8)
-    with st.container(key="card-replay-alarms"):
-        ui.label("Latest alarms")
+            wafer_view(current, "replay-wafer", height=200, compact=True)
+    with alarms_tab:
         if alarms.empty:
             st.caption("No alarm yet.")
         else:
@@ -176,17 +177,19 @@ def _view(frame: pd.DataFrame, shown: int) -> None:
             }), {"risk score": st.column_config.NumberColumn(format="%.3f")}, max_rows=8)
 
 
-def wafer_view(run: pd.Series, key: str) -> None:
+def wafer_view(run: pd.Series, key: str, height: int = 300, compact: bool = False) -> None:
     """A run's simulated wafer and what is known about the run (also on Investigation &
     Report)."""
     failed = int(run.label) == 1
     wafer = simulate(int(run.run_id), failed, float(run.risk_score))
     outcome = ":orange-badge[failed]" if failed else ":gray-badge[passed]"
     alarm = ":blue-badge[alarm]" if int(run.flagged) == 1 else ":gray-badge[no alarm]"
-    st.markdown(f"**Run {int(run.run_id)}** {outcome} {alarm} · risk {run.risk_score:.3f}")
-    charts.wafer_3d(wafer, key, height=300)
+    st.markdown(f"**Run {int(run.run_id)}** {outcome} {alarm} · risk {run.risk_score:.3f}",
+                help=NOTE if compact else None)  # compact: the note as a tooltip
+    charts.wafer_3d(wafer, key, height=height)
     pattern = f" · pattern: {wafer.pattern}" if wafer.pattern else ""
     signals = run.top_signals if isinstance(run.top_signals, str) and run.top_signals else "none"
     st.caption(f"Simulated die yield {wafer.die_yield:.0%} ({wafer.bad_dies} of {wafer.dies} "
                f"dies defective){pattern}. Top signals (measured): {signals}.")
-    st.caption(NOTE)
+    if not compact:
+        st.caption(NOTE)

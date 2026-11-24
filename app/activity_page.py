@@ -27,24 +27,25 @@ def render(settings: Settings, viewer) -> None:
         ("Questions asked", str(len(questions)), None, "Questions to Ask Foresight"),
     ])
 
-    with st.container(key="card-my-runs"):
-        ui.label("Your runs")
+    # Phase 8.7: runs and questions in tabs, so the page fits one screen
+    runs_tab, questions_tab = st.tabs([f"Your runs ({len(runs)})",
+                                       f"Your questions ({len(questions)})"])
+    with runs_tab, st.container(key="card-my-runs"):
         if runs:
-            ui.table(pd.DataFrame(runs), max_rows=20)
+            ui.table(pd.DataFrame(runs), max_rows=10)
             st.caption("Open a successful run's results by choosing it under \"Results shown\" "
                        "in the sidebar.")
         else:
             st.caption("No runs yet. Start one on the Run Pipeline page.")
 
-    with st.container(key="card-my-questions"):
-        ui.label("Your questions")
+    with questions_tab, st.container(key="card-my-questions"):
         if questions:
             ui.table(pd.DataFrame([{
                 "asked": local_time(q.get("time"), "%d %b, %H:%M"),
                 "about": "all runs" if q.get("run") == store.ALL_RUNS else f"run {q.get('run')}",
                 "question": q.get("question", ""),
                 "answer": "not found" if q.get("refused") else "answered",
-            } for q in questions]), max_rows=20)
+            } for q in questions]), max_rows=10)
         else:
             st.caption("No questions yet. Ask one on the Ask Foresight page.")
 

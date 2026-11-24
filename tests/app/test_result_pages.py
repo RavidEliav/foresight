@@ -49,7 +49,9 @@ def test_users_see_the_results_without_the_extended_data(run_dir, module):
     charts and (on the report page) the engineering report download."""
     user, developer = _render(module, run_dir, "user"), _render(module, run_dir)
     assert not user.exception and not developer.exception
-    assert not user.tabs and developer.tabs
+    # Phase 8.7: users get the main tabs too; the Extended data tabs are the developer's
+    extended = {t.label for t in developer.tabs} - {t.label for t in user.tabs}
+    assert extended and len(user.tabs) + len(extended) == len(developer.tabs)
     assert user.get("metric") and len(user.get("metric")) == len(developer.get("metric"))
     if module == "app.report_page":
         assert [b.proto.label for b in user.get("download_button")] == [
@@ -73,8 +75,9 @@ def test_eda_page_shows_overview_and_top_sensor(run_dir):
     charts = [c.key for c in at.get("plotly_chart")]
     assert charts == ["weekly-fail-rate", "sensor-differences", "missing-by-sensor",
                       "correlation"]  # the last two under Extended data
-    assert [t.label for t in at.tabs] == ["Sensor statistics", "Missing data and redundancy",
-                                          "Full insights"]
+    assert [t.label for t in at.tabs] == ["Fail rate over time", "Sensors that differ",
+                                          "Sensor statistics", "Missing data and redundancy",
+                                          "Full insights"]  # the main part's tabs first
 
     assert any("## Summary" in md.value for md in at.markdown)
 
@@ -85,7 +88,9 @@ def test_model_page_shows_metrics_with_confidence_intervals(run_dir):
     assert [m.label for m in at.metric] == ["PR-AUC", "Fail recall", "Precision",
                                             "Balanced accuracy"]
     assert "95% bootstrap CI" in at.metric[0].help
-    comparison = at.dataframe[0].value
+    assert [t.label for t in at.tabs][:4] == ["Risk scores", "Important sensors",
+                                              "Alarms vs outcomes", "Precision-recall"]
+    comparison = at.table[0].value  # long descriptions: a wrapped table (Phase 8.7)
     assert set(comparison["model"]) == {"logreg_l1", "random_forest", "rf_regularized",
                                         "rf_select_k", "baseline_always_pass"}
 
@@ -97,9 +102,11 @@ def test_report_page_leads_with_headline_numbers_and_puts_details_in_tabs(run_di
                                             "Anomaly flag lift", "Sensors out of limits",
                                             "Similar runs that failed"]
     assert " of " in at.metric[0].value and at.metric[0].delta.startswith("with ")
-    assert [t.label for t in at.tabs] == ["Engineering report", "Full investigation",
+    assert [t.label for t in at.tabs] == ["Key findings", "Hypotheses",
+                                          "Anomalies and run map", "Simulated wafer",
+                                          "Engineering report", "Full investigation",
                                           "Risk ranking", "Similar past runs", "Anomalies",
-                                          "Safety checks"]
+                                          "Safety checks"]  # main part, then Extended data
     assert len(at.get("plotly_chart")) == 3  # anomaly timeline, run map, simulated wafer
     assert "Report safety checks: **PASS**" in at.success[0].value
     assert any("## What was detected" in md.value for md in at.markdown)
@@ -316,7 +323,7 @@ def test_trends_page_reads_the_run_folders_without_supabase():
     assert any("run folders on this server" in c.value for c in at.caption)
     assert "trend-quality" in [c.key for c in at.get("plotly_chart")]
     assert any("No stage times recorded yet." in c.value for c in at.caption)
-    assert at.dataframe[0].value.iloc[0]["source"] == "Reference"
+    assert at.table[0].value.iloc[0]["source"] == "Reference"  # 12 columns: wrapped
     assert any("Every recorded run completed." in c.value for c in at.caption)
 
 
@@ -384,7 +391,7 @@ def test_line_replay_plays_the_test_period_and_ends_on_the_runs_own_totals(run_d
     at.button(key="replay-step").click().run()
     assert at.metric[0].value == f"1 of {total}"
     assert len(at.get("plotly_chart")) == 2  # the stream and the newest run's wafer
-    assert any("Simulated wafer" in c.value for c in at.caption)
+    assert any("Simulated wafer" in (m.proto.help or "") for m in at.markdown)  # a tooltip
 
     at.button(key="replay-play").click().run()  # one tick at the default speed (3 runs/s)
     assert not at.exception

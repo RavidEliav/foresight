@@ -27,22 +27,23 @@ def render(run_dir: Path | None) -> None:
         ("Sensors differ (q<0.05)", str(eda["significant_features_q_below_0.05"]), None,
          "Mann-Whitney U test, failing vs passing runs, Benjamini-Hochberg corrected"),
     ])
-    if store.exists(run_dir, "insights.md"):
-        with st.container(key="card-insights"):
+    # Phase 8.7: the crew's insights beside one chart card with tabs, so the page fits a screen
+    insights = store.exists(run_dir, "insights.md")
+    left, right = st.columns([2, 3], gap="medium") if insights else (None, st.container())
+    if insights:
+        with left, st.container(key="card-insights", height="stretch"):
             ui.label("Insights from the Data Analyst crew")
             _summary_section(run_dir)
-
-    left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-chart-failrate", height="stretch"):
-        ui.label("Fail rate over time")
-        charts.weekly_fail_rate(eda)
-        months = ", ".join(f"{m}: {r:.1%}" for m, r in eda["monthly_fail_rate"].items())
-        st.caption(f"By month: {months}")
-    with right, st.container(key="card-chart-sensors", height="stretch"):
-        ui.label("Sensors that differ between failing and passing runs")
-        charts.sensor_differences(eda)
-        st.caption("A difference between failing and passing runs is a correlation, not a "
-                   "cause. Sensor names are anonymized.")
+    with right, st.container(key="card-tabs-eda", height="stretch"):
+        rate, sensors = st.tabs(["Fail rate over time", "Sensors that differ"])
+        with rate:
+            charts.weekly_fail_rate(eda)
+            months = ", ".join(f"{m}: {r:.1%}" for m, r in eda["monthly_fail_rate"].items())
+            st.caption(f"By month: {months}")
+        with sensors:
+            charts.sensor_differences(eda)
+            st.caption("Sensors that differ between failing and passing runs. A difference is "
+                       "a correlation, not a cause. Sensor names are anonymized.")
 
     if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
         return

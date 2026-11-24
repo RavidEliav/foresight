@@ -41,31 +41,30 @@ def render(run_dir: Path | None) -> None:
 
     cm = metrics["confusion_matrix"]
     fixed = metrics["test_metrics_fixed_threshold"]
-    with st.container(key="card-model-summary"):
+    # Phase 8.7: the selected model beside one chart card with tabs, so the page fits a screen
+    left, right = st.columns([2, 3], gap="medium")
+    with left, st.container(key="card-model-summary", height="stretch"):
         ui.label("Selected model")
-        st.markdown(f"**`{metrics['selected_model']}`** · operating point: {op['rule']}")
-        st.markdown(f"On the test period the alarm budget raised **{op['alarms_in_test']}** "
-                    f"alarms: **{cm['tp']}** failing runs caught, **{cm['fn']}** missed, "
-                    f"**{cm['fp']}** false alarms. For comparison, the fixed threshold "
-                    f"({metrics['threshold']:.3f}, tuned on older runs) caught "
-                    f"{fixed['recall_fail']:.0%} of failing runs.")
-
-    left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-chart-risk", height="stretch"):
-        ui.label("Risk scores over the test period")
-        charts.risk_over_time(run_dir, op.get("cutoff_probability_in_test"),
-                              metrics.get("threshold"))
-        st.caption("Drift moves the scores; the alarm budget adapts, a fixed threshold does not.")
-    with right, st.container(key="card-chart-pr", height="stretch"):
-        ui.label("Precision-recall curve")
-        charts.pr_curve(run_dir, metrics["baseline_pr_auc"])
-    left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-chart-confusion", height="stretch"):
-        ui.label("Alarms vs outcomes (test period)")
-        charts.confusion(cm)
-    with right, st.container(key="card-chart-importance", height="stretch"):
-        ui.label("Most important sensors")
-        charts.importance(metrics)
+        st.markdown(f"**`{metrics['selected_model']}`** · {op['rule']}.")
+        st.markdown(f"On the test period it raised **{op['alarms_in_test']}** alarms: "
+                    f"**{cm['tp']}** failing runs caught, **{cm['fn']}** missed, "
+                    f"**{cm['fp']}** false alarms.")
+        st.markdown(f"The fixed threshold ({metrics['threshold']:.3f}, tuned on older runs) "
+                    f"caught {fixed['recall_fail']:.0%} of failing runs.")
+        st.caption("Drift moves the scores; the alarm budget adapts, a fixed threshold does "
+                   "not.")
+    with right, st.container(key="card-tabs-model", height="stretch"):
+        risk, sensors, outcomes, curve = st.tabs(["Risk scores", "Important sensors",
+                                                  "Alarms vs outcomes", "Precision-recall"])
+        with risk:
+            charts.risk_over_time(run_dir, op.get("cutoff_probability_in_test"),
+                                  metrics.get("threshold"))
+        with sensors:
+            charts.importance(metrics)
+        with outcomes:
+            charts.confusion(cm)
+        with curve:
+            charts.pr_curve(run_dir, metrics["baseline_pr_auc"])
 
     if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
         return

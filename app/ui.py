@@ -213,6 +213,11 @@ section[data-testid="stSidebar"] {
 [data-testid="stTable"] table { font-size: .84rem; }
 [data-testid="stTable"] td, [data-testid="stTable"] th { padding: .3rem .55rem;
   white-space: normal; vertical-align: top; }
+/* Ask Foresight: the conversation scrolls in a box that fills the window between the scope
+   line and the examples above the question bar, so those stay in place */
+.st-key-chat-log, [data-testid="stLayoutWrapper"]:has(.st-key-chat-log) {
+  height: calc(100dvh - 32.5rem) !important; min-height: 12rem !important;
+  max-height: none !important; flex: 0 0 auto !important; }
 @media (max-width: 640px) {
   [data-testid="stMainBlockContainer"] { padding: 1.4rem .75rem 2rem .75rem; }
   [data-testid="stMain"] h1 { font-size: 1.6rem; }
@@ -221,6 +226,8 @@ section[data-testid="stSidebar"] {
   .st-key-kpis [data-testid="stMetric"] { padding: .55rem .7rem; }
   .st-key-kpis [data-testid="stMetricValue"] > div { font-size: 1.45rem; }
   [class*="st-key-card-"] { padding: .75rem .8rem; }
+  .st-key-chat-log, [data-testid="stLayoutWrapper"]:has(.st-key-chat-log) {
+    height: calc(100dvh - 38rem) !important; }
 }
 </style>
 """
@@ -285,6 +292,14 @@ def page_header(title: str) -> None:
 def section_label(text: str) -> None:
     """Uppercase divider between the main content and the extended data."""
     st.html(f'<div class="fs-section">{text}</div>')
+
+
+def extended(labels: list[str], key: str) -> str | None:
+    """Extended data: a row of tabs that are all closed until one is pressed (pressing it
+    again closes it). Returns the open tab's label; only that tab is drawn."""
+    section_label("Extended data")
+    return st.segmented_control("Extended data", labels, key=f"extended-{key}",
+                                label_visibility="collapsed")
 
 
 def kpis(items: list[tuple[str, str, str | None, str | None]]) -> None:

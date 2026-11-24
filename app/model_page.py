@@ -68,10 +68,8 @@ def render(run_dir: Path | None) -> None:
 
     if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
         return
-    ui.section_label("Extended data")
-    comparison, evaluation, card = st.tabs(["Model comparison", "Evaluation report",
-                                            "Model card"])
-    with comparison:
+    shown = ui.extended(["Model comparison", "Evaluation report", "Model card"], "model")
+    if shown == "Model comparison":
         st.subheader("Model comparison")
         rows = [{"model": name, "time CV PR-AUC": c["cv_pr_auc_mean"],
                  "stratified CV (optimistic)": c["stratified_cv_pr_auc_mean"],
@@ -82,12 +80,12 @@ def render(run_dir: Path | None) -> None:
                          for c in frame.columns if c not in ("model", "description")})
         rules = (metrics["selection_rule"], op["rule"])
         st.caption(" ".join(f"{rule[:1].upper()}{rule[1:]}." for rule in rules))
-    with evaluation:
+    elif shown == "Evaluation report":
         report = store.read_text(run_dir, "evaluation_report.md")
         if report is not None:
             st.markdown(report)
             st.download_button("Download evaluation_report.md", report.encode("utf-8"),
                                file_name="evaluation_report.md", mime="text/markdown")
-    with card:
-        if not show_markdown_file(run_dir, "model_card.md", "Download model_card.md"):
-            st.info("No model card in this run.")
+    elif shown == "Model card" and not show_markdown_file(run_dir, "model_card.md",
+                                                          "Download model_card.md"):
+        st.info("No model card in this run.")

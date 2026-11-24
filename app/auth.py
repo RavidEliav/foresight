@@ -189,9 +189,10 @@ def gate_page(settings: Settings, state: Session, privacy, terms) -> None:
         else:
             _no_access(settings, state.account)
         st.html('<div class="fs-gap"></div>')
-        left, right, _ = st.columns([1, 1, 3])
-        left.page_link(privacy, label="Privacy", icon=":material/shield:")
-        right.page_link(terms, label="Terms", icon=":material/gavel:")
+        # a row as wide as its links: fixed columns cut the labels in a narrow window
+        with st.container(key="legal-links", horizontal=True, gap="small"):
+            st.page_link(privacy, label="Privacy", icon=":material/shield:", width="content")
+            st.page_link(terms, label="Terms", icon=":material/gavel:", width="content")
 
 
 def _sign_in(settings: Settings) -> None:

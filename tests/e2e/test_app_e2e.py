@@ -91,6 +91,7 @@ def test_e2_every_result_page_shows_its_content(app_page: Page):
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Fail rate")).to_be_visible()
 
     _goto(app_page, "Model")
+    _open_extended(app_page, "Model comparison")  # Extended data: closed until pressed
     expect(app_page.get_by_role("heading", name="Model comparison")).to_be_visible()
     expect(app_page.get_by_test_id("stMetric").filter(has_text="PR-AUC")).to_be_visible()
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Fail recall")).to_be_visible()
@@ -98,6 +99,12 @@ def test_e2_every_result_page_shows_its_content(app_page: Page):
     expect(app_page.get_by_test_id("stTable").first).to_contain_text("baseline_always_pass")
     expect(app_page.get_by_text("Model card", exact=False).first).to_be_visible()
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
+
+
+def _open_extended(page: Page, tab: str) -> None:
+    """Extended data is a row of tabs that are all closed until one is pressed."""
+    page.locator(".st-key-extended-report, .st-key-extended-model").get_by_role(
+        "radio", name=tab, exact=True).click()  # a segmented control: radio buttons
 
 
 def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
@@ -111,10 +118,10 @@ def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
     app_page.get_by_role("tab", name="Anomalies and run map").click()
     expect(app_page.locator('[data-testid="stPlotlyChart"]:visible').first).to_be_visible(
         timeout=30_000)
-    app_page.get_by_role("tab", name="Full investigation").click()
+    _open_extended(app_page, "Full investigation")
     for label in ("Facts", "Assumptions", "Hypotheses"):
         expect(app_page.locator("span:visible", has_text=label).first).to_be_visible()
-    app_page.get_by_role("tab", name="Engineering report").click()
+    _open_extended(app_page, "Engineering report")
     with app_page.expect_download() as download:
         app_page.get_by_role("button", name="Download engineering_report.md").click()
     text = Path(download.value.path()).read_text(encoding="utf-8")

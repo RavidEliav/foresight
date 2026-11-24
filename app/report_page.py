@@ -79,25 +79,24 @@ def render(run_dir: Path | None) -> None:
                                file_name="engineering_report.md", mime="text/markdown",
                                type="primary", icon=":material/download:")
         return
-    ui.section_label("Extended data")
-    report, investigation, risk_tab, similar_tab, anomalies, safety = st.tabs(TABS)
-    with report:
+    shown = ui.extended(TABS, "report")
+    if shown == "Engineering report":
         _render_report(run_dir)
-    with investigation:
+    elif shown == "Full investigation":
         _render_investigation(run_dir)
-    with risk_tab:
+    elif shown == "Risk ranking":
         if risk:
             _render_risk(risk)
         else:
             _older_run("The risk ranking")
-    with similar_tab:
+    elif shown == "Similar past runs":
         if similar:
             _render_similar(similar)
         else:
             _older_run("Similar-run search")
-    with anomalies:
+    elif shown == "Anomalies":
         _render_anomalies(summary)
-    with safety:
+    elif shown == "Safety checks":
         _render_checks(checks)
 
 

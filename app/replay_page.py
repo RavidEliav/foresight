@@ -71,11 +71,27 @@ def render(run_dir: Path | None) -> None:
     state = st.session_state
     if state.get(SHOWN_RUN) != str(run_dir):  # another run: start from the beginning
         state[SHOWN_RUN], state[POS], state[PLAYING] = str(run_dir), 0, False
-    _controls(len(frame))
-    if state[PLAYING]:
-        _live(str(run_dir))
-    else:
-        _view(frame, state[POS])
+    # The controls and the view are one fragment, playing or not, and only its timer changes:
+    # Play and Pause redraw the same elements in the same places, so the page does not jump.
+    ticking = bool(state[PLAYING])
+    st.fragment(_replay, run_every=TICK_S if ticking else None)(str(run_dir), ticking)
+
+
+def _replay(run_dir: str, ticking: bool) -> None:
+    """The controls and the view. While playing, each tick advances by the chosen speed."""
+    state = st.session_state
+    frame = load(Path(run_dir))
+    if frame is None:
+        return
+    n = len(frame)
+    if ticking and state[PLAYING]:
+        state[POS] = min(state[POS] + SPEEDS.get(state.get(SPEED) or "", 3), n)
+        if state[POS] >= n:
+            state[PLAYING] = False
+    if bool(state[PLAYING]) != ticking:  # Play, Pause or the end: start or stop the timer
+        st.rerun(scope="app")
+    _controls(n)
+    _view(frame, state[POS])
 
 
 def _controls(n: int) -> None:
@@ -83,12 +99,12 @@ def _controls(n: int) -> None:
     with st.container(key="card-replay-controls"):
         play, restart, step, end, speed = st.columns([1.2, 1, 1, 1, 3],
                                                      vertical_alignment="bottom")
-        if state[PLAYING]:
-            play.button("Pause", key="replay-pause", icon=":material/pause:", type="primary",
-                        on_click=lambda: state.update({PLAYING: False}), width="stretch")
-        else:
-            play.button("Play", key="replay-play", icon=":material/play_arrow:",
-                        type="primary", on_click=_play, args=(n,), width="stretch")
+        # one button whose label changes (the key is its identity): swapping two buttons
+        # showed both for a moment and moved the page
+        playing = bool(state[PLAYING])
+        play.button("Pause" if playing else "Play", key="replay-toggle",
+                    icon=":material/pause:" if playing else ":material/play_arrow:",
+                    type="primary", on_click=_toggle, args=(n,), width="stretch")
         restart.button("Restart", key="replay-restart", icon=":material/replay:",
                        on_click=lambda: state.update({POS: 0, PLAYING: False}),
                        width="stretch")
@@ -99,33 +115,21 @@ def _controls(n: int) -> None:
                    on_click=lambda: state.update({POS: n, PLAYING: False}), width="stretch")
         speed.segmented_control("Speed", list(SPEEDS), key=SPEED, default="3 runs/s",
                                 label_visibility="collapsed")
-        if not state[PLAYING]:
-            state[SCRUB] = state[POS]
-            st.slider("Position in the test period", 0, n, key=SCRUB,
-                      label_visibility="collapsed",
-                      on_change=lambda: state.update({POS: state[SCRUB]}))
+        state[SCRUB] = state[POS]  # always shown (follows the line while playing): no jump
+        st.slider("Position in the test period", 0, n, key=SCRUB, disabled=state[PLAYING],
+                  label_visibility="collapsed",
+                  on_change=lambda: state.update({POS: state[SCRUB]}))
 
 
-def _play(n: int) -> None:
+def _toggle(n: int) -> None:
+    """Play or Pause."""
     state = st.session_state
+    if state[PLAYING]:
+        state[PLAYING] = False
+        return
     if state[POS] >= n:
         state[POS] = 0
     state[PLAYING] = True
-
-
-@st.fragment(run_every=TICK_S)
-def _live(run_dir: str) -> None:
-    """One tick of the replay: advance by the chosen speed and redraw."""
-    state = st.session_state
-    frame = load(Path(run_dir))
-    if frame is None or not state.get(PLAYING):
-        return
-    n = len(frame)
-    state[POS] = min(state[POS] + SPEEDS.get(state.get(SPEED) or "", 3), n)
-    _view(frame, state[POS])
-    if state[POS] >= n:
-        state[PLAYING] = False
-        st.rerun()
 
 
 def _view(frame: pd.DataFrame, shown: int) -> None:

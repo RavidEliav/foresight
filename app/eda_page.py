@@ -47,17 +47,16 @@ def render(run_dir: Path | None) -> None:
 
     if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
         return
-    ui.section_label("Extended data")
-    sensors, missing, insights = st.tabs(["Sensor statistics", "Missing data and redundancy",
-                                          "Full insights"])
-    with sensors:
+    shown = ui.extended(["Sensor statistics", "Missing data and redundancy", "Full insights"],
+                        "eda")
+    if shown == "Sensor statistics":
         table = pd.DataFrame(eda["top_discriminating_features"])
         if not table.empty:
             ui.table(table[["feature", "direction", "effect", "q_value", "median_pass",
                             "median_fail"]],
                      {"effect": st.column_config.NumberColumn(format="%.3f"),
                       "q_value": st.column_config.NumberColumn(format="%.2e")})
-    with missing:
+    elif shown == "Missing data and redundancy":
         m = eda["missingness"]
         st.markdown(f"- {m['features_with_missing']} sensors have gaps\n"
                     f"- Missing values per run: failing {m['mean_missing_per_run_fail']}, "
@@ -72,7 +71,7 @@ def render(run_dir: Path | None) -> None:
         with right, st.container(key="card-chart-correlation", height="stretch"):
             ui.label("Correlation between the sensors that differ most")
             charts.correlation(run_dir, top)
-    with insights:
+    elif shown == "Full insights":
         show_markdown_file(run_dir, "insights.md", "Download insights.md")
         report = store.read_bytes(run_dir, "eda_report.html")
         if report is not None:

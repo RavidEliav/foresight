@@ -48,8 +48,14 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     if opened and opened.get("run") == (ALL_RUNS if every else run_dir.name) and (
             not history or history[-1]["question"] != opened["question"]):
         history.append({**opened, "from_history": True})
-    for item in history:
-        _show(item)
+    # the conversation scrolls in its own box (its height follows the window, ui.CSS), so the
+    # title, the scope and the question bar stay in place
+    log = st.container(height=400, key="chat-log", border=False)
+    with log:
+        for item in history:
+            _show(item)
+        if not history:
+            st.caption("Ask a question below, or pick an example.")
 
     turn = st.session_state.setdefault("example_turn", 0)
     picked = st.pills("Examples", EXAMPLES_ALL if every else EXAMPLES,
@@ -58,9 +64,9 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     if picked:
         st.session_state["example_turn"] = turn + 1  # use a picked example only once
     if question:
-        with st.chat_message("user"):
+        with log, st.chat_message("user"):
             st.markdown(question)
-        with st.chat_message("assistant", avatar=ui.LOGO_IMAGE), \
+        with log, st.chat_message("assistant", avatar=ui.LOGO_IMAGE), \
                 st.spinner("Searching all runs' reports..." if every
                            else "Searching this run's reports..."):
             item = _ask(question, None if every else run_dir, settings)

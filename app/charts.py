@@ -15,7 +15,7 @@ CYAN, VIOLET, AMBER, GREEN, RED, SLATE = ("#22D3EE", "#A78BFA", "#FBBF24", "#34D
 GRID = "rgba(148,163,184,0.10)"
 # Charts that share a row have the same height, so their tops and bottoms line up.
 ROW_HEIGHT, MODEL_HEIGHT, DETAIL_HEIGHT = 300, 290, 460  # Phase 8.7: rows fit a screen
-TREND_HEIGHT, REPLAY_HEIGHT = 270, 225  # time lines read well lower
+TREND_HEIGHT, REPLAY_HEIGHT = 270, 205  # time lines read well lower
 
 pio.templates["foresight"] = go.layout.Template(layout=go.Layout(
     font={"family": "Inter, sans-serif", "color": "#CBD5E1", "size": 13},

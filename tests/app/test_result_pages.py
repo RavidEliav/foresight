@@ -42,6 +42,18 @@ def _render(module: str, run_dir: Path | None, role: str = "developer") -> AppTe
                                  default_timeout=60).run()
 
 
+def _extended(at: AppTest) -> list:
+    """The Extended data row (Phase 8.7 feedback): tabs that are closed until one is pressed."""
+    return [s for s in at.segmented_control if (s.key or "").startswith("extended-")]
+
+
+def _open(at: AppTest, tab: str) -> AppTest:
+    """Opens one Extended data tab."""
+    _extended(at)[0].set_value(tab).run()
+    assert not at.exception
+    return at
+
+
 @pytest.mark.parametrize("module", ["app.data_quality", "app.eda_page", "app.model_page",
                                     "app.report_page"])
 def test_users_see_the_results_without_the_extended_data(run_dir, module):
@@ -49,9 +61,10 @@ def test_users_see_the_results_without_the_extended_data(run_dir, module):
     charts and (on the report page) the engineering report download."""
     user, developer = _render(module, run_dir, "user"), _render(module, run_dir)
     assert not user.exception and not developer.exception
-    # Phase 8.7: users get the main tabs too; the Extended data tabs are the developer's
-    extended = {t.label for t in developer.tabs} - {t.label for t in user.tabs}
-    assert extended and len(user.tabs) + len(extended) == len(developer.tabs)
+    # users get the main tabs too; the Extended data row is the developer's, all closed
+    assert [t.label for t in user.tabs] == [t.label for t in developer.tabs]
+    assert not _extended(user) and _extended(developer)
+    assert _extended(developer)[0].value is None
     assert user.get("metric") and len(user.get("metric")) == len(developer.get("metric"))
     if module == "app.report_page":
         assert [b.proto.label for b in user.get("download_button")] == [
@@ -71,15 +84,17 @@ def test_eda_page_shows_overview_and_top_sensor(run_dir):
     at = _render("app.eda_page", run_dir)
     assert not at.exception
     assert [m.label for m in at.metric][:3] == ["Runs", "Sensors", "Fail rate"]
-    assert at.dataframe[0].value.iloc[0]["feature"] == "f_020"
-    charts = [c.key for c in at.get("plotly_chart")]
+    assert [c.key for c in at.get("plotly_chart")] == ["weekly-fail-rate", "sensor-differences"]
+    assert [t.label for t in at.tabs] == ["Fail rate over time", "Sensors that differ"]
+    assert _extended(at)[0].options == ["Sensor statistics", "Missing data and redundancy",
+                                        "Full insights"]
+    assert not at.dataframe  # Extended data stays closed until a tab is pressed
+    assert _open(at, "Sensor statistics").dataframe[0].value.iloc[0]["feature"] == "f_020"
+    charts = [c.key for c in _open(at, "Missing data and redundancy").get("plotly_chart")]
     assert charts == ["weekly-fail-rate", "sensor-differences", "missing-by-sensor",
-                      "correlation"]  # the last two under Extended data
-    assert [t.label for t in at.tabs] == ["Fail rate over time", "Sensors that differ",
-                                          "Sensor statistics", "Missing data and redundancy",
-                                          "Full insights"]  # the main part's tabs first
+                      "correlation"]
 
-    assert any("## Summary" in md.value for md in at.markdown)
+    assert any("## Summary" in md.value for md in _open(at, "Full insights").markdown)
 
 
 def test_model_page_shows_metrics_with_confidence_intervals(run_dir):
@@ -88,9 +103,9 @@ def test_model_page_shows_metrics_with_confidence_intervals(run_dir):
     assert [m.label for m in at.metric] == ["PR-AUC", "Fail recall", "Precision",
                                             "Balanced accuracy"]
     assert "95% bootstrap CI" in at.metric[0].help
-    assert [t.label for t in at.tabs][:4] == ["Risk scores", "Important sensors",
-                                              "Alarms vs outcomes", "Precision-recall"]
-    comparison = at.table[0].value  # long descriptions: a wrapped table (Phase 8.7)
+    assert [t.label for t in at.tabs] == ["Risk scores", "Important sensors",
+                                          "Alarms vs outcomes", "Precision-recall"]
+    comparison = _open(at, "Model comparison").table[0].value  # long text: a wrapped table
     assert set(comparison["model"]) == {"logreg_l1", "random_forest", "rf_regularized",
                                         "rf_select_k", "baseline_always_pass"}
 
@@ -103,17 +118,19 @@ def test_report_page_leads_with_headline_numbers_and_puts_details_in_tabs(run_di
                                             "Similar runs that failed"]
     assert " of " in at.metric[0].value and at.metric[0].delta.startswith("with ")
     assert [t.label for t in at.tabs] == ["Key findings", "Hypotheses",
-                                          "Anomalies and run map", "Simulated wafer",
-                                          "Engineering report", "Full investigation",
-                                          "Risk ranking", "Similar past runs", "Anomalies",
-                                          "Safety checks"]  # main part, then Extended data
+                                          "Anomalies and run map", "Simulated wafer"]
+    assert _extended(at)[0].options == ["Engineering report", "Full investigation",
+                                        "Risk ranking", "Similar past runs", "Anomalies",
+                                        "Safety checks"]
     assert len(at.get("plotly_chart")) == 3  # anomaly timeline, run map, simulated wafer
-    assert "Report safety checks: **PASS**" in at.success[0].value
-    assert any("## What was detected" in md.value for md in at.markdown)
-    assert not any(md.value.startswith("# Engineering report") for md in at.markdown)
-    assert any("Recommended ranking" in md.value and " of " in md.value and "alarms" in md.value
-               for md in at.markdown)
-    assert any("Most anomalous runs" in md.value for md in at.markdown)
+    shown = {tab: [md.value for md in _open(at, tab).markdown]
+             for tab in _extended(at)[0].options}
+    assert any("## What was detected" in md for md in shown["Engineering report"])
+    assert not any(md.startswith("# Engineering report") for md in shown["Engineering report"])
+    assert any("Recommended ranking" in md and " of " in md and "alarms" in md
+               for md in shown["Risk ranking"])
+    assert any("Most anomalous runs" in md for md in shown["Anomalies"])
+    assert "Report safety checks: **PASS**" in at.success[0].value  # the last tab opened
 
 
 def test_summary_cards_follow_the_investigation(run_dir):
@@ -165,18 +182,19 @@ def test_older_runs_explain_what_they_lack(run_dir, tmp_path):
 
 
 def test_investigation_is_split_into_labelled_blocks(run_dir):
-    at = _render("app.report_page", run_dir)
+    at = _open(_render("app.report_page", run_dir), "Full investigation")
     sections = {"Facts", "Assumptions", "Hypotheses", "Suggested verification"}
     labels = [md.value.split("[")[1].split("]")[0] for md in at.markdown
               if "-badge[" in md.value]
     assert [label for label in labels if label in sections] == [
         "Facts", "Assumptions", "Hypotheses", "Suggested verification"]
-    assert {b.label for b in at.get("download_button")} >= {"Download engineering_report.md",
-                                                            "Download investigation.md"}
+    assert "Download investigation.md" in {b.label for b in at.get("download_button")}
+    _open(at, "Engineering report")
+    assert "Download engineering_report.md" in {b.label for b in at.get("download_button")}
 
 
 def test_model_page_shows_the_model_card(run_dir):
-    at = _render("app.model_page", run_dir)
+    at = _open(_render("app.model_page", run_dir), "Model card")
     assert any("## Model purpose" in md.value for md in at.markdown)
 
 
@@ -323,6 +341,8 @@ def test_trends_page_reads_the_run_folders_without_supabase():
     assert any("run folders on this server" in c.value for c in at.caption)
     assert "trend-quality" in [c.key for c in at.get("plotly_chart")]
     assert any("No stage times recorded yet." in c.value for c in at.caption)
+    assert not at.table  # the run table is under Extended data, closed until pressed
+    at.segmented_control(key="extended-trends").set_value("Run table").run()
     assert at.table[0].value.iloc[0]["source"] == "Reference"  # 12 columns: wrapped
     assert any("Every recorded run completed." in c.value for c in at.caption)
 
@@ -393,11 +413,12 @@ def test_line_replay_plays_the_test_period_and_ends_on_the_runs_own_totals(run_d
     assert len(at.get("plotly_chart")) == 2  # the stream and the newest run's wafer
     assert any("Simulated wafer" in (m.proto.help or "") for m in at.markdown)  # a tooltip
 
-    at.button(key="replay-play").click().run()  # one tick at the default speed (3 runs/s)
+    at.button(key="replay-toggle").click().run()  # Play: one tick at the default speed (3 runs/s)
     assert not at.exception
     assert at.metric[0].value == f"4 of {total}"
-    at.button(key="replay-pause").click().run()
-    assert at.button(key="replay-play")
+    assert at.button(key="replay-toggle").label == "Pause"
+    at.button(key="replay-toggle").click().run()
+    assert at.button(key="replay-toggle").label == "Play"
 
     at.button(key="replay-end").click().run()
     risk = json.loads((run_dir / "risk_summary.json").read_text(encoding="utf-8"))

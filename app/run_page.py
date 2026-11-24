@@ -30,7 +30,8 @@ def render(settings: Settings, results_page=None) -> None:
 
     with st.container(key="card-launch"):
         ui.label("Start a run")
-        source = st.radio("Dataset", [SECOM, UPLOAD, SCENARIO], key="source", horizontal=True)
+        source = st.radio("Dataset", [SECOM, UPLOAD, SCENARIO], key="source", horizontal=True,
+                          label_visibility="collapsed")  # the card's label says it
         upload = scenario = None
         if source == SCENARIO:
             scenario = _scenario_inputs()
@@ -57,7 +58,6 @@ def render(settings: Settings, results_page=None) -> None:
     run_id = watched or (active.run_id if active else None)
     if run_id:
         st.session_state["watch_run"] = run_id  # keep showing it after it finishes
-        st.divider()
         _show_run(settings, run_id, results_page)
     _history(settings)
 
@@ -164,22 +164,29 @@ def _live(settings: Settings, run_dir: str) -> None:
     progress = store.progress(Path(run_dir))
     if progress is None:
         return
-    _render_progress(progress, Path(run_dir))
-    if progress.effective_status() in ACTIVE:
-        if store.stop_requested(Path(run_dir)):
-            st.caption("Stopping the run: it records what it has finished and stops within a "
-                       "few seconds.")
-        else:
-            st.button("Stop run", key="stop", icon=":material/stop_circle:", on_click=_stop,
-                      args=(settings, progress.run_id))
-            if error := st.session_state.pop(STOP_ERROR, None):
-                ui.friendly_error(error)
-            st.caption("Stopping keeps the stages that have finished, so the run can be resumed "
-                       "later. You can then start a different run.")
+    folder = Path(run_dir)
+    _render_progress(progress, folder, actions=lambda: _stop_control(settings, progress, folder))
+    if error := st.session_state.pop(STOP_ERROR, None):
+        ui.friendly_error(error)
     if progress.effective_status() not in ACTIVE:
         if progress.status == "success":
             st.session_state[NEW_RUN_KEY] = progress.run_id
         st.rerun()
+
+
+def _stop_control(settings: Settings, progress: RunProgress, run_dir: Path) -> None:
+    """Stop run, on the gates' line; its note is a tooltip, so a running run and the run
+    history fit one screen (Phase 8.7)."""
+    if progress.effective_status() not in ACTIVE:
+        return
+    if store.stop_requested(run_dir):
+        st.caption("Stopping the run: it records what it has finished and stops within a few "
+                   "seconds.")
+    else:
+        st.button("Stop run", key="stop", icon=":material/stop_circle:", on_click=_stop,
+                  args=(settings, progress.run_id),
+                  help="Stopping keeps the stages that have finished, so the run can be "
+                       "resumed later. You can then start a different run.")
 
 
 GATE_NAMES = {"data_contract": "Data Contract", "features_present": "Features",
@@ -187,7 +194,8 @@ GATE_NAMES = {"data_contract": "Data Contract", "features_present": "Features",
 
 
 def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
-                     on_continue=None, cause: tuple[str, str] | None = None) -> None:
+                     on_continue=None, cause: tuple[str, str] | None = None,
+                     actions=None) -> None:
     from app.messages import explain_failure
     from app.runs import local_time
 
@@ -226,10 +234,15 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
     from app.stepper import stepper_html
 
     st.html(stepper_html(progress))
-    if progress.gates:
-        st.markdown("Gates: " + " ".join(
-            f":{ui.STATUS_COLORS.get(g['status'], 'gray')}-badge["
-            f"{GATE_NAMES.get(g['gate'], g['gate'])}: {g['status']}]" for g in progress.gates))
+    with st.container(key="run-gates", horizontal=True, vertical_alignment="center",
+                      gap="medium"):
+        if progress.gates:
+            st.markdown("Gates: " + " ".join(
+                f":{ui.STATUS_COLORS.get(g['status'], 'gray')}-badge["
+                f"{GATE_NAMES.get(g['gate'], g['gate'])}: {g['status']}]"
+                for g in progress.gates), width="content")
+        if actions is not None:  # Stop run while the run is going
+            actions()
 
     if status == "success":
         if results_page is not None:

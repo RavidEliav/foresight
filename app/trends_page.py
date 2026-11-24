@@ -113,8 +113,8 @@ def render(settings: Settings) -> None:
             charts.run_time_trend(recent, store.stage_history(settings, list(recent.run_id),
                                                               source))
 
-    ui.section_label("Extended data")
-    _table(frame.sort_values("when", ascending=False))
+    if ui.extended(["Run table"], "trends") == "Run table":
+        _table(frame.sort_values("when", ascending=False))
 
 
 STATUS_COLORS = {"success": "green", "failed": "red", "timeout": "orange",

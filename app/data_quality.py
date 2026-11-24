@@ -46,11 +46,10 @@ def render(run_dir: Path | None) -> None:
 
     if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
         return
-    ui.section_label("Extended data")
-    checks, contract_tab = st.tabs(["All validation checks", "Data Contract"])
-    with checks:
+    shown = ui.extended(["All validation checks", "Data Contract"], "data-quality")
+    if shown == "All validation checks":
         ui.table(pd.DataFrame(summary["checks"])[["status", "name", "message"]], max_rows=30)
-    with contract_tab:
+    elif shown == "Data Contract":
         _render_contract(read_json(run_dir, "dataset_contract.json"))
 
 

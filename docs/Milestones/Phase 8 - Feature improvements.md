@@ -1,6 +1,6 @@
 ---
 date: 2026-11-20
-updated: 2026-11-23
+updated: 2026-11-24
 phase: 8
 tags: [milestone, features]
 ---
@@ -50,12 +50,20 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - **The incident (Nov 22):** the dev volume filled up.
   - **#50:** interrupted runs name their real cause; Start and Resume check free space first; the embedding model cache moved off the volume.
   - **#51:** run files go to Supabase Storage and chat history to Postgres; the volume keeps stubs of older runs.
+  - **On `dev`:** 4 runs archived (5 to 7 MB each), 45 chat questions imported, a Storage round trip checked.
+- **#53:** an All runs summary may name a run by its date. The run id's date and time parts count as known numbers, so "the run on Nov 22" is no longer withheld as an ungrounded number.
+- **8.7 One screen per page** (#54) ([[ADR-034 One screen per page with tabs inside cards and tables that wrap]]):
+  - the summary card beside one chart card with tabs; less space at the top; long captions as tooltips
+  - Investigation & Report's main part: 2,670 px → 663 px; every page fits a laptop window (1536×730) and a desktop
+  - on a phone, headline numbers two per row, and the title, headline and the start of the main content on the first screen
+  - tables: columns fit their header or longest value; long or wide tables wrap instead of cutting columns off
+  - E9 checks the fit in CI; `scripts/measure_fit.py` measures and screenshots every page
 
-8.3 to 8.6 are on `dev`; `main` runs 8.1 and 8.2 (#40). #50 and #51 are open.
+8.3 to 8.7 and storage are on `dev`; `main` runs 8.1 and 8.2 (#40). The release to `main` waits for Ravid's check of `dev` and main's Google redirect address.
 
 ## Test results
-- 282 tests pass locally, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)
-- Smoke + E2E green in CI. The deployed tests check the sign-in screen and the public pages; E1–E8 run in CI against the local app, since a test browser cannot sign in with Google.
+- 285 tests pass locally, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)
+- Smoke + E2E green in CI. The deployed tests check the sign-in screen and the public pages; E1–E9 run in CI against the local app, since a test browser cannot sign in with Google.
 - Supabase advisors on both projects: INFO notes only
 
 ## Issues found (lessons)
@@ -82,11 +90,12 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - a question opened from the sidebar that vanished in All runs mode
   - a sensor-outage recipe whose window moved on Continue (one random generator shared by two steps)
   - stopped scenario runs recorded as SECOM
+- **Run dates in summaries (#53):** Ravid's "all runs" question was answered "not found in recorded runs": the summary named runs by date, and the date's numbers were not in any excerpt's text, only in the run ids.
+- **Fit on another machine (8.7):** Line Replay fit locally but measured 730 px on CI's 730 px window, because the reference run's label is longer. A fit test needs a margin.
 - **Wording:** "1175 training runs changed" counted the training period, not the 80 runs actually shifted.
 
 ## Next
 Plan renumbered on Nov 22:
-- **8.7 One screen per page:** the main part of each page fits the screen on desktop and phone, and every table's columns fit their content.
 - **8.8** PDF export
 - **8.9** Voice
 - **8.10 Course extras:** retrieval evaluation, prompt-injection tests, MCP server

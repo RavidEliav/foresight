@@ -58,6 +58,7 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - on a phone, headline numbers two per row, and the title, headline and the start of the main content on the first screen
   - tables: columns fit their header or longest value; long or wide tables wrap instead of cutting columns off
   - E9 checks the fit in CI; `scripts/measure_fit.py` measures and screenshots every page
+  - **After Ravid's check (#56):** Extended data tabs stay closed until pressed; Run Pipeline fits with a run in progress; the Ask Foresight conversation scrolls in its own box under a fixed title and question bar; Play/Pause on Line Replay no longer moves the page; the sign-in page's Privacy and Terms links are no longer cut
 
 8.3 to 8.7 and storage are on `dev`; `main` runs 8.1 and 8.2 (#40). The release to `main` waits for Ravid's check of `dev` and main's Google redirect address.
 
@@ -91,6 +92,7 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - a sensor-outage recipe whose window moved on Continue (one random generator shared by two steps)
   - stopped scenario runs recorded as SECOM
 - **Run dates in summaries (#53):** Ravid's "all runs" question was answered "not found in recorded runs": the summary named runs by date, and the date's numbers were not in any excerpt's text, only in the run ids.
+- **Swapping widgets moves the page (#56):** Line Replay's Play and Pause were two buttons. For a moment the browser showed both, and the slider disappeared while playing, so the cards jumped. One button with a fixed key whose label changes, and a slider that always shows, keep every element in place.
 - **Fit on another machine (8.7):** Line Replay fit locally but measured 730 px on CI's 730 px window, because the reference run's label is longer. A fit test needs a margin.
 - **Wording:** "1175 training runs changed" counted the training period, not the 80 runs actually shifted.
 

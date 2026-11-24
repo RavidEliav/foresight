@@ -29,6 +29,8 @@ After 8.6, Ravid asked that the main part of each page fit one screen, on a lapt
 - **Tables** (`ui.table`):
   - every column is as wide as its header or its longest shown value
   - a table with text over 60 characters, or wider than 1,000 px, is shown as a wrapped table (`st.table`, first 12 rows, with a caption that says so), so no column is cut off
+- **Extended data** (#56): a row of tabs (`ui.extended`, a segmented control) that are all closed until one is pressed; only the open tab is drawn.
+- **Ask Foresight** (#56): the conversation scrolls in its own box sized to the window, under a fixed title and question bar.
 - **Checks:**
   - **E9** (Playwright) fails if a page's main part is taller than 1536×730, or if the headline is not on a 390×844 phone's first screen.
   - `scripts/measure_fit.py` measures and screenshots every page at laptop, desktop (1920×960) and phone sizes.

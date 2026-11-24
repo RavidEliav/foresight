@@ -94,7 +94,8 @@ def test_e2_every_result_page_shows_its_content(app_page: Page):
     expect(app_page.get_by_role("heading", name="Model comparison")).to_be_visible()
     expect(app_page.get_by_test_id("stMetric").filter(has_text="PR-AUC")).to_be_visible()
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Fail recall")).to_be_visible()
-    expect(app_page.get_by_test_id("stDataFrame").first).to_be_visible()
+    # the comparison has long descriptions: a wrapped table, every column shown (Phase 8.7)
+    expect(app_page.get_by_test_id("stTable").first).to_contain_text("baseline_always_pass")
     expect(app_page.get_by_text("Model card", exact=False).first).to_be_visible()
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
 
@@ -104,9 +105,12 @@ def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
     _goto(app_page, "Investigation & Report")
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Failing runs caught")
            ).to_be_visible()
-    expect(app_page.get_by_text("Key findings")).to_be_visible()
+    expect(app_page.get_by_text("Key findings").last).to_be_visible()  # the first tab
+    app_page.get_by_role("tab", name="Hypotheses").click()  # Phase 8.7: one tab at a time
     expect(app_page.get_by_text("confidence").first).to_be_visible()  # hypothesis cards
-    expect(app_page.get_by_test_id("stPlotlyChart").first).to_be_visible(timeout=30_000)
+    app_page.get_by_role("tab", name="Anomalies and run map").click()
+    expect(app_page.locator('[data-testid="stPlotlyChart"]:visible').first).to_be_visible(
+        timeout=30_000)
     app_page.get_by_role("tab", name="Full investigation").click()
     for label in ("Facts", "Assumptions", "Hypotheses"):
         expect(app_page.locator("span:visible", has_text=label).first).to_be_visible()
@@ -129,8 +133,52 @@ def test_e8_line_replay_plays_the_reference_test_period(app_page: Page):  # need
     expect(replayed).to_contain_text("392 of 392", timeout=15_000)
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Failing runs caught")
            ).to_contain_text("5 of 24")
-    expect(app_page.get_by_text("Simulated wafer: SECOM has no die positions")).to_be_visible()
+    expect(app_page.get_by_text("Simulated die yield")).to_be_visible()  # the note: a tooltip
     expect(app_page.get_by_test_id("stException")).to_have_count(0)
+
+
+# Phase 8.7: the main part of every page (above Extended data and technical details) fits the
+# browser window of a laptop (1920x1080 at 125%: about 1536x730), and on a phone the title,
+# the headline numbers and the start of the main content are on the first screen.
+FIT = r"""() => {
+  const content = document.querySelector(
+    '[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]');
+  let fold = content.getBoundingClientRect().bottom;
+  for (const e of document.querySelectorAll('[data-testid="stExpander"], .fs-section')) {
+    const label = e.innerText.split('\n')[0].toLowerCase();
+    if (['extended data', 'technical details', 'run history', 'your runs']
+        .some(x => label.includes(x))) { fold = Math.min(fold, e.getBoundingClientRect().top); }
+  }
+  const kpis = document.querySelector('.st-key-kpis');
+  return {main: fold, headline: kpis ? kpis.getBoundingClientRect().bottom : 0,
+          screen: window.innerHeight};
+}"""
+PATHS = {"Run Pipeline": "", "Data Quality": "data-quality", "EDA & Insights": "eda",
+         "Model": "model", "Investigation & Report": "report", "Line Replay": "replay",
+         "Trends": "trends", "Ask Foresight": "ask", "My activity": "activity",
+         "Users & access": "users"}
+
+
+@pytest.mark.parametrize(("width", "height"), [(1536, 730), (390, 844)])
+def test_e9_every_page_fits_one_screen(app_page: Page, app_url, width, height):
+    app_page.set_viewport_size({"width": width, "height": height})
+    phone = width <= 640
+    too_tall = {}
+    for title, path in PATHS.items():
+        app_page.goto(f"{app_url.rstrip('/')}/{path}")
+        expect(app_page.get_by_role("heading", name=title, level=1)).to_be_visible(
+            timeout=60_000)
+        expect(app_page.get_by_test_id("stStatusWidget")).to_have_count(0, timeout=60_000)
+        app_page.wait_for_timeout(1500)  # charts take their height
+        m = app_page.evaluate(FIT)
+        # a phone stacks the cards: there the title, the headline numbers and the start of
+        # what follows (100 px) must be on the first screen
+        measured, limit = (m["headline"], m["screen"] - 100) if phone else (m["main"],
+                                                                            m["screen"])
+        if measured > limit:
+            too_tall[title] = round(measured)
+    assert not too_tall, f"taller than the screen at {width}x{height}: {too_tall}"
+
 
 
 def test_e7_ask_foresight_cites_sources_and_refuses_off_topic(app_page: Page, e2e_runs):

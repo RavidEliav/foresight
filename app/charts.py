@@ -14,7 +14,8 @@ CYAN, VIOLET, AMBER, GREEN, RED, SLATE = ("#22D3EE", "#A78BFA", "#FBBF24", "#34D
                                           "#64748B")
 GRID = "rgba(148,163,184,0.10)"
 # Charts that share a row have the same height, so their tops and bottoms line up.
-ROW_HEIGHT, MODEL_HEIGHT, DETAIL_HEIGHT = 420, 360, 460
+ROW_HEIGHT, MODEL_HEIGHT, DETAIL_HEIGHT = 300, 290, 460  # Phase 8.7: rows fit a screen
+TREND_HEIGHT, REPLAY_HEIGHT = 270, 225  # time lines read well lower
 
 pio.templates["foresight"] = go.layout.Template(layout=go.Layout(
     font={"family": "Inter, sans-serif", "color": "#CBD5E1", "size": 13},
@@ -322,7 +323,7 @@ def quality_trend(runs: pd.DataFrame) -> None:
                    mode="lines", line={"color": AMBER, "dash": "dot"}, hoverinfo="skip"),
     ])
     fig.update_layout(yaxis={"title": "test metric", "rangemode": "tozero"})
-    show(fig, "trend-quality", height=ROW_HEIGHT)
+    show(fig, "trend-quality", height=TREND_HEIGHT)
 
 
 def run_time_trend(runs: pd.DataFrame, stages: pd.DataFrame) -> None:
@@ -341,7 +342,7 @@ def run_time_trend(runs: pd.DataFrame, stages: pd.DataFrame) -> None:
                                hovertemplate=f"{title}: " + "%{y:.0f} s<extra></extra>"))
     fig = go.Figure(bars)
     fig.update_layout(barmode="stack", yaxis_title="seconds", xaxis={"type": "category"})
-    show(fig, "trend-run-time", height=ROW_HEIGHT)
+    show(fig, "trend-run-time", height=TREND_HEIGHT)
 
 
 def tokens_trend(runs: pd.DataFrame) -> None:
@@ -357,7 +358,7 @@ def tokens_trend(runs: pd.DataFrame) -> None:
         hovertemplate="%{x} (%{customdata[0]})<br>%{y:,} tokens<extra></extra>"))
     fig.update_layout(yaxis={"title": "tokens", "tickformat": ",d"}, showlegend=False,
                       xaxis={"type": "category"})
-    show(fig, "trend-tokens", height=ROW_HEIGHT)
+    show(fig, "trend-tokens", height=TREND_HEIGHT)
 
 
 # --- Line Replay (Phase 8.4) -----------------------------------------------------------------
@@ -395,7 +396,7 @@ def replay_stream(frame: pd.DataFrame, shown: int, cutoff: float, key: str) -> N
                              "title": None},
                       yaxis={"range": [0, 1.05], "title": "risk score"},
                       uirevision="replay")
-    show(fig, key, height=ROW_HEIGHT)
+    show(fig, key, height=REPLAY_HEIGHT)
 
 
 # Two triangles per face of a box: bottom, top, then the four sides

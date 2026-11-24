@@ -1,6 +1,7 @@
-"""Investigation & Report page: a short, checked summary (key findings and one card per
-hypothesis) on top; the engineering report, the full investigation, the risk ranking, similar
-past runs, anomalies and the safety checks in tabs below."""
+"""Investigation & Report page: the headline numbers, then the main part one tab at a time
+(key findings, one card per hypothesis, anomalies and the run map, a simulated wafer; Phase
+8.7); the engineering report, the full investigation, the risk ranking, similar past runs,
+anomalies and the safety checks under Extended data."""
 
 from __future__ import annotations
 
@@ -17,6 +18,8 @@ STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:
                "ERROR": ":material/cancel:"}
 TABS = ["Engineering report", "Full investigation", "Risk ranking", "Similar past runs",
         "Anomalies", "Safety checks"]
+MAIN_TABS = ["Key findings", "Hypotheses", "Anomalies and run map", "Simulated wafer"]
+SCENARIO_TAB = "Synthetic scenario"
 
 
 def render(run_dir: Path | None) -> None:
@@ -33,41 +36,41 @@ def render(run_dir: Path | None) -> None:
     _status_line(checks)
     ui.kpis(_headline_numbers(summary, risk, similar))
     scenario = read_json(run_dir, "scenario_check.json")
-    if scenario:
-        _render_scenario(scenario)
     overview = store.investigation_summary(run_dir)
-    if overview:
-        _render_overview(overview)
-    elif store.exists(run_dir, SUMMARY_FILE):
-        st.warning("The short summary of this run did not pass its format check, so there are "
-                   "no hypothesis cards. " + (
-                       "The full investigation is under Extended data below; the Safety checks "
-                       "tab says what was wrong." if ui.developer() else
-                       "The engineering report below has the full results."),
-                   icon=":material/warning:")
-    else:
-        st.info("This run was made before Foresight wrote a short summary, so there are no "
-                "hypothesis cards. " + ("The full investigation is under Extended data below."
-                                        if ui.developer() else
-                                        "The engineering report below has the full results."),
-                icon=":material/history:")
 
-    left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-chart-anomalies", height="stretch"):
-        ui.label("Anomaly score over time")
-        charts.anomaly_timeline(run_dir, summary["score_limit"])
-        st.caption("Dotted line: the flag limit (95% of training-run scores). Shaded: the test "
-                   "period.")
-    with right, st.container(key="card-chart-runmap", height="stretch"):
-        ui.label("Run map: similar sensor profiles sit close together")
-        if similar:
-            three_d = st.session_state.get("run-map-3d-toggle", False)
-            charts.run_map(run_dir, three_d)
-            st.toggle("3D view", key="run-map-3d-toggle")
+    # Phase 8.7: the main part is the headline and one tab at a time, so it fits a screen
+    names = ([SCENARIO_TAB] if scenario else []) + MAIN_TABS
+    tabs = dict(zip(names, st.tabs(names), strict=True))
+    if scenario:
+        with tabs[SCENARIO_TAB]:
+            _render_scenario(scenario)
+    with tabs["Key findings"]:
+        if overview:
+            _render_findings(overview)
         else:
-            _older_run("Similar-run search")
-
-    _render_wafer(run_dir)
+            _no_summary(run_dir)
+    with tabs["Hypotheses"]:
+        if overview:
+            _render_hypotheses(overview)
+        else:
+            _no_summary(run_dir)
+    with tabs["Anomalies and run map"]:
+        left, right = st.columns(2, gap="medium")
+        with left, st.container(key="card-chart-anomalies", height="stretch"):
+            ui.label("Anomaly score over time")
+            charts.anomaly_timeline(run_dir, summary["score_limit"])
+            st.caption("Dotted line: the flag limit (95% of training-run scores). Shaded: the "
+                       "test period.")
+        with right, st.container(key="card-chart-runmap", height="stretch"):
+            ui.label("Run map: similar sensor profiles sit close together")
+            if similar:
+                three_d = st.session_state.get("run-map-3d-toggle", False)
+                charts.run_map(run_dir, three_d)
+                st.toggle("3D view", key="run-map-3d-toggle")
+            else:
+                _older_run("Similar-run search")
+    with tabs["Simulated wafer"]:
+        _render_wafer(run_dir)
 
     if not ui.developer():  # users get the report; Extended data is the developer view
         report = store.read_bytes(run_dir, "engineering_report.md")
@@ -176,17 +179,34 @@ def _status_line(checks: dict | None) -> None:
                 f":gray[{counts['PASS']} of {total} passed{where}]")
 
 
-def _render_overview(overview: InvestigationSummary) -> None:
+def _no_summary(run_dir: Path) -> None:
+    if store.exists(run_dir, SUMMARY_FILE):
+        st.warning("The short summary of this run did not pass its format check, so there are "
+                   "no hypothesis cards. " + (
+                       "The full investigation is under Extended data below; the Safety checks "
+                       "tab says what was wrong." if ui.developer() else
+                       "The engineering report has the full results."),
+                   icon=":material/warning:")
+    else:
+        st.info("This run was made before Foresight wrote a short summary, so there are no "
+                "hypothesis cards. " + ("The full investigation is under Extended data below."
+                                        if ui.developer() else
+                                        "The engineering report has the full results."),
+                icon=":material/history:")
+
+
+def _render_findings(overview: InvestigationSummary) -> None:
     with st.container(key="card-summary"):
         ui.label("Key findings")
         st.html(f'<div class="fs-headline">{_escape(overview.headline)}</div>')
         st.markdown("\n".join(f"- {ui.md(f.text)} :gray-badge[{f.source}]"
                               for f in overview.key_findings))
 
-    st.markdown("**Hypotheses** :gray[AI-generated leads for an engineer to verify, not proven "
-                "causes]")
-    per_row = 3
+
+def _render_hypotheses(overview: InvestigationSummary) -> None:
+    st.markdown(":gray[AI-generated leads for an engineer to verify, not proven causes]")
     cards = overview.hypotheses
+    per_row = min(4, max(1, len(cards)))  # one row for up to four cards
     for start in range(0, len(cards), per_row):
         columns = st.columns(per_row)
         for offset, (column, card) in enumerate(zip(columns, cards[start:start + per_row],

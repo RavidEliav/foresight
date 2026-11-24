@@ -102,7 +102,7 @@ def test_interrupted_run_can_be_resumed(monkeypatch):
     at = _app()
     assert not any("was interrupted" in w.value for w in at.warning)
     assert not [b for b in at.button if b.key == "continue"]
-    history = at.dataframe[0].value
+    history = at.table[0].value  # long reasons: a wrapped table
     assert history.iloc[0]["why it stopped"].startswith("The app restarted")
 
 
@@ -182,7 +182,7 @@ def test_failed_upload_run_lists_the_failed_data_checks(monkeypatch, secom_env, 
     assert any("stopped" in err.value and "Some labels are not -1 (pass) or 1 (fail)"
                in err.value for err in at.error)
     assert any("upload it again" in i.value for i in at.info)
-    failed = at.dataframe[0].value  # technical details: the failed checks by name
+    failed = at.table[0].value  # technical details: the failed checks by name
     assert "raw_label_values" in set(failed["name"])
 
 

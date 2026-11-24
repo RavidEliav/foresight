@@ -54,3 +54,20 @@ def test_times_are_shown_in_the_viewers_time_zone(monkeypatch):
     assert runs.local_time("2026-11-16T20:58:00+00:00") == "16 Nov 2026, 22:58"
     monkeypatch.setattr(runs, "local_zone", lambda: runs.UTC)
     assert runs.local_time("2026-11-16T20:58:00+00:00") == "16 Nov 2026, 20:58 UTC"
+
+
+def test_table_columns_fit_their_header_and_longest_value():
+    """Phase 8.7: no header or value cut off; long text and wide tables wrap instead."""
+    import pandas as pd
+    import streamlit as st
+
+    from app import ui
+
+    frame = pd.DataFrame({"stratified CV (optimistic)": [0.177, None], "id": ["a", "bbbbbb"]})
+    widths = ui.column_widths(frame)
+    assert widths["stratified CV (optimistic)"] > widths["id"]  # the header is the widest
+    assert widths["id"] == int(7.4 * len("bbbbbb") + 30)
+    percent = st.column_config.NumberColumn(format="percent")
+    assert ui._formatted(0.0664, percent) == "6.6%"
+    assert ui._formatted(0.08512, st.column_config.NumberColumn(format="%.3f")) == "0.085"
+    assert ui._formatted(float("nan"), percent) == "" and ui._formatted("x", None) == "x"

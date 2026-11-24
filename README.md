@@ -121,7 +121,9 @@ A question costs about 600–1,100 tokens (well under 0.1 cent).
 
 The sidebar starts with the Foresight wordmark (its "o" is the wafer logo) and the page menu. **Results shown** picks which successful run the result pages display (a short label, the full description under it); it follows the newest run until you choose another one, and the committed reference run is always available. Times are shown in the viewer's time zone (from the browser). A run made before a feature existed says so instead of hiding the section.
 
-**Design.** A dark "cleanroom" theme (`.streamlit/config.toml`): cyan and violet for lithography light, amber (the fab's yellow-room light) for failing runs, a faint die-grid background, a wafer logo, frosted-glass cards, tiles and sidebar (`app/ui.py`). Each page leads with its headline numbers and main charts; the long tables and documents sit under **Extended data**. Charts are Plotly (`app/charts.py`): hover for run ids and values, zoom, and a 3D run map. Fonts (Inter, Space Grotesk, JetBrains Mono) load from Google Fonts.
+**Design.** A dark "cleanroom" theme (`.streamlit/config.toml`): cyan and violet for lithography light, amber (the fab's yellow-room light) for failing runs, a faint die-grid background, a wafer logo, frosted-glass cards, tiles and sidebar (`app/ui.py`). Each page leads with its headline numbers and main charts; the long tables and documents sit under **Extended data**.
+
+**One screen per page (Phase 8.7).** The main part of every page fits a laptop's browser window (1920×1080 at 125%, about 1536×730) without scrolling. To get there, charts and cards share a card through tabs (Model, EDA, Trends, Line Replay, Investigation & Report, My activity), and the "Hi, name" menu sits on the title's line. Only Extended data and technical details need scrolling. On a phone the headline numbers sit two per row, and the title, the headline and the start of the main content are on the first screen. Every table is as wide as its content: each column fits its header and longest value, and a table with long text, or one wider than the page, wraps its cells instead of cutting columns off. Check it with `python scripts/measure_fit.py` (every page at laptop, desktop and phone size, with screenshots) or the E9 test. Charts are Plotly (`app/charts.py`): hover for run ids and values, zoom, and a 3D run map. Fonts (Inter, Space Grotesk, JetBrains Mono) load from Google Fonts.
 
 **Background runs.** "Run pipeline" starts `python -m foresight.cli run` as a separate process, so a run continues when the page is refreshed or closed. The run writes `progress.json` (stages, gates, a heartbeat every 15 s) and `run.log` into its folder. Guards (`app` in `config/settings.yaml`):
 
@@ -221,8 +223,10 @@ Set `MOCK_LLM=true` in `.env` to work without any LLM calls.
 | E5 | Broken CSV upload stops at the contract gate with a plain-language error and the failed checks under Technical details | CI only (starts a run) |
 | E6 | Full run: live progress through all crews, then the new run's report | CI only (mock LLM) |
 | E7 | Ask Foresight: an answer with a citation; an off-topic question gets "Not found in this run's artifacts." | CI only (mock LLM) |
+| E8 | Line Replay plays the reference test period and ends on 5 of 24 failing runs caught | CI |
+| E9 | Every page's main part fits a laptop window (1536×730); on a phone (390×844) the headline is on the first screen | CI |
 
-The deployed apps need Google sign-in, which a test browser cannot do, so the deployed suite (`-m deployed`) checks what a visitor sees before signing in; it is read-only and never spends LLM tokens. E1–E7 run in CI against a local app without Google keys (it opens as a local developer); start it with `MOCK_LLM=true` and, for speed, `FORESIGHT_CONFIG=tests/fast_settings.yaml`. Sign-in itself (users, developers, access requests, emailed links, the idle sign-out) is covered by AppTest with a simulated Google user (`tests/app/test_sign_in.py`).
+The deployed apps need Google sign-in, which a test browser cannot do, so the deployed suite (`-m deployed`) checks what a visitor sees before signing in; it is read-only and never spends LLM tokens. E1–E9 run in CI against a local app without Google keys (it opens as a local developer); start it with `MOCK_LLM=true` and, for speed, `FORESIGHT_CONFIG=tests/fast_settings.yaml`. Sign-in itself (users, developers, access requests, emailed links, the idle sign-out) is covered by AppTest with a simulated Google user (`tests/app/test_sign_in.py`).
 
 ## Release workflow
 
@@ -264,7 +268,7 @@ src/foresight/  flow.py, jobs.py + cli.py (background runs), progress.py, data/,
 supabase/       Supabase CLI project: config.toml and versioned SQL migrations
 knowledge/      background documents for the Investigation crew (+ SOURCES.md)
 tests/          unit/, integration/, app/, smoke/, e2e/
-scripts/        data download, helper scripts, db_migrate.py (Railway pre-deploy), measure_run.py / measure_app.py / compare_runs.py (performance)
+scripts/        data download, helper scripts, db_migrate.py (Railway pre-deploy), measure_run.py / measure_app.py / compare_runs.py (performance), measure_fit.py (one screen per page)
 data/           raw/ and processed/ (not committed)
 artifacts/      committed reference run
 docs/           Obsidian vault: requirements, decisions, results, lessons learned

@@ -1,6 +1,6 @@
 ---
 date: 2026-11-20
-updated: 2026-11-24
+updated: 2026-11-25
 phase: 8
 tags: [milestone, features]
 ---
@@ -58,31 +58,40 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - on a phone, headline numbers two per row, and the title, headline and the start of the main content on the first screen
   - tables: columns fit their header or longest value; long or wide tables wrap instead of cutting columns off
   - E9 checks the fit in CI; `scripts/measure_fit.py` measures and screenshots every page
-  - **Phone check (#58):**
-    - the "Hi, name" menu opens with a tap (Streamlit's transparent header lay over it)
-    - every page fits a phone (a phone view with one card of tabs)
-    - the Run Pipeline stage cards no longer overflow
-    - a signed-out link to a page such as `/activity` opens the sign-in screen instead of "Page not found"
-    - Stop run and Resume run sit beside Run pipeline, which is grayed out while a run with the same data is going; other data lights it up, and it then stops the running run and starts the new one
-  - **Validation on main (#65):**
-    - Run pipeline with other data, the first time: the page waited at most 30 s for the running run to stop, but a run that has just started needs its process up first (45 to 90 s on main), so it gave up. The new run now waits in the session and starts as soon as the old one has stopped.
-    - Line Replay, End while playing, the first time: on the server a slow first page run let the slider's old position arrive after the 2 s guard. Positions the playback showed are now remembered and never count as a drag. A phone shows Play, Restart, Next and End as words (Next run's icon looked like End's).
-  - **Check of main after the release (#62):**
-    - Stop run and Resume run on a scenario run showed KeyError 'kind': the run's first stage rewrites scenario.json as {"scenario": recipe, ...}, and the new launch card read only the first form
-    - Line Replay: End reached the end, then jumped back. A timer tick in flight sent the slider's old position, which counted as a drag; slider changes while playing or just after a button are now ignored
-    - All runs chat: an answer citing a section that was not retrieved (another run's section) gets one more try with what was wrong, before it is withheld
-    - Ask Foresight: the examples sit right above the question bar, compact
-    - Privacy and Terms opened from the sign-in screen lead back to it
-  - **Second phone check (#59):**
-    - tapping the question bar or the Extended data dropdown no longer zooms the page (an iPhone zooms into text fields under 16 px)
-    - a pinch on a 2D chart zooms it like the rest of the page (Plotly takes every touch on a 2D chart and has no pinch zoom; on a phone those charts are still pictures, 3D charts keep their own pinch)
-    - the running stage's circle spins on a phone, and while the run's process starts up the first stage already spins ("starting")
   - **After Ravid's check (#56):** Extended data tabs stay closed until pressed; Run Pipeline fits with a run in progress; the Ask Foresight conversation scrolls in its own box under a fixed title and question bar; Play/Pause on Line Replay no longer moves the page; the sign-in page's Privacy and Terms links are no longer cut
+- **Release to `main`** (#57, Nov 25): 8.3 to 8.7 and storage; `main`'s Supabase got the accounts and run-files migrations and the `runs` bucket.
+- **Phone check (#58):**
+  - the "Hi, name" menu opens with a tap (Streamlit's transparent header lay over it)
+  - every page fits a phone: a phone view (user agent) with one card of tabs, lower charts, compact tiles, Extended data as a dropdown
+  - the Run Pipeline stage cards no longer overflow
+  - a signed-out link to a page such as `/activity` opens the sign-in screen instead of "Page not found"
+  - Stop run and Resume run beside Run pipeline, which is grayed out while a run with the same data is going ([[ADR-035 Run pipeline replaces a running run only for other data]])
+- **Second phone check (#59, #60):**
+  - tapping the question bar or the Extended data dropdown no longer zooms the page (an iPhone zooms into text fields under 16 px)
+  - a pinch on a 2D chart zooms it like the rest of the page (Plotly takes every touch on a 2D chart and has no pinch zoom; on a phone those charts are still pictures, 3D charts keep their own pinch)
+  - the running stage's circle spins on a phone, and while the run's process starts up the first stage already spins ("starting")
+  - a tap on a dropdown opens its list instead of the keyboard (no typing in short lists; long lists search on a computer only)
+- **Release to `main`** (#61).
+- **Check of `main` after the release (#62, #63):**
+  - Stop run and Resume run on a scenario run showed KeyError 'kind': the run's first stage rewrites scenario.json as {"scenario": recipe, ...}, and the new launch card read only the first form
+  - Line Replay: End reached the end, then jumped back. A timer tick in flight sent the slider's old position, which counted as a drag; slider changes while playing or just after a button are ignored
+  - All runs chat: an answer citing a section that was not retrieved (another run's section) gets one more try with what was wrong, before it is withheld
+  - Ask Foresight: the examples sit right above the question bar, compact; on a phone both are pinned to the bottom (#63)
+  - Privacy and Terms opened from the sign-in screen lead back to it
+- **Release to `main`** (#64).
+- **Validation on `main` (#65):**
+  - Run pipeline with other data, the first time: the page waited at most 30 s for the running run to stop, but a run that has just started needs its process up first (45 to 90 s on `main`), so it gave up. The new run now waits in the session and starts as soon as the old one has stopped.
+  - Line Replay, End while playing, the first time: on the server a slow first page run can let the slider's old position arrive after the 2 s guard. Positions the playback showed are remembered and never count as a drag. A phone shows Play, Restart, Next and End as words (Next run's icon looked like End's).
+- **Release to `main`** (#66, Nov 25).
+- **8.8 Run report** (#68) ([[ADR-036 A run report PDF of every result page, built from the run's files]]):
+  - every result page of a run in one PDF (about 10 pages): cover with the numbers at a glance, Data Quality, EDA & Insights, Model, Investigation & Report with the engineering report in full, appendix with the report's checks
+  - citations kept; built only from the run's files, so older runs and the reference run get it too; a new run saves `run_report.pdf`
+  - "Download full run report" in the sidebar under "Results shown" (Ravid's choice), the one place for it (the second button on Run Pipeline was taken out, #69)
 
-8.1 to 8.7 and storage are on `main` (#57, 2026-11-25).
+Everything above is on `main` (#66, Nov 25); `main` and `dev` are the same.
 
 ## Test results
-- 285 tests pass locally, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)
+- 290 tests (unit, integration, app and E2E) pass locally and in CI, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)
 - Smoke + E2E green in CI. The deployed tests check the sign-in screen and the public pages; E1–E9 run in CI against the local app, since a test browser cannot sign in with Google.
 - Supabase advisors on both projects: INFO notes only
 
@@ -113,11 +122,14 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
 - **Run dates in summaries (#53):** Ravid's "all runs" question was answered "not found in recorded runs": the summary named runs by date, and the date's numbers were not in any excerpt's text, only in the run ids.
 - **Swapping widgets moves the page (#56):** Line Replay's Play and Pause were two buttons. For a moment the browser showed both, and the slider disappeared while playing, so the cards jumped. One button with a fixed key whose label changes, and a slider that always shows, keep every element in place.
 - **Fit on another machine (8.7):** Line Replay fit locally but measured 730 px on CI's 730 px window, because the reference run's label is longer. A fit test needs a margin.
+- **A phone is not a narrow window:** the phone checks found what a narrow desktop browser could not show: the header over the menu, an iPhone zooming into small text fields, Plotly taking pinches, a dropdown opening the keyboard. The phone view keys off the user agent, and E9 runs with an iPhone user agent.
+- **Browser and server race:** the browser keeps sending what it showed a moment ago (a timer tick in flight, a slider's old value). Code that reacts to a widget change must tell an echo from a real change.
+- **A second reader of a file:** the launch card read `scenario.json` in the form the app writes, but the run's first stage rewrites it. The traceback was in `main`'s log within a minute of Ravid's report.
+- **Fixed waits on the server:** a 30 s wait that never ran out locally gave up on `main`, where a new run's process takes much longer to start.
 - **Wording:** "1175 training runs changed" counted the training period, not the 80 runs actually shifted.
 
 ## Next
-Plan renumbered on Nov 22:
-- **8.8** PDF export
-- **8.9** Voice
-- **8.10 Course extras:** retrieval evaluation, prompt-injection tests, MCP server
-- **8.11** Vault close-out, README and release to `main`
+Plan changed on Nov 25 (Ravid): voice and the MCP server are future features, built after the submission (Dec 4), not part of it.
+- **8.9 Course extras:** retrieval evaluation and prompt-injection tests
+- **8.10** Vault close-out, README and release to `main`
+- **After the submission:** voice (ask by voice, answers read aloud) and an MCP server exposing Foresight's tools

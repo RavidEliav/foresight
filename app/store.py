@@ -10,6 +10,7 @@ id.
 from __future__ import annotations
 
 import json
+from datetime import UTC, tzinfo
 from pathlib import Path
 
 import pandas as pd
@@ -171,6 +172,15 @@ def stop_run(settings: Settings, run_id: str, user: str = "") -> None:
 
 def stop_requested(run_dir: Path) -> bool:
     return jobs.stop_requested(run_dir)
+
+
+def run_report(run_dir: Path, zone: tzinfo = UTC) -> bytes:
+    """The run report PDF (Phase 8.8), with its times in the reader's zone: built from the
+    run's files. The one the run saved (UTC) serves a reader whose zone is unknown."""
+    from foresight.run_report import RUN_REPORT_FILE, build
+
+    saved = run_dir / RUN_REPORT_FILE
+    return saved.read_bytes() if zone is UTC and saved.exists() else build(run_dir, zone)
 
 
 def run_data(run_dir: Path) -> tuple:

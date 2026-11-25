@@ -350,6 +350,23 @@ def section_label(text: str) -> None:
     st.html(f'<div class="fs-section">{text}</div>')
 
 
+def run_report_button(run_dir: Path) -> None:
+    """In the sidebar under the run choice: download the run report, every result page of
+    that run in one PDF (Phase 8.8; the one place for it). The PDF is made when the button is
+    pressed, not on every page."""
+    from app import store
+    from app.runs import local_zone
+
+    zone = local_zone()  # read now: the PDF is made outside the page run, without the browser
+    st.sidebar.download_button(
+        "Download full run report", data=lambda: store.run_report(run_dir, zone),
+        file_name=f"foresight-run-report-{run_dir.name}.pdf", mime="application/pdf",
+        key="run-report", icon=":material/picture_as_pdf:", width="stretch", type="primary",
+        help="Every result page of this run in one PDF: Data Quality, EDA & Insights, Model, "
+             "Investigation & Report (with the engineering report) and the report's checks.")
+    st.sidebar.caption("All result pages of this run in one PDF.")  # the whole run, not a page
+
+
 def extended(labels: list[str], key: str) -> str | None:
     """Extended data: a row of tabs that are all closed until one is pressed (pressing it
     again closes it). Returns the open tab's label; only that tab is drawn. On a phone, one

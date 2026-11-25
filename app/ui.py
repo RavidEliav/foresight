@@ -158,6 +158,8 @@ section[data-testid="stSidebar"] {
 .fs-gate-error, .fs-gate-error::after { background: #F87171 !important; }
 .fs-art { width: 100%; height: 46px; margin: .1rem 0 .15rem 0; }
 @keyframes fs-spin { to { transform: rotate(360deg); } }
+@keyframes fs-spin-row { from { transform: translateY(-50%) rotate(0deg); }
+  to { transform: translateY(-50%) rotate(360deg); } }  /* a phone: the badge is centered */
 @keyframes fs-glow {
   50% { box-shadow: var(--fs-glass-shadow), 0 0 26px -4px rgba(34,211,238,.6); } }
 @keyframes fs-blink { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
@@ -234,6 +236,9 @@ section[data-testid="stSidebar"] {
   .st-key-chat-log, [data-testid="stLayoutWrapper"]:has(.st-key-chat-log) {
     height: calc(100dvh - 38rem) !important; }
   /* phone view: one screen per page (the pages draw one card with tabs, ui.phone) */
+  /* an iPhone zooms the page into a text field under 16 px when it is tapped */
+  [data-testid="stApp"] input, [data-testid="stApp"] textarea {
+    font-size: 16px !important; }
   [data-testid="stMainBlockContainer"] { padding-top: 2.2rem; }
   [data-testid="stMain"] h1 { font-size: 1.4rem; padding: 0 0 .15rem 0; }
   [data-testid="stMainBlockContainer"] [data-testid="stCaptionContainer"] { font-size: .7rem; }
@@ -262,7 +267,7 @@ section[data-testid="stSidebar"] {
   .fs-stage-crew { display: none; }
   .fs-stage-meta { margin: 0 1.7rem 0 0; white-space: nowrap; font-size: .7rem; }
   .fs-badge { top: 50%; transform: translateY(-50%); width: 18px; height: 18px; }
-  .fs-running .fs-badge { animation: none; }
+  .fs-running .fs-badge { animation: fs-spin-row .9s linear infinite; }
   /* Line Replay: the four buttons on one line (icons only), the speed under them */
   .st-key-card-replay-controls [data-testid="stHorizontalBlock"] { flex-wrap: wrap;
     gap: .35rem; }

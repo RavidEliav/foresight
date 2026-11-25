@@ -64,6 +64,10 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
     - the Run Pipeline stage cards no longer overflow
     - a signed-out link to a page such as `/activity` opens the sign-in screen instead of "Page not found"
     - Stop run and Resume run sit beside Run pipeline, which is grayed out while a run with the same data is going; other data lights it up, and it then stops the running run and starts the new one
+  - **Second phone check (#59):**
+    - tapping the question bar or the Extended data dropdown no longer zooms the page (an iPhone zooms into text fields under 16 px)
+    - a pinch on a 2D chart zooms it like the rest of the page (Plotly takes every touch on a 2D chart and has no pinch zoom; on a phone those charts are still pictures, 3D charts keep their own pinch)
+    - the running stage's circle spins on a phone, and while the run's process starts up the first stage already spins ("starting")
   - **After Ravid's check (#56):** Extended data tabs stay closed until pressed; Run Pipeline fits with a run in progress; the Ask Foresight conversation scrolls in its own box under a fixed title and question bar; Play/Pause on Line Replay no longer moves the page; the sign-in page's Privacy and Terms links are no longer cut
 
 8.1 to 8.7 and storage are on `main` (#57, 2026-11-25).

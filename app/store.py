@@ -180,6 +180,8 @@ def run_data(run_dir: Path) -> tuple:
 
     if (run_dir / SCENARIO_FILE).exists():
         s = json.loads((run_dir / SCENARIO_FILE).read_text(encoding="utf-8"))
+        # the run's first stage rewrites the request as {"scenario": recipe, "label", ...}
+        s = s.get("scenario", s)
         return ("scenario", s["kind"], round(float(s.get("intensity") or 0), 4),
                 int(s.get("seed", 7)))
     if (run_dir / jobs.UPLOAD_FILE).exists():

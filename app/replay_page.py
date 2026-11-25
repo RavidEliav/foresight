@@ -9,6 +9,7 @@ totals at the end are the ones on the Investigation & Report page.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -24,6 +25,8 @@ SPEEDS = {"1 run/s": 1, "3 runs/s": 3, "10 runs/s": 10, "30 runs/s": 30}
 POS, PLAYING, SPEED, SCRUB, SHOWN_RUN = ("replay_pos", "replay_playing", "replay_speed",
                                          "replay_scrub", "replay_run")
 TICK_S = 1.0
+MOVED = "replay_moved"  # when a button last moved the line (time.monotonic)
+SETTLE_S = 2.0  # slider changes this soon after a button are echoes, not drags
 
 
 def load(run_dir: Path) -> pd.DataFrame | None:
@@ -88,6 +91,7 @@ def _replay(run_dir: str, ticking: bool) -> None:
         state[POS] = min(state[POS] + SPEEDS.get(state.get(SPEED) or "", 3), n)
         if state[POS] >= n:
             state[PLAYING] = False
+            state[MOVED] = time.monotonic()
     if bool(state[PLAYING]) != ticking:  # Play, Pause or the end: start or stop the timer
         st.rerun(scope="app")
     _controls(n)
@@ -106,24 +110,38 @@ def _controls(n: int) -> None:
                     icon=":material/pause:" if playing else ":material/play_arrow:",
                     type="primary", on_click=_toggle, args=(n,), width="stretch")
         restart.button("Restart", key="replay-restart", icon=":material/replay:",
-                       on_click=lambda: state.update({POS: 0, PLAYING: False}),
-                       width="stretch")
+                       on_click=_move, args=(lambda: 0,), width="stretch")
         step.button("Next run", key="replay-step", icon=":material/skip_next:",
-                    on_click=lambda: state.update({POS: min(state[POS] + 1, n),
-                                                   PLAYING: False}), width="stretch")
+                    on_click=_move, args=(lambda: min(state[POS] + 1, n),), width="stretch")
         end.button("End", key="replay-end", icon=":material/last_page:",
-                   on_click=lambda: state.update({POS: n, PLAYING: False}), width="stretch")
+                   on_click=_move, args=(lambda: n,), width="stretch")
         speed.segmented_control("Speed", list(SPEEDS), key=SPEED, default="3 runs/s",
                                 label_visibility="collapsed")
         state[SCRUB] = state[POS]  # always shown (follows the line while playing): no jump
         st.slider("Position in the test period", 0, n, key=SCRUB, disabled=state[PLAYING],
-                  label_visibility="collapsed",
-                  on_change=lambda: state.update({POS: state[SCRUB]}))
+                  label_visibility="collapsed", on_change=_scrubbed)
+
+
+def _move(position) -> None:
+    """Restart, Next run or End: stop playing and move the line."""
+    state = st.session_state
+    state[POS], state[PLAYING], state[MOVED] = position(), False, time.monotonic()
+
+
+def _scrubbed() -> None:
+    """The slider moved. While playing, and just after a button, a change is the browser
+    sending back a position it showed a moment ago (a tick in flight), not a drag: ignored.
+    Without this, End reached the end and then jumped back to where the line had been."""
+    state = st.session_state
+    if state[PLAYING] or time.monotonic() - state.get(MOVED, 0.0) < SETTLE_S:
+        return
+    state[POS] = state[SCRUB]
 
 
 def _toggle(n: int) -> None:
     """Play or Pause."""
     state = st.session_state
+    state[MOVED] = time.monotonic()
     if state[PLAYING]:
         state[PLAYING] = False
         return

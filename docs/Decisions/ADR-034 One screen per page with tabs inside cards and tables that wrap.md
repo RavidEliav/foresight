@@ -33,12 +33,12 @@ After 8.6, Ravid asked that the main part of each page fit one screen, on a lapt
 - **Phone view** (#58, after Ravid's phone check):
   - A phone's browser (user agent with Mobile or iPhone, `ui.phone`) gets each page's cards as the tabs of one card (`ui.cards`).
   - Charts are at most 210 px, the headline tiles are compact, a long tab scrolls inside its card and Extended data is one dropdown.
-  - Run Pipeline's stages become one-line rows, and the launch card folds away while a run is going.
+  - Run Pipeline's stages become one-line rows, the dataset is a dropdown, and the status line leaves out the current stage (the highlighted row shows it).
   - Text fields use 16 px (an iPhone zooms into smaller ones), and 2D charts are still pictures, so a pinch zooms them like the rest of the page (#59).
   - Every page fits 390×664 (an iPhone's Safari with its bars shown); E9 checks it with an iPhone user agent.
-- **Ask Foresight** (#56): the conversation scrolls in its own box sized to the window, under a fixed title and question bar.
+- **Ask Foresight** (#56, #62): the conversation scrolls in its own box sized to the window; the examples and the question bar sit together right under it (the question bar is not pinned to the window's bottom).
 - **Checks:**
-  - **E9** (Playwright) fails if a page's main part is taller than 1536×730, or if the headline is not on a 390×844 phone's first screen.
+  - **E9** (Playwright) fails if a page's main part is taller than 1536×730, or if a whole page is taller than 390×664 with an iPhone user agent; it also taps the "Hi, name" menu.
   - `scripts/measure_fit.py` measures and screenshots every page at laptop, desktop (1920×960) and phone sizes.
 
 ## Consequences

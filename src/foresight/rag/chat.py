@@ -69,6 +69,11 @@ class ChatAnswer(BaseModel):
     mock: bool = False
 
 
+RETRY = ("\n\nYour previous answer was withheld because {problem}. Answer again. Cite only the "
+         "sources exactly as they appear in the [source: ...] lines above (the same file, "
+         "section and run), and every paragraph must cite one of them.")
+
+
 def _prompt(question: str, hits: list[Hit]) -> str:
     excerpts = "\n\n".join(f"[source: {h.chunk.citation}]\n{h.chunk.text}" for h in hits)
     return f"Excerpts:\n\n{excerpts}\n\nQuestion: {question}"
@@ -208,11 +213,22 @@ def _answer(question: str, hits: list[Hit], sources: list[Source], settings: Set
     else:
         answer, usage = complete(settings, system, prompt)
 
+    def refuses(text: str) -> bool:
+        return refusal.lower().rstrip(".") in text.lower() or \
+            REFUSAL.lower().rstrip(".") in text.lower()
+
+    problem = None if refuses(answer) else citation_problem(answer, hits, grounded_summaries)
+    if problem and not settings.mock_llm:
+        # One more try with what was wrong: a model sometimes pairs a run with another run's
+        # section (seen on main, 2026-11-25), and the same question then answered correctly
+        answer, more = complete(settings, system, prompt + RETRY.format(problem=problem))
+        usage = {k: usage.get(k, 0) + more.get(k, 0) for k in {*usage, *more}}
+        problem = None if refuses(answer) else citation_problem(answer, hits,
+                                                                 grounded_summaries)
     refused, reason = False, ""
-    if refusal.lower().rstrip(".") in answer.lower() or \
-            REFUSAL.lower().rstrip(".") in answer.lower():
+    if refuses(answer):
         answer, refused, reason = refusal, True, "the excerpts do not contain the answer"
-    elif problem := citation_problem(answer, hits, grounded_summaries):
+    elif problem:
         answer, refused, reason = refusal, True, f"answer withheld: {problem}"
     return ChatAnswer(question=question, answer=answer, refused=refused, reason=reason,
                       sources=sources, usage=usage, mock=settings.mock_llm,

@@ -281,6 +281,21 @@ def test_other_data_lights_run_pipeline_up_and_replaces_the_running_run(monkeypa
     assert started and started[0][3]["kind"]  # the scenario run started
 
 
+def test_a_running_scenario_is_known_before_and_after_its_first_stage(tmp_path):
+    """The run's first stage rewrites scenario.json as {"scenario": recipe, ...}; the launch
+    card still knows the run's data (a KeyError on main, 2026-11-25)."""
+    import json
+
+    from app import store
+
+    request = {"kind": "drift", "intensity": 2.0, "seed": 7}
+    (tmp_path / "scenario.json").write_text(json.dumps(request))
+    assert store.run_data(tmp_path) == ("scenario", "drift", 2.0, 7)
+    (tmp_path / "scenario.json").write_text(json.dumps(
+        {"scenario": {**request, "sensors": ["f_031"]}, "label": "x", "ground_truth": {}}))
+    assert store.run_data(tmp_path) == ("scenario", "drift", 2.0, 7)
+
+
 def test_an_archived_run_is_loaded_again_when_picked(monkeypatch):
     """ADR-033: an older run is only a stub on the server; picking it downloads its files."""
     import json

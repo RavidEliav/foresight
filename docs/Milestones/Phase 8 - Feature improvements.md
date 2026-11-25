@@ -125,8 +125,8 @@ Everything above is on `main` (#66, Nov 25); `main` and `dev` are the same.
 - **Wording:** "1175 training runs changed" counted the training period, not the 80 runs actually shifted.
 
 ## Next
-Plan renumbered on Nov 22:
+Plan changed on Nov 25 (Ravid): voice and the MCP server are future features, built after the submission (Dec 4), not part of it.
 - **8.8** PDF export of the engineering report
-- **8.9** Voice
-- **8.10 Course extras:** retrieval evaluation, prompt-injection tests, MCP server
-- **8.11** Vault close-out, README and release to `main`
+- **8.9 Course extras:** retrieval evaluation and prompt-injection tests
+- **8.10** Vault close-out, README and release to `main`
+- **After the submission:** voice (ask by voice, answers read aloud) and an MCP server exposing Foresight's tools

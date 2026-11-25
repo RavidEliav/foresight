@@ -14,7 +14,7 @@ Multi-agent semiconductor yield intelligence on SECOM. Author: Ravid Eliav.
 - Phase 5: RAG stretch: similar runs, knowledge base, "Ask Foresight" (done, see [[Phase 5 - RAG stretch]])
 - Phase 6 and 6.1: UX & visual design, Continue run, chat on run data (done, see [[Phase 6 - UX and visual design]])
 - Phase 7: performance: same numbers, 2.5 min runs, about half the memory (done, see [[Phase 7 - Performance]])
-- Phase 8: feature improvements: run registry + Trends, All runs chat, Scenario Lab, Line Replay + 3D wafer, Stop/Resume, Google sign-in with roles, run files in Supabase, one screen per page and a phone view done, all on `main`; PDF, voice, course extras next (in progress, see [[Phase 8 - Feature improvements]])
+- Phase 8: feature improvements: run registry + Trends, All runs chat, Scenario Lab, Line Replay + 3D wafer, Stop/Resume, Google sign-in with roles, run files in Supabase, one screen per page and a phone view done, all on `main`; PDF export, retrieval evaluation and prompt-injection tests next; voice and an MCP server after the submission (in progress, see [[Phase 8 - Feature improvements]])
 - Next: 9 README, slides, video · 10 close-out ([[ADR-017 Phase order after Phase 4 and the design direction]])
 - Railway: Hobby plan since Nov 18 (8 GB memory per service)
 - Supabase: `foresight-dev` and `foresight-main` (free, East US), one per Railway environment: registry, accounts, chat history and run files ([[ADR-033 Run files and chat history in Supabase, stubs on the volume]])

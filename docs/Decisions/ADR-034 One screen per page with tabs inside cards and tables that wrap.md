@@ -36,7 +36,7 @@ After 8.6, Ravid asked that the main part of each page fit one screen, on a lapt
   - Run Pipeline's stages become one-line rows, the dataset is a dropdown, and the status line leaves out the current stage (the highlighted row shows it).
   - Text fields use 16 px (an iPhone zooms into smaller ones), and 2D charts are still pictures, so a pinch zooms them like the rest of the page (#59).
   - Every page fits 390×664 (an iPhone's Safari with its bars shown); E9 checks it with an iPhone user agent.
-- **Ask Foresight** (#56, #62): the conversation scrolls in its own box sized to the window; the examples and the question bar sit together right under it (the question bar is not pinned to the window's bottom).
+- **Ask Foresight** (#56, #62): the conversation scrolls in its own box sized to the window; the examples and the question bar sit together right under it on a computer, and pinned to the bottom of the screen on a phone (`st.bottom`, #63).
 - **Checks:**
   - **E9** (Playwright) fails if a page's main part is taller than 1536×730, or if a whole page is taller than 390×664 with an iPhone user agent; it also taps the "Hi, name" menu.
   - `scripts/measure_fit.py` measures and screenshots every page at laptop, desktop (1920×960) and phone sizes.

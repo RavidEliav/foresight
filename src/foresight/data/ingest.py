@@ -12,7 +12,16 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from foresight.data.cleaning import CleaningConfig, clean, profile
-from foresight.data.secom import SecomDataError, ensure_secom, load_csv, load_raw, sha256
+from foresight.data.scenarios import DATA_FILE as SCENARIO_DATA_FILE
+from foresight.data.scenarios import SCENARIO_FILE, Scenario, check_test_period, generate
+from foresight.data.secom import (
+    SecomDataError,
+    ensure_secom,
+    load_csv,
+    load_raw,
+    sha256,
+    to_upload_csv,
+)
 from foresight.settings import Settings
 from foresight.utils.logging import get_logger
 from foresight.validation.contract import (
@@ -39,14 +48,28 @@ def _write_json(path: Path, payload: dict) -> str:
     return str(path)
 
 
-def run_ingest(settings: Settings, run_dir: Path, dataset: Path | None = None) -> IngestResult:
-    """Ingest the built-in SECOM files, or ``dataset`` (an uploaded CSV) when given."""
+def run_ingest(settings: Settings, run_dir: Path, dataset: Path | None = None,
+               scenario: Scenario | None = None) -> IngestResult:
+    """Ingest the built-in SECOM files, ``dataset`` (an uploaded CSV) when given, or a
+    synthetic ``scenario`` built from SECOM (training period only, Phase 8.3)."""
     raw_dir = settings.resolve(settings.paths.data_raw_dir)
     artifacts: dict[str, str] = {}
+    contract_path = settings.resolve(settings.paths.contract_path)
+    contract = DatasetContract.load(contract_path) if contract_path.exists() else None
+    config = CleaningConfig(max_missing_ratio=settings.data.max_missing_ratio)
+    if contract is not None:
+        config.contract_features = contract.features.required
+        config.contract_dropped = contract.dropped_columns
+    original = None
     try:
         if dataset is not None:
             checksums = {dataset.name: sha256(dataset)}
             raw = load_csv(dataset)
+        elif scenario is not None:
+            ensure_secom(raw_dir)
+            original = load_raw(raw_dir)
+            raw, artifacts, checksums = _scenario_data(original, scenario, config, settings,
+                                                       run_dir)
         else:
             checksums = ensure_secom(raw_dir)
             raw = load_raw(raw_dir)
@@ -55,15 +78,11 @@ def run_ingest(settings: Settings, run_dir: Path, dataset: Path | None = None) -
         return _finish(run_dir, checks, artifacts, {})
 
     checks = validate_raw(raw, settings.data.min_rows)
+    if original is not None:
+        checks.append(check_test_period(original, raw, config, settings.analytics.test_fraction))
     if any(c.status == GateStatus.ERROR for c in checks):
         return _finish(run_dir, checks, artifacts, checksums)
 
-    contract_path = settings.resolve(settings.paths.contract_path)
-    contract = DatasetContract.load(contract_path) if contract_path.exists() else None
-    config = CleaningConfig(max_missing_ratio=settings.data.max_missing_ratio)
-    if contract is not None:
-        config.contract_features = contract.features.required
-        config.contract_dropped = contract.dropped_columns
     cleaned, report = clean(raw, config)
     clean_path = run_dir / "clean_data.csv"
     cleaned.to_csv(clean_path, index=False, date_format="%Y-%m-%dT%H:%M:%S")
@@ -85,6 +104,20 @@ def run_ingest(settings: Settings, run_dir: Path, dataset: Path | None = None) -
     checks += validate_clean(cleaned, contract, checksums)
     log.info("cleaned %d rows x %d features", report.rows_out, report.features_out)
     return _finish(run_dir, checks, artifacts, checksums)
+
+
+def _scenario_data(original, scenario: Scenario, config: CleaningConfig, settings: Settings,
+                   run_dir: Path) -> tuple:
+    """Generate the scenario's data from SECOM and save it apart from the original files:
+    scenario_data.csv (upload format) and scenario.json (recipe and ground truth)."""
+    raw, resolved, truth = generate(original, scenario, config, settings.analytics.test_fraction)
+    data_path = run_dir / SCENARIO_DATA_FILE
+    data_path.write_bytes(to_upload_csv(raw))
+    recipe = {"scenario": resolved.model_dump(), "label": resolved.label(), "ground_truth": truth}
+    artifacts = {"scenario": _write_json(run_dir / SCENARIO_FILE, recipe),
+                 "scenario_data": str(data_path)}
+    log.info("scenario %s: %s", resolved.kind, resolved.label())
+    return raw, artifacts, {SCENARIO_DATA_FILE: sha256(data_path)}
 
 
 def _finish(run_dir: Path, checks: list[Check], artifacts: dict[str, str],

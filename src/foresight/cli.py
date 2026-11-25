@@ -9,39 +9,74 @@ progress.json and a timeout guard that stops the run and records why.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import json
 import os
 import threading
 from pathlib import Path
 
+from foresight.data.scenarios import Scenario
 from foresight.flow import run_pipeline
-from foresight.progress import ProgressTracker, new_run_id
+from foresight.progress import ACTIVE, STOP_FILE, ProgressTracker, new_run_id
 from foresight.registry import record_run, sync
 from foresight.settings import load_settings
 
 TIMEOUT_EXIT_CODE = 3
+STOPPED_EXIT_CODE = 4
+STOP_POLL_S = 1.0
+_END_LOCK = threading.Lock()  # the timeout guard and a stop request never both end a run
+
+
+def _end(tracker: ProgressTracker, status: str, reason: str, exit_code: int,
+         settings=None) -> None:
+    """Record why the run ended, write it to the registry (at most 3 s) and exit now: the Flow
+    may be inside an LLM call."""
+    with _END_LOCK:
+        if tracker.progress.status not in ACTIVE:  # the run finished in the meantime
+            return
+        tracker.finish(status, reason)
+        (tracker.run_dir / "failure_report.md").write_text(
+            f"# Run {tracker.progress.run_id} stopped\n\n**Reason:** {reason}\n",
+            encoding="utf-8")
+        if settings is not None:  # the database must not keep the run alive
+            writer = threading.Thread(target=record_run, args=(tracker.run_dir, settings),
+                                      daemon=True)
+            writer.start()
+            writer.join(timeout=3)
+        os._exit(exit_code)
 
 
 def stop_on_timeout(tracker: ProgressTracker, timeout_s: int, settings=None) -> None:
-    reason = f"stopped by the timeout guard after {timeout_s} s"
-    tracker.finish("timeout", reason)
-    (tracker.run_dir / "failure_report.md").write_text(
-        f"# Run {tracker.progress.run_id} stopped\n\n**Reason:** {reason}\n", encoding="utf-8")
-    if settings is not None:  # at most 3 s: the guard must stop the run whatever the database does
-        writer = threading.Thread(target=record_run, args=(tracker.run_dir, settings),
-                                  daemon=True)
-        writer.start()
-        writer.join(timeout=3)
-    os._exit(TIMEOUT_EXIT_CODE)  # the Flow may be inside an LLM call; stop the process now
+    _end(tracker, "timeout", f"stopped by the timeout guard after {timeout_s} s",
+         TIMEOUT_EXIT_CODE, settings)
+
+
+def watch_for_stop(tracker: ProgressTracker, done: threading.Event, settings=None) -> None:
+    """Stop the run when the app asks (Phase 8.5): the app writes stop.requested into the run
+    folder."""
+    while not done.wait(STOP_POLL_S):
+        request = tracker.run_dir / STOP_FILE
+        if request.exists():
+            # who asked (Phase 8.6); older requests hold only a time
+            with contextlib.suppress(OSError, ValueError, KeyError, TypeError):
+                tracker.progress.stopped_by = json.loads(request.read_text("utf-8"))["by"] or ""
+            _end(tracker, "stopped", "stopped by the user", STOPPED_EXIT_CODE, settings)
+            return
 
 
 def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None,
-                resume: bool = False) -> int:
+                resume: bool = False, scenario_path: Path | None = None) -> int:
     settings = load_settings()
     if resume and not run_id:
         raise SystemExit("--resume needs --run-id")
+    scenario = None
+    if scenario_path is not None:
+        recipe = json.loads(scenario_path.read_text(encoding="utf-8"))
+        scenario = Scenario(**recipe.get("scenario", recipe))  # a request, or a resolved recipe
     run_id = run_id or new_run_id()
     run_dir = settings.resolve(settings.paths.runs_dir) / run_id
-    tracker = ProgressTracker.create(run_dir, run_id, "Uploaded CSV" if dataset else None)
+    label = "Uploaded CSV" if dataset else scenario.label() if scenario else None
+    tracker = ProgressTracker.create(run_dir, run_id, label)
     if resume and tracker.progress.status != "queued":  # the app prepares it before starting
         tracker.prepare_resume()
     timeout_s = timeout_s or settings.app.run_timeout_s
@@ -50,14 +85,18 @@ def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None,
 
     def heartbeat() -> None:
         while not stop.wait(settings.app.heartbeat_s):
-            tracker.save()
+            try:
+                tracker.save()
+            except OSError as exc:  # e.g. a full volume: say so in run.log, keep trying
+                print(f"heartbeat not saved: {exc}", flush=True)
 
     threading.Thread(target=heartbeat, daemon=True).start()
+    threading.Thread(target=watch_for_stop, args=(tracker, stop, settings), daemon=True).start()
     guard = threading.Timer(timeout_s, stop_on_timeout, args=(tracker, timeout_s, settings))
     guard.daemon = True
     guard.start()
     try:
-        state = run_pipeline(settings, run_id, dataset, tracker, resume=resume)
+        state = run_pipeline(settings, run_id, dataset, tracker, resume=resume, scenario=scenario)
     except Exception as exc:  # the Flow handles stage errors; this is a last resort
         tracker.finish("failed", f"unexpected error: {exc}")
         record_run(run_dir, settings)
@@ -65,6 +104,9 @@ def run_command(run_id: str | None, dataset: Path | None, timeout_s: int | None,
     finally:
         guard.cancel()
         stop.set()
+    from foresight.registry.archive import archive_run
+
+    archive_run(run_dir, settings)  # its files to Supabase Storage (ADR-033); logged on failure
     print(f"run {state.run_id}: {state.status}"
           + (f" ({state.failure_reason})" if state.failure_reason else ""), flush=True)
     return 0 if state.status == "success" else 1
@@ -79,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--timeout", type=int, help="seconds before the timeout guard stops the run")
     run.add_argument("--resume", action="store_true",
                      help="continue the interrupted run --run-id, reusing its finished stages")
+    run.add_argument("--scenario", type=Path,
+                     help="scenario.json: a synthetic variation of SECOM's training period")
     commands.add_parser("registry-sync",
                         help="record every run on disk and the reference run in Supabase")
     commands.add_parser("db-migrate",
@@ -91,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
         from foresight.registry.migrate import main as migrate_main
 
         return migrate_main()
-    return run_command(args.run_id, args.dataset, args.timeout, args.resume)
+    return run_command(args.run_id, args.dataset, args.timeout, args.resume, args.scenario)
 
 
 if __name__ == "__main__":

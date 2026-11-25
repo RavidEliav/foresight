@@ -1,6 +1,7 @@
-"""Investigation & Report page: a short, checked summary (key findings and one card per
-hypothesis) on top; the engineering report, the full investigation, the risk ranking, similar
-past runs, anomalies and the safety checks in tabs below."""
+"""Investigation & Report page: the headline numbers, then the main part one tab at a time
+(key findings, one card per hypothesis, anomalies and the run map, a simulated wafer; Phase
+8.7); the engineering report, the full investigation, the risk ranking, similar past runs,
+anomalies and the safety checks under Extended data."""
 
 from __future__ import annotations
 
@@ -17,6 +18,8 @@ STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:
                "ERROR": ":material/cancel:"}
 TABS = ["Engineering report", "Full investigation", "Risk ranking", "Similar past runs",
         "Anomalies", "Safety checks"]
+MAIN_TABS = ["Key findings", "Hypotheses", "Anomalies and run map", "Simulated wafer"]
+SCENARIO_TAB = "Synthetic scenario"
 
 
 def render(run_dir: Path | None) -> None:
@@ -32,52 +35,68 @@ def render(run_dir: Path | None) -> None:
     similar = read_json(run_dir, "similar_runs.json")
     _status_line(checks)
     ui.kpis(_headline_numbers(summary, risk, similar))
+    scenario = read_json(run_dir, "scenario_check.json")
     overview = store.investigation_summary(run_dir)
-    if overview:
-        _render_overview(overview)
-    elif store.exists(run_dir, SUMMARY_FILE):
-        st.warning("The short summary of this run did not pass its format check, so there are "
-                   "no hypothesis cards. The full investigation is under Extended data below; "
-                   "the Safety checks tab says what was wrong.", icon=":material/warning:")
-    else:
-        st.info("This run was made before Foresight wrote a short summary, so there are no "
-                "hypothesis cards. The full investigation is under Extended data below.",
-                icon=":material/history:")
 
-    left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-chart-anomalies", height="stretch"):
-        ui.label("Anomaly score over time")
-        charts.anomaly_timeline(run_dir, summary["score_limit"])
-        st.caption("Dotted line: the flag limit (95% of training-run scores). Shaded: the test "
-                   "period.")
-    with right, st.container(key="card-chart-runmap", height="stretch"):
-        ui.label("Run map: similar sensor profiles sit close together")
-        if similar:
-            three_d = st.session_state.get("run-map-3d-toggle", False)
-            charts.run_map(run_dir, three_d)
-            st.toggle("3D view", key="run-map-3d-toggle")
+    # Phase 8.7: the main part is the headline and one tab at a time, so it fits a screen
+    names = ([SCENARIO_TAB] if scenario else []) + MAIN_TABS
+    tabs = dict(zip(names, st.tabs(names), strict=True))
+    if scenario:
+        with tabs[SCENARIO_TAB]:
+            _render_scenario(scenario)
+    with tabs["Key findings"]:
+        if overview:
+            _render_findings(overview)
         else:
-            _older_run("Similar-run search")
+            _no_summary(run_dir)
+    with tabs["Hypotheses"]:
+        if overview:
+            _render_hypotheses(overview)
+        else:
+            _no_summary(run_dir)
+    with tabs["Anomalies and run map"]:
+        left, right = st.columns(2, gap="medium")
+        with left, st.container(key="card-chart-anomalies", height="stretch"):
+            ui.label("Anomaly score over time")
+            charts.anomaly_timeline(run_dir, summary["score_limit"])
+            st.caption("Dotted line: the flag limit (95% of training-run scores). Shaded: the "
+                       "test period.")
+        with right, st.container(key="card-chart-runmap", height="stretch"):
+            ui.label("Run map: similar sensor profiles sit close together")
+            if similar:
+                three_d = st.session_state.get("run-map-3d-toggle", False)
+                charts.run_map(run_dir, three_d)
+                st.toggle("3D view", key="run-map-3d-toggle")
+            else:
+                _older_run("Similar-run search")
+    with tabs["Simulated wafer"]:
+        _render_wafer(run_dir)
 
-    ui.section_label("Extended data")
-    report, investigation, risk_tab, similar_tab, anomalies, safety = st.tabs(TABS)
-    with report:
+    if not ui.developer():  # users get the report; Extended data is the developer view
+        report = store.read_bytes(run_dir, "engineering_report.md")
+        if report is not None:
+            st.download_button("Download engineering_report.md", report,
+                               file_name="engineering_report.md", mime="text/markdown",
+                               type="primary", icon=":material/download:")
+        return
+    shown = ui.extended(TABS, "report")
+    if shown == "Engineering report":
         _render_report(run_dir)
-    with investigation:
+    elif shown == "Full investigation":
         _render_investigation(run_dir)
-    with risk_tab:
+    elif shown == "Risk ranking":
         if risk:
             _render_risk(risk)
         else:
             _older_run("The risk ranking")
-    with similar_tab:
+    elif shown == "Similar past runs":
         if similar:
             _render_similar(similar)
         else:
             _older_run("Similar-run search")
-    with anomalies:
+    elif shown == "Anomalies":
         _render_anomalies(summary)
-    with safety:
+    elif shown == "Safety checks":
         _render_checks(checks)
 
 
@@ -116,6 +135,33 @@ def _headline_numbers(summary: dict, risk: dict | None,
     return items
 
 
+def _render_wafer(run_dir: Path) -> None:
+    """A simulated wafer of one test-period run, the riskiest first (Phase 8.4)."""
+    from app.replay_page import load, wafer_view
+
+    frame = load(run_dir)
+    if frame is None or frame.empty:
+        return
+    ranked = frame.sort_values("risk_score", ascending=False, kind="mergesort")
+    rows = {int(r.run_id): r for r in ranked.itertuples(index=False)}
+
+    def describe(run_id: int) -> str:
+        r = rows[run_id]
+        return (f"Run {run_id} · {'failed' if r.label == 1 else 'passed'} · risk "
+                f"{r.risk_score:.3f}{' · alarm' if r.flagged == 1 else ''}")
+
+    with st.container(key="card-wafer"):
+        ui.label("Simulated wafer of a test-period run")
+        left, right = st.columns([1, 2], gap="medium")
+        with left:
+            run_id = st.selectbox("Run (riskiest first)", list(rows), format_func=describe,
+                                  key="wafer-run")
+            st.caption("The Line Replay page plays the whole test period with a wafer for "
+                       "each run.")
+        with right:
+            wafer_view(ranked[ranked.run_id == run_id].iloc[0], "report-wafer")
+
+
 def _older_run(feature: str) -> None:
     st.info(f"{feature} was added after this run was made. Choose the reference run in the "
             "sidebar, or start a new run.", icon=":material/history:")
@@ -127,22 +173,39 @@ def _status_line(checks: dict | None) -> None:
     status, counts = checks["status"], checks["counts"]
     total = sum(counts.values())
     color = ui.STATUS_COLORS[status]
+    where = " · details in the Safety checks tab" if ui.developer() else ""
     st.markdown(f":{color}-badge[{STATUS_ICON[status]} Report safety checks: {status}] "
-                f":gray[{counts['PASS']} of {total} passed · details in the Safety checks "
-                "tab]")
+                f":gray[{counts['PASS']} of {total} passed{where}]")
 
 
-def _render_overview(overview: InvestigationSummary) -> None:
+def _no_summary(run_dir: Path) -> None:
+    if store.exists(run_dir, SUMMARY_FILE):
+        st.warning("The short summary of this run did not pass its format check, so there are "
+                   "no hypothesis cards. " + (
+                       "The full investigation is under Extended data below; the Safety checks "
+                       "tab says what was wrong." if ui.developer() else
+                       "The engineering report has the full results."),
+                   icon=":material/warning:")
+    else:
+        st.info("This run was made before Foresight wrote a short summary, so there are no "
+                "hypothesis cards. " + ("The full investigation is under Extended data below."
+                                        if ui.developer() else
+                                        "The engineering report has the full results."),
+                icon=":material/history:")
+
+
+def _render_findings(overview: InvestigationSummary) -> None:
     with st.container(key="card-summary"):
         ui.label("Key findings")
         st.html(f'<div class="fs-headline">{_escape(overview.headline)}</div>')
         st.markdown("\n".join(f"- {ui.md(f.text)} :gray-badge[{f.source}]"
                               for f in overview.key_findings))
 
-    st.markdown("**Hypotheses** :gray[AI-generated leads for an engineer to verify, not proven "
-                "causes]")
-    per_row = 3
+
+def _render_hypotheses(overview: InvestigationSummary) -> None:
+    st.markdown(":gray[AI-generated leads for an engineer to verify, not proven causes]")
     cards = overview.hypotheses
+    per_row = min(4, max(1, len(cards)))  # one row for up to four cards
     for start in range(0, len(cards), per_row):
         columns = st.columns(per_row)
         for offset, (column, card) in enumerate(zip(columns, cards[start:start + per_row],
@@ -158,6 +221,33 @@ def _render_overview(overview: InvestigationSummary) -> None:
 
 def _escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _render_scenario(scenario: dict) -> None:
+    """Scenario Lab: what was changed (ground truth) and what the analysis found."""
+    with st.container(key="card-scenario"):
+        ui.label("Synthetic scenario: ground truth")
+        found = len(scenario["found"])
+        total = len(scenario["sensors"])
+        period = scenario.get("training_runs")  # runs recorded before 8.3's fix lack it
+        changed = (f"{scenario['training_runs_changed']} of {period} training runs changed"
+                   if period else "training period changed")
+        st.markdown(f":orange-badge[SYNTHETIC] **{scenario['title']}** · strength "
+                    f"{scenario['intensity']:g} · seed {scenario['seed']} · {changed}, "
+                    f"{scenario['test_runs_untouched']} test runs untouched")
+        if total:
+            st.markdown(f"The analysis named **{found} of {total}** changed "
+                        f"sensor{'s' if total != 1 else ''}.")
+            rows = [{"sensor": r["sensor"],
+                     "EDA rank": (f"{r['eda_rank']} of {r['eda_listed']}" if r["eda_rank"]
+                                  else f"not in the top {r['eda_listed']}"),
+                     "model importance rank": r["model_rank"] or "not listed",
+                     "named in the reports": "yes" if r["in_reports"] else "no"}
+                    for r in scenario["sensors_checked"]]
+            ui.table(pd.DataFrame(rows))
+        st.caption("The model is evaluated on the original SECOM test period, where the "
+                   "synthetic change does not exist: every metric on these pages is computed "
+                   "on real runs only.")
 
 
 def _render_report(run_dir: Path) -> None:

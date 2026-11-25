@@ -81,19 +81,52 @@ def run_folder(settings: Settings, run_id: str) -> Path:
     return jobs.runs_dir(settings) / run_id
 
 
-def viewable_runs(settings: Settings) -> list[Path]:
-    """Successful runs, newest first, then the committed reference run."""
+def is_stub(run_dir: Path) -> bool:
+    """Only the run's progress and manifest are on the server; its files are in Supabase."""
+    from foresight.registry.archive import is_stub as stub
+
+    return stub(run_dir)
+
+
+def ensure_full(settings: Settings, run_dir: Path) -> bool:
+    """The run's files on the server, downloaded from Supabase Storage if needed (ADR-033)."""
+    from foresight.registry.archive import ensure_full as load
+
+    return load(settings, run_dir)
+
+
+def owns(progress: RunProgress | None, user: str) -> bool:
+    """``user`` started, resumed or stopped the run (Phase 8.6)."""
+    return bool(user and progress and (progress.started_by == user or user in progress.resumed_by
+                                       or progress.stopped_by == user))
+
+
+def viewable_runs(settings: Settings, user: str | None = None) -> list[Path]:
+    """Successful runs, newest first, then the committed reference run. With ``user`` (a
+    signed-in user, not a developer): only that person's runs, then the reference run."""
     folder = runs_folder(settings)
     found = []
     if folder.exists():
         for path in sorted(folder.iterdir(), reverse=True):
             manifest = read_json(path, MANIFEST) if path.is_dir() else None
-            if manifest and manifest.get("status") == "success":
+            if manifest and manifest.get("status") == "success" and (
+                    user is None or owns(load_progress(path), user)):
                 found.append(path)
     reference = settings.resolve(settings.paths.reference_run_dir)
     if exists(reference, MANIFEST):
         found.append(reference)
     return found
+
+
+def visible_run_ids(settings: Settings, user: str | None) -> list[str] | None:
+    """The runs a person may see (their own and the reference run) for the All runs chat;
+    None for a developer, who sees every run."""
+    if user is None:
+        return None
+    reference = settings.resolve(settings.paths.reference_run_dir)
+    manifest = read_json(reference, MANIFEST) if exists(reference, MANIFEST) else None
+    return [p.run_id for p in runs_of(settings, user)] + (
+        [manifest.get("run_id") or reference.name] if manifest else [])
 
 
 def all_runs(settings: Settings) -> list[RunProgress]:
@@ -109,12 +142,35 @@ def active_run(settings: Settings) -> RunProgress | None:
     return jobs.active_run(settings)
 
 
-def start_run(settings: Settings, upload: bytes | None, upload_name: str | None) -> str:
-    return jobs.start_run(settings, upload, upload_name)
+def interruption_cause(settings: Settings, run_dir: Path,
+                       progress: RunProgress) -> tuple[str, str]:
+    """Why an interrupted run stopped (storage full, a crash, a restart, memory) and what to
+    do."""
+    return jobs.interruption_cause(settings, run_dir, progress)
 
 
-def resume_run(settings: Settings, run_id: str) -> str:
-    return jobs.resume_run(settings, run_id)
+def start_run(settings: Settings, upload: bytes | None, upload_name: str | None,
+              scenario: dict | None = None, user: str = "") -> str:
+    return jobs.start_run(settings, upload, upload_name, scenario, user=user)
+
+
+def scenario_kinds() -> dict[str, tuple[str, str, float, int]]:
+    """Scenario Lab kinds: title, description, default intensity, sensors changed."""
+    from foresight.data.scenarios import KINDS
+
+    return KINDS
+
+
+def resume_run(settings: Settings, run_id: str, user: str = "") -> str:
+    return jobs.resume_run(settings, run_id, user=user)
+
+
+def stop_run(settings: Settings, run_id: str, user: str = "") -> None:
+    jobs.stop_run(settings, run_id, user=user)
+
+
+def stop_requested(run_dir: Path) -> bool:
+    return jobs.stop_requested(run_dir)
 
 
 @st.cache_data(show_spinner=False)
@@ -143,9 +199,9 @@ def _history(key: str, _settings: Settings) -> tuple[list[dict], str | None]:
     try:
         return registry.history(_settings), None
     except Exception as exc:  # database unreachable: the run folders still work
-        from foresight.utils.logging import get_logger
+        from foresight.utils.logging import get_logger, redact
 
-        get_logger("registry").warning("registry read failed: %s", exc)
+        get_logger("registry").warning("registry read failed: %s", redact(exc))
         files = _settings.model_copy(update={"database_url": ""})
         return registry.history(files), f"{type(exc).__name__}"
 
@@ -194,7 +250,16 @@ def sync_registry_in_background(settings: Settings) -> None:
         log = get_logger("registry")
         try:
             db.ping(settings.database_url)
+            from foresight.rag.chat import import_chat_logs
+
+            if settings.archive:  # ADR-033: stubs on an empty volume, then archive and slim
+                from foresight.registry.archive import restore_stubs
+
+                log.info("archive: %d run stubs restored", restore_stubs(settings))
             log.info("registry sync: %d runs recorded", registry.sync(settings))
+            if settings.archive:
+                log.info("archive: %d runs kept as stubs", len(jobs.tidy(settings)))
+            log.info("chat: %d logged questions moved to Supabase", import_chat_logs(settings))
         except Exception as exc:
             log.warning("registry sync skipped: %s", type(exc).__name__)
 
@@ -203,47 +268,137 @@ def sync_registry_in_background(settings: Settings) -> None:
 
 # --- chat ------------------------------------------------------------------------------------
 
-def ask(question: str, run_dir: Path, settings: Settings) -> dict:
+def ask(question: str, run_dir: Path, settings: Settings, user: str = "") -> dict:
     """Answer and log a question about the run; a failure is logged too, then raised."""
     from foresight.rag.chat import ChatAnswer, log_answer
     from foresight.rag.chat import ask as rag_ask
-    from foresight.utils.logging import get_logger
+    from foresight.utils.logging import get_logger, redact
 
     try:
         result = rag_ask(question, run_dir, settings)
     except Exception as exc:
-        get_logger("chat").exception("question failed for run %s", run_dir.name)
+        reason = f"{type(exc).__name__}: {redact(exc)}"
+        get_logger("chat").warning("question failed for run %s: %s", run_dir.name, reason)
         log_answer(settings, run_dir, ChatAnswer(question=question, answer="", refused=True,
-                                                 reason=f"error: {exc}"))
+                                                 reason=f"error: {reason}"), user)
         raise
-    log_answer(settings, run_dir, result)
+    log_answer(settings, run_dir, result, user)
     return result.model_dump()
 
 
-def ask_all(question: str, settings: Settings) -> dict:
-    """Answer and log a question about all recorded runs (logged as "all_runs")."""
+def ask_all(question: str, settings: Settings, user: str = "",
+            run_ids: list[str] | None = None) -> dict:
+    """Answer and log a question about all recorded runs, or only ``run_ids`` (a user's own
+    runs and the reference run); logged as "all_runs"."""
     from foresight.rag.chat import ChatAnswer, log_answer
     from foresight.rag.chat import ask_all as rag_ask_all
-    from foresight.utils.logging import get_logger
+    from foresight.utils.logging import get_logger, redact
 
     try:
-        result = rag_ask_all(question, settings)
+        result = rag_ask_all(question, settings, run_ids)
     except Exception as exc:
-        get_logger("chat").exception("question about all runs failed")
+        reason = f"{type(exc).__name__}: {redact(exc)}"
+        get_logger("chat").warning("question about all runs failed: %s", reason)
         log_answer(settings, Path(ALL_RUNS), ChatAnswer(question=question, answer="",
-                                                        refused=True, reason=f"error: {exc}"))
+                                                        refused=True, reason=f"error: {reason}"),
+                   user)
         raise
-    log_answer(settings, Path(ALL_RUNS), result)
+    log_answer(settings, Path(ALL_RUNS), result, user)
     return result.model_dump()
 
 
 ALL_RUNS = "all_runs"  # chat log name of questions about all runs
 
 
-def recent_questions(settings: Settings, run_dir: Path) -> list[dict]:
+def recent_questions(settings: Settings, run_dir: Path, user: str | None = None,
+                     limit: int = 6) -> list[dict]:
+    """The latest questions about the run and about all runs, newest first."""
     from foresight.rag.chat import recent_questions as recent
 
-    return recent(settings, run_dir)
+    found = recent(settings, run_dir, limit, user) + recent(settings, Path(ALL_RUNS), limit, user)
+    return sorted(found, key=lambda r: r.get("time", ""), reverse=True)[:limit]
+
+
+def questions_by(settings: Settings, user: str) -> list[dict]:
+    from foresight.rag.chat import questions_by as asked
+
+    return asked(settings, user)
+
+
+# --- accounts and sign-in (Phase 8.6) ----------------------------------------------------------
+
+def account(settings: Settings, email: str, name: str = ""):
+    from foresight import access
+
+    return access.get_account(settings, email, name)
+
+
+def accounts(settings: Settings) -> list:
+    from foresight import access
+
+    return access.accounts(settings)
+
+
+def request_access(settings: Settings, email: str, name: str, message: str) -> bool:
+    """Record the request and email the developers; True when the email went out."""
+    from foresight import access, notify
+
+    return notify.send_access_request(settings, access.request_access(settings, email, name,
+                                                                       message))
+
+
+def decide(settings: Settings, email: str, approve: bool, by: str):
+    from foresight import access
+
+    return access.decide(settings, email, approve, by)
+
+
+def add_account(settings: Settings, email: str, role: str, by: str):
+    from foresight import access
+
+    return access.add_account(settings, email, role, by)
+
+
+def set_role(settings: Settings, email: str, role: str, by: str):
+    from foresight import access
+
+    return access.set_role(settings, email, role, by)
+
+
+def remove_account(settings: Settings, email: str) -> None:
+    from foresight import access
+
+    access.remove_account(settings, email)
+
+
+def review_request(settings: Settings, token: str):
+    """The waiting request an emailed link names (None if the link is not valid)."""
+    from foresight import access
+
+    return access.read_token(settings, token)
+
+
+def accounts_backend(settings: Settings) -> str:
+    from foresight import access
+
+    return access.backend(settings)
+
+
+@st.cache_resource(show_spinner=False)
+def _activity(runs_dir: str, idle_minutes: int, _settings: Settings):
+    from foresight.access import Activity
+
+    return Activity(_settings)
+
+
+def activity(settings: Settings):
+    """The sign-in activity clock, one per server process."""
+    return _activity(str(runs_folder(settings)), settings.auth.idle_minutes, settings)
+
+
+def runs_of(settings: Settings, user: str) -> list[RunProgress]:
+    """Runs on this server that ``user`` started, resumed or stopped, newest first."""
+    return [p for p in all_runs(settings) if owns(p, user)]
 
 
 def warm_up_chat(settings: Settings) -> None:

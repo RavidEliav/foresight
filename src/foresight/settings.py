@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = PROJECT_ROOT / "config" / "settings.yaml"
@@ -26,7 +27,7 @@ class PathSettings(BaseModel):
     data_raw_dir: Path = Path("data/raw")
     contract_path: Path = Path("config/dataset_contract.json")
     knowledge_dir: Path = Path("knowledge")
-    models_dir: Path = Path("runs/.models")  # embedding model + knowledge index cache (volume)
+    models_dir: Path = Path("runs/.models")  # embedding model + knowledge index cache
 
 
 class RagSettings(BaseModel):
@@ -68,7 +69,26 @@ class AppSettings(BaseModel):
     run_timeout_s: int = 1200        # timeout guard for one pipeline run
     max_runs_per_hour: int = 6       # cost and abuse control (one run at a time as well)
     heartbeat_s: int = 15            # a run without a heartbeat for 90 s counts as interrupted
-    keep_runs: int = 20              # older finished runs are deleted (the volume is 500 MB)
+    keep_runs: int = 10              # older finished runs are deleted (the volume is 500 MB)
+    keep_full_runs: int = 3          # with Supabase Storage: newest runs kept whole on the volume
+
+
+class AuthSettings(BaseModel):
+    """Google sign-in and access requests (Phase 8.6). Secrets come from the environment only."""
+    idle_minutes: int = 60           # signed out after this long without activity
+    request_link_days: int = 7       # an emailed approve/deny link works this long
+    email_from: str = "Foresight <onboarding@resend.dev>"
+    google_client_id: str = ""
+    google_client_secret: SecretStr = SecretStr("")
+    cookie_secret: SecretStr = SecretStr("")  # signs the sign-in cookie and the emailed links
+    resend_api_key: SecretStr = SecretStr("")
+    developers: list[str] = []       # always approved, with the developer view
+    public_url: str = "http://localhost:8501"
+
+    @property
+    def google(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret.get_secret_value()
+                    and self.cookie_secret.get_secret_value())
 
 
 class Settings(BaseModel):
@@ -79,22 +99,50 @@ class Settings(BaseModel):
     analytics: AnalyticsSettings = AnalyticsSettings()
     app: AppSettings = AppSettings()
     rag: RagSettings = RagSettings()
+    auth: AuthSettings = AuthSettings()
     mock_llm: bool = False
-    run_passcode: str = ""
     environment: str = "local"
     database_url: str = ""  # Supabase Postgres (Session pooler); empty = run folders only
+    storage_url: str = ""   # https://<project>.supabase.co, for Supabase Storage (ADR-033)
+    storage_key: SecretStr = SecretStr("")  # the project's secret key (server-side only)
 
     def resolve(self, path: Path) -> Path:
         return path if path.is_absolute() else PROJECT_ROOT / path
+
+    @property
+    def archive(self) -> bool:
+        """Run files are kept in Supabase Storage and chat history in Postgres (ADR-033): the
+        volume keeps only the newest runs whole and a small stub of the others."""
+        return bool(self.database_url and self.storage_url
+                    and self.storage_key.get_secret_value())
+
+
+def project_url(database_url: str) -> str:
+    """The Supabase project's API URL from its database URL: the Session pooler's user is
+    ``postgres.<project ref>``, a direct connection's host ``db.<ref>.supabase.co``."""
+    found = (re.search(r"//postgres\.([a-z0-9]{20})[:@]", database_url)
+             or re.search(r"@db\.([a-z0-9]{20})\.supabase\.co", database_url))
+    return f"https://{found.group(1)}.supabase.co" if found else ""
 
 
 def _as_bool(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _clean_environment() -> None:
+    """Drop a byte-order mark at the start of any environment value. Windows PowerShell can
+    add one when a value is piped to a CLI (2026-11-21: every Railway secret started with
+    U+FEFF and the database URL did not parse). Libraries that read the environment
+    themselves, such as the OpenAI SDK, get the clean value too."""
+    for name, value in list(os.environ.items()):
+        if value.startswith("﻿"):
+            os.environ[name] = value.lstrip("﻿")
+
+
 def load_settings(config_path: Path | None = None) -> Settings:
     if not _as_bool(os.getenv("FORESIGHT_SKIP_DOTENV")):
         load_dotenv(PROJECT_ROOT / ".env", override=False)
+    _clean_environment()
     path = config_path or Path(os.getenv("FORESIGHT_CONFIG", DEFAULT_CONFIG))
     data = yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
     settings = Settings(**(data or {}))
@@ -111,9 +159,26 @@ def load_settings(config_path: Path | None = None) -> Settings:
     for env_name, field in path_overrides.items():
         if value := os.getenv(env_name):
             setattr(settings.paths, field, Path(value))
+    if os.getenv("RAILWAY_ENVIRONMENT_NAME") and not os.getenv("FORESIGHT_MODELS_DIR"):
+        # the container's own disk, not the 500 MB runs volume: downloaded again (80 MB, a few
+        # seconds) after each deploy
+        settings.paths.models_dir = Path("/tmp/foresight-models")
     settings.mock_llm = _as_bool(os.getenv("MOCK_LLM"))
-    settings.run_passcode = os.getenv("RUN_PASSCODE", "")
     settings.environment = os.getenv("RAILWAY_ENVIRONMENT_NAME", "local")
+    auth = settings.auth
+    auth.google_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    auth.google_client_secret = SecretStr(os.getenv("GOOGLE_CLIENT_SECRET", "").strip())
+    auth.cookie_secret = SecretStr(os.getenv("AUTH_COOKIE_SECRET", "").strip())
+    auth.resend_api_key = SecretStr(os.getenv("RESEND_API_KEY", "").strip())
+    if developers := os.getenv("FORESIGHT_DEVELOPERS"):
+        auth.developers = [e.strip().lower() for e in developers.split(",") if e.strip()]
+    if url := os.getenv("FORESIGHT_PUBLIC_URL"):
+        auth.public_url = url.rstrip("/")
+    elif domain := os.getenv("RAILWAY_PUBLIC_DOMAIN"):
+        auth.public_url = f"https://{domain}"
     # Railway sets SUPABASE_DB_URL per environment (ADR-026); empty = the run folders only
-    settings.database_url = os.getenv("SUPABASE_DB_URL", "")
+    settings.database_url = os.getenv("SUPABASE_DB_URL", "").strip()
+    settings.storage_url = (os.getenv("SUPABASE_URL", "").strip()
+                            or project_url(settings.database_url)).rstrip("/")
+    settings.storage_key = SecretStr(os.getenv("SUPABASE_SECRET_KEY", "").strip())
     return settings

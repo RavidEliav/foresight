@@ -14,7 +14,8 @@ CYAN, VIOLET, AMBER, GREEN, RED, SLATE = ("#22D3EE", "#A78BFA", "#FBBF24", "#34D
                                           "#64748B")
 GRID = "rgba(148,163,184,0.10)"
 # Charts that share a row have the same height, so their tops and bottoms line up.
-ROW_HEIGHT, MODEL_HEIGHT, DETAIL_HEIGHT = 420, 360, 460
+ROW_HEIGHT, MODEL_HEIGHT, DETAIL_HEIGHT = 300, 290, 460  # Phase 8.7: rows fit a screen
+TREND_HEIGHT, REPLAY_HEIGHT = 270, 205  # time lines read well lower
 
 pio.templates["foresight"] = go.layout.Template(layout=go.Layout(
     font={"family": "Inter, sans-serif", "color": "#CBD5E1", "size": 13},
@@ -322,7 +323,7 @@ def quality_trend(runs: pd.DataFrame) -> None:
                    mode="lines", line={"color": AMBER, "dash": "dot"}, hoverinfo="skip"),
     ])
     fig.update_layout(yaxis={"title": "test metric", "rangemode": "tozero"})
-    show(fig, "trend-quality", height=ROW_HEIGHT)
+    show(fig, "trend-quality", height=TREND_HEIGHT)
 
 
 def run_time_trend(runs: pd.DataFrame, stages: pd.DataFrame) -> None:
@@ -341,7 +342,7 @@ def run_time_trend(runs: pd.DataFrame, stages: pd.DataFrame) -> None:
                                hovertemplate=f"{title}: " + "%{y:.0f} s<extra></extra>"))
     fig = go.Figure(bars)
     fig.update_layout(barmode="stack", yaxis_title="seconds", xaxis={"type": "category"})
-    show(fig, "trend-run-time", height=ROW_HEIGHT)
+    show(fig, "trend-run-time", height=TREND_HEIGHT)
 
 
 def tokens_trend(runs: pd.DataFrame) -> None:
@@ -357,4 +358,97 @@ def tokens_trend(runs: pd.DataFrame) -> None:
         hovertemplate="%{x} (%{customdata[0]})<br>%{y:,} tokens<extra></extra>"))
     fig.update_layout(yaxis={"title": "tokens", "tickformat": ",d"}, showlegend=False,
                       xaxis={"type": "category"})
-    show(fig, "trend-tokens", height=ROW_HEIGHT)
+    show(fig, "trend-tokens", height=TREND_HEIGHT)
+
+
+# --- Line Replay (Phase 8.4) -----------------------------------------------------------------
+
+def replay_stream(frame: pd.DataFrame, shown: int, cutoff: float, key: str) -> None:
+    """The test period up to the replayed run: every run's risk score, the alarm cutoff, the
+    alarms (rings) and the failing runs (amber). The axes cover the whole period from the
+    start, so the line fills in from left to right."""
+    seen = frame.iloc[:shown]
+    hover = ("Run %{customdata[0]}<br>%{x|%d %b %H:%M}<br>Risk %{y:.3f}"
+             "<br>%{customdata[1]}<extra></extra>")
+
+    def runs(mask, name: str, color: str, size: int, opacity: float = 0.9) -> go.Scatter:
+        part = seen[mask]
+        return go.Scatter(x=part.timestamp, y=part.risk_score, mode="markers", name=name,
+                          marker={"color": color, "size": size, "opacity": opacity},
+                          customdata=part[["run_id", "top_signals"]].to_numpy(),
+                          hovertemplate=hover)
+
+    alarms = seen[seen.flagged == 1]
+    fig = go.Figure([
+        go.Scatter(x=seen.timestamp, y=seen.risk_score, mode="lines", name="risk score",
+                   line={"color": "rgba(148,163,184,0.25)", "width": 1}, hoverinfo="skip"),
+        runs(seen.label == 0, "passing runs", SLATE, 5, 0.7),
+        runs(seen.label == 1, "failing runs", AMBER, 9),
+        go.Scatter(x=alarms.timestamp, y=alarms.risk_score, mode="markers", name="alarms",
+                   hoverinfo="skip", marker={"symbol": "circle-open", "size": 15,
+                                             "color": CYAN, "line": {"width": 2}}),
+    ])
+    fig.add_hline(y=cutoff, line={"color": CYAN, "dash": "dot", "width": 1.5},
+                  annotation_text="alarm cutoff", annotation_font_color=CYAN)
+    if shown:
+        fig.add_vline(x=seen.timestamp.iloc[-1], line={"color": VIOLET, "width": 1.5})
+    fig.update_layout(xaxis={"range": [frame.timestamp.min(), frame.timestamp.max()],
+                             "title": None},
+                      yaxis={"range": [0, 1.05], "title": "risk score"},
+                      uirevision="replay")
+    show(fig, key, height=REPLAY_HEIGHT)
+
+
+# Two triangles per face of a box: bottom, top, then the four sides
+_BOX = [(0, 1, 2), (0, 2, 3), (4, 5, 6), (4, 6, 7), (0, 1, 5), (0, 5, 4), (1, 2, 6), (1, 6, 5),
+        (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7)]
+
+
+def _boxes(x, y, height: float, half: float, color: str, name: str) -> go.Mesh3d:
+    """One mesh of square dies (boxes) standing on the wafer."""
+    import numpy as np
+
+    corners = np.array([(-1, -1), (1, -1), (1, 1), (-1, 1)]) * half
+    vx = (x[:, None] + np.tile(corners[:, 0], 2)).ravel()
+    vy = (y[:, None] + np.tile(corners[:, 1], 2)).ravel()
+    vz = np.tile(np.repeat([0.0, height], 4), len(x))
+    faces = (np.arange(len(x))[:, None, None] * 8 + np.array(_BOX)[None]).reshape(-1, 3)
+    return go.Mesh3d(x=vx, y=vy, z=vz, i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+                     color=color, flatshading=True, name=name, hoverinfo="skip",
+                     lighting={"ambient": 0.6, "diffuse": 0.8, "specular": 0.3})
+
+
+GOOD_H, DEFECT_H = 0.012, 0.06  # die heights: defective dies stand out
+
+
+def wafer_3d(wafer, key: str, height: int = ROW_HEIGHT) -> None:
+    """A simulated wafer in 3D: good dies flat and teal, defective dies raised and amber."""
+    import numpy as np
+
+    from app.wafer import DIE
+
+    angle = np.linspace(0, 2 * np.pi, 97)[:-1]
+    disc = go.Mesh3d(x=np.r_[0, np.cos(angle)], y=np.r_[0, np.sin(angle)],
+                     z=np.full(len(angle) + 1, -0.004), i=np.zeros(len(angle), int),
+                     j=np.arange(1, len(angle) + 1), k=np.r_[np.arange(2, len(angle) + 1), 1],
+                     color="#1E293B", hoverinfo="skip", name="wafer")
+    half = DIE * 0.42
+    good, bad = ~wafer.bad, wafer.bad
+    traces = [disc, _boxes(wafer.x[good], wafer.y[good], GOOD_H, half, "#155E75", "good dies")]
+    if bad.any():
+        traces.append(_boxes(wafer.x[bad], wafer.y[bad], DEFECT_H, half, AMBER, "defective dies"))
+    traces.append(go.Scatter3d(
+        x=wafer.x, y=wafer.y, z=np.where(bad, DEFECT_H, GOOD_H), mode="markers", name="dies",
+        marker={"size": 2, "color": np.where(bad, AMBER, CYAN), "opacity": 0.6},
+        customdata=np.where(bad, "defective", "good"),
+        hovertemplate="Die (%{x:.2f}, %{y:.2f}): %{customdata}<extra></extra>"))
+    hidden = {"visible": False, "showbackground": False}
+    fig = go.Figure(traces)
+    fig.update_layout(showlegend=False, uirevision="wafer",
+                      margin={"l": 0, "r": 0, "t": 0, "b": 0},
+                      scene={"xaxis": hidden, "yaxis": hidden,
+                             "zaxis": {**hidden, "range": [-0.01, 0.3]},  # fixed: true heights
+                             "aspectmode": "manual",
+                             "aspectratio": {"x": 1, "y": 1, "z": 0.3},
+                             "camera": {"eye": {"x": 0.62, "y": -0.88, "z": 0.62}}})
+    show(fig, key, height=height)

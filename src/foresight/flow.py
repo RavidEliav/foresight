@@ -32,6 +32,7 @@ from foresight.analytics.stages import (
     run_report,
 )
 from foresight.data.ingest import run_ingest
+from foresight.data.scenarios import Scenario, load_scenario
 from foresight.progress import ProgressTracker, new_run_id
 from foresight.rag.index import CHUNKS_FILE
 from foresight.registry import record_run
@@ -75,6 +76,7 @@ class ForesightState(BaseModel):
 class ForesightFlow(Flow[ForesightState]):
     settings: Settings = Field(default_factory=load_settings)
     dataset: Path | None = None
+    scenario: Scenario | None = None  # synthetic training-period variation (Phase 8.3)
     tracker: ProgressTracker | None = None
     continue_run: bool = False  # `resume` is taken by CrewAI's Flow
     background_crews: bool = True
@@ -182,8 +184,12 @@ class ForesightFlow(Flow[ForesightState]):
         return Path(self.state.run_dir)
 
     def _ingest(self) -> StageResult:
-        result = run_ingest(self.settings, self._run_dir, self.dataset)
+        result = run_ingest(self.settings, self._run_dir, self.dataset, self.scenario)
         self.state.data_checksums = result.checksums
+        recipe = load_scenario(self._run_dir) if self.scenario else None
+        if recipe:  # the label names the sensors the scenario chose
+            self.tracker.progress.dataset = recipe["label"]
+            self.tracker.save()
         return StageResult(artifacts=result.artifacts, checks=result.validation)
 
     @start()
@@ -272,6 +278,8 @@ class ForesightFlow(Flow[ForesightState]):
         chunks = Path(self.state.run_dir) / CHUNKS_FILE
         rag = json.loads(chunks.read_text(encoding="utf-8"))["params"] if chunks.exists() \
             else None
+        scenario = load_scenario(Path(self.state.run_dir))
+        extra = {"scenario": scenario} if scenario else {}
         manifest = build_manifest(
             self.state.run_id,
             self.settings,
@@ -284,6 +292,7 @@ class ForesightFlow(Flow[ForesightState]):
             rag_index=rag,
             data_sha256=self.state.data_checksums,
             artifacts=sorted(Path(p).name for p in self.state.artifacts.values()),
+            **extra,
         )
         write_manifest(manifest, Path(self.state.run_dir) / "run_manifest.json")
 
@@ -291,11 +300,12 @@ class ForesightFlow(Flow[ForesightState]):
 
 def run_pipeline(settings: Settings | None = None, run_id: str | None = None,
                  dataset: Path | None = None, tracker: ProgressTracker | None = None,
-                 resume: bool = False) -> ForesightState:
+                 resume: bool = False, scenario: Scenario | None = None) -> ForesightState:
     """Run the whole Flow. ``dataset`` is an uploaded CSV (default: the built-in SECOM files);
+    ``scenario`` a synthetic variation of SECOM's training period (Phase 8.3);
     ``tracker`` lets the background runner share progress.json (and add a heartbeat);
     ``resume`` continues an interrupted run, reusing the stages it had finished."""
     flow = ForesightFlow(settings=settings or load_settings(), dataset=dataset, tracker=tracker,
-                         continue_run=resume, suppress_flow_events=True)
+                         scenario=scenario, continue_run=resume, suppress_flow_events=True)
     flow.kickoff(inputs={"run_id": run_id} if run_id else None)
     return flow.state

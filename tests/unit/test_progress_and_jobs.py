@@ -52,6 +52,7 @@ def test_run_without_heartbeat_counts_as_interrupted():
 @pytest.mark.parametrize(("status", "reason", "heartbeat_s_ago", "expected"), [
     ("running", None, 600, True),  # interrupted: the app restarted
     ("timeout", "stopped by the timeout guard after 1200 s", 0, True),
+    ("stopped", "stopped by the user", 0, True),  # Phase 8.5: stop, then resume
     ("failed", "model stage error: connection reset", 0, True),
     ("failed", "features_present: test_fails: 4 failing runs", 0, False),  # same data, same stop
     ("success", None, 0, False),
@@ -135,6 +136,68 @@ def test_oldest_finished_runs_are_pruned_but_never_an_active_one():
         "20260101T000000000001Z", "20260101T000000000004Z", "20260101T000000000005Z"]
 
 
+def test_pruning_removes_the_old_model_copy_only_when_the_model_lives_elsewhere(tmp_path):
+    settings = load_settings()
+    old = jobs.runs_dir(settings) / ".models"
+    (old / "all-MiniLM-L6-v2").mkdir(parents=True)
+    settings.paths.models_dir = old
+    jobs.prune_runs(settings)
+    assert old.exists()  # still the model's folder
+    settings.paths.models_dir = tmp_path / "models"  # Railway: the container's own disk
+    jobs.prune_runs(settings)
+    assert not old.exists()
+
+
+def test_models_stay_off_the_runs_volume_on_railway(monkeypatch):
+    from pathlib import Path
+
+    monkeypatch.delenv("FORESIGHT_MODELS_DIR", raising=False)
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "dev")
+    assert load_settings().paths.models_dir == Path("/tmp/foresight-models")
+    monkeypatch.setenv("FORESIGHT_MODELS_DIR", "/data/models")
+    assert load_settings().paths.models_dir == Path("/data/models")
+
+
+def test_a_run_does_not_start_or_resume_on_a_full_volume(monkeypatch):
+    settings = load_settings()
+    monkeypatch.setattr(jobs, "free_mb", lambda _s: 12.0)
+    monkeypatch.setattr(jobs, "_launch", lambda *_: pytest.fail("must not launch"))
+    with pytest.raises(jobs.RunLimitError, match=r"storage is full \(12 MB free\)"):
+        jobs.start_run(settings)
+    assert jobs.list_runs(settings) == []  # no half-made run folder
+    _fake_run(settings, "20260101T000000000000Z", heartbeat_s_ago=600)
+    with pytest.raises(jobs.RunLimitError, match="storage is full"):
+        jobs.resume_run(settings, "20260101T000000000000Z")
+
+
+def test_an_interrupted_run_says_why_it_stopped(monkeypatch):
+    """2026-11-22: two runs died on a full volume and the app only said "for example because
+    the app restarted"."""
+    from foresight.registry import run_record
+
+    settings = load_settings()
+    run_dir = _fake_run(settings, "20260101T000000000000Z", heartbeat_s_ago=600)
+    progress = load_progress(run_dir)
+
+    def cause():
+        return jobs.interruption_cause(settings, run_dir, progress)[0]
+
+    assert cause().startswith("The app restarted")  # quiet since before this app process
+    assert run_record(run_dir, settings)["failure_reason"] == cause()  # Trends gets it too
+    monkeypatch.setattr(jobs, "SERVER_STARTED", datetime.now(UTC) - timedelta(hours=1))
+    assert "ran out of memory" in cause()  # gone without a word while the app ran
+    (run_dir / "run.log").write_text(
+        'Traceback (most recent call last):\n  File "flow.py", line 9, in ingest\n'
+        "ValueError: sensor column 12 is empty\n", encoding="utf-8")
+    assert cause() == "The run crashed: ValueError: sensor column 12 is empty"
+    (run_dir / "run.log").write_text("heartbeat not saved: [Errno 28] No space left on device\n",
+                                     encoding="utf-8")
+    assert cause() == "The server's storage was full, so the run could not save its files."
+    (run_dir / "run.log").unlink()
+    monkeypatch.setattr(jobs, "free_mb", lambda _s: 3.0)  # still full: it could not even log
+    assert cause().startswith("The server's storage was full")
+
+
 def _wait_until_finished(run_dir, timeout_s=180):
     deadline = time.time() + timeout_s
     while time.time() < deadline:
@@ -172,3 +235,66 @@ def test_timeout_guard_stops_the_run(secom_env):
     assert result.returncode == 3
     assert progress.status == "timeout"
     assert "timeout guard after 1 s" in (run_dir / "failure_report.md").read_text()
+
+
+def test_a_stopped_run_keeps_its_finished_stages_and_marks_the_rest(tmp_path):
+    kept = tmp_path / "run" / "eda_summary.json"
+    tracker = ProgressTracker.create(tmp_path / "run", "r1")
+    kept.write_text("{}")
+    tracker.running()
+    tracker.stage_started("ingest")
+    tracker.stage_finished("ingest", 1.0, artifacts={"p": str(kept)})
+    tracker.stage_started("analyze")
+    tracker.crew("analyst", "running")
+    tracker.stage_finished("analyze", 2.0, artifacts={"eda": str(kept)})  # crew still working
+    tracker.stage_started("model")
+    tracker.finish("stopped", "stopped by the user")
+
+    progress = load_progress(tmp_path / "run")
+    assert [(s.name, s.status, s.crew_status) for s in progress.stages] == [
+        ("ingest", "done", None), ("analyze", "done", "stopped"), ("model", "stopped", None),
+        ("investigate", "skipped", None), ("report", "skipped", None)]
+    assert progress.can_continue
+    assert not progress.stages[1].reusable  # its crew did not finish: redone on resume
+
+
+def test_stop_request_only_for_an_active_run_and_resume_clears_it(monkeypatch):
+    settings = load_settings()
+    run_dir = _fake_run(settings, "20260101T000000000000Z")
+    assert not jobs.stop_requested(run_dir)
+    jobs.stop_run(settings, "20260101T000000000000Z")
+    assert jobs.stop_requested(run_dir)
+
+    tracker = ProgressTracker.create(run_dir, "20260101T000000000000Z")
+    tracker.finish("stopped", "stopped by the user")
+    with pytest.raises(jobs.RunLimitError, match="not running"):
+        jobs.stop_run(settings, "20260101T000000000000Z")
+
+    monkeypatch.setattr(jobs, "_launch", lambda command, _dir: None)
+    jobs.resume_run(settings, "20260101T000000000000Z")
+    assert not jobs.stop_requested(run_dir)  # else the resumed run would stop at once
+    assert load_progress(run_dir).status == "queued"
+
+
+def test_a_running_run_stops_when_asked_and_resumes_to_success(secom_env):
+    """The real thing: a background run is stopped from the app, then resumed."""
+    run_id = jobs.start_run(secom_env)
+    run_dir = jobs.runs_dir(secom_env) / run_id
+    deadline = time.time() + 60
+    while (p := load_progress(run_dir)) is None or p.status != "running":
+        assert time.time() < deadline, "the run did not start"
+        time.sleep(0.2)
+    jobs.stop_run(secom_env, run_id)
+
+    progress = _wait_until_finished(run_dir)
+    assert progress.status == "stopped", (run_dir / jobs.LOG_FILE).read_text()
+    assert progress.failure_reason == "stopped by the user"
+    assert "stopped by the user" in (run_dir / "failure_report.md").read_text()
+    assert progress.can_continue
+    assert jobs.active_run(secom_env) is None  # a different run could start now
+
+    jobs.resume_run(secom_env, run_id)
+    progress = _wait_until_finished(run_dir)
+    assert progress.status == "success", (run_dir / jobs.LOG_FILE).read_text()
+    assert len(progress.resumed_at) == 1
+    assert (run_dir / "engineering_report.md").exists()

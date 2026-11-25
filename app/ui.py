@@ -1,12 +1,12 @@
-"""Shared UI helpers: page style, headers, badges, environment badge, passcode check and
+"""Shared UI helpers: page style, headers, badges, environment badge, the developer view and
 friendly errors."""
 
 from __future__ import annotations
 
 import base64
-import hmac
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 from foresight.settings import Settings
@@ -129,7 +129,7 @@ section[data-testid="stSidebar"] {
   background: linear-gradient(135deg, rgba(34,211,238,.16), rgba(255,255,255,.02));
   animation: fs-glow 2s ease-in-out infinite; }
 .fs-stage.fs-skipped { --c: #64748B; opacity: .55; }
-.fs-stage.fs-interrupted { --c: #FBBF24; border-color: rgba(251,191,36,.5);
+.fs-stage.fs-interrupted, .fs-stage.fs-stopped { --c: #FBBF24; border-color: rgba(251,191,36,.5);
   background: linear-gradient(135deg, rgba(251,191,36,.14), rgba(255,255,255,.02)); }
 .fs-stage.fs-pending { opacity: .75; }
 .fs-stage-title { font-weight: 600; font-size: .9rem; line-height: 1.25; color: #E2E8F0;
@@ -140,7 +140,8 @@ section[data-testid="stSidebar"] {
   margin-right: .35rem; background: #475569; vertical-align: middle; }
 .fs-dot.fs-done { background: #34D399; } .fs-dot.fs-failed { background: #F87171; }
 .fs-dot.fs-running { background: #22D3EE; animation: fs-blink 1s infinite; }
-.fs-dot.fs-skipped { background: #64748B; } .fs-dot.fs-interrupted { background: #FBBF24; }
+.fs-dot.fs-skipped { background: #64748B; } .fs-dot.fs-interrupted,
+.fs-dot.fs-stopped { background: #FBBF24; }
 .fs-badge { position: absolute; top: .6rem; right: .65rem; width: 20px; height: 20px;
   border-radius: 50%; display: grid; place-items: center; font-size: .72rem;
   font-weight: 800; color: #070B14; background: var(--c); }
@@ -192,6 +193,42 @@ section[data-testid="stSidebar"] {
   justify-content: flex-start; width: 100%; text-align: left; }
 .st-key-recent button p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-size: .84rem; color: #CBD5E1; }
+/* signed-in person (Phase 8.6): the "Hi, name" menu top right, above the page title.
+   No angle brackets in this style block: the HTML sanitizer drops a style that has them. */
+/* Phase 8.7: on the title's line, taking no height of its own */
+.st-key-topbar { position: absolute; top: -.2rem; right: 0; width: auto !important;
+  z-index: 10; }
+[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] {
+  position: relative; }
+.st-key-topbar [data-testid="stPopover"] button p { font-weight: 600; color: #E2E8F0; }
+.fs-gap { height: .4rem; }
+/* Phase 8.7: one screen per page. Less space above the title, compact headline tiles, and
+   tables whose long text wraps instead of being cut off. */
+[data-testid="stMainBlockContainer"] { padding-top: 2.6rem; padding-bottom: 3rem; }
+[data-testid="stMain"] h1 { font-size: 2.15rem; padding: .1rem 0 .35rem 0; }
+.st-key-kpis [data-testid="stMetric"] { padding: .7rem 1rem; }
+.st-key-kpis [data-testid="stMetricValue"] > div { font-size: 1.85rem; }
+[class*="st-key-card-tabs"] [data-baseweb="tab-list"] { margin-top: -.3rem; }
+.st-key-card-replay-controls { padding-top: .7rem; padding-bottom: .5rem; }
+[data-testid="stTable"] table { font-size: .84rem; }
+[data-testid="stTable"] td, [data-testid="stTable"] th { padding: .3rem .55rem;
+  white-space: normal; vertical-align: top; }
+/* Ask Foresight: the conversation scrolls in a box that fills the window between the scope
+   line and the examples above the question bar, so those stay in place */
+.st-key-chat-log, [data-testid="stLayoutWrapper"]:has(.st-key-chat-log) {
+  height: calc(100dvh - 32.5rem) !important; min-height: 12rem !important;
+  max-height: none !important; flex: 0 0 auto !important; }
+@media (max-width: 640px) {
+  [data-testid="stMainBlockContainer"] { padding: 1.4rem .75rem 2rem .75rem; }
+  [data-testid="stMain"] h1 { font-size: 1.6rem; }
+  .st-key-kpis [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: .5rem; }
+  .st-key-kpis [data-testid="stColumn"] { flex: 1 1 40% !important; min-width: 40% !important; }
+  .st-key-kpis [data-testid="stMetric"] { padding: .55rem .7rem; }
+  .st-key-kpis [data-testid="stMetricValue"] > div { font-size: 1.45rem; }
+  [class*="st-key-card-"] { padding: .75rem .8rem; }
+  .st-key-chat-log, [data-testid="stLayoutWrapper"]:has(.st-key-chat-log) {
+    height: calc(100dvh - 38rem) !important; }
+}
 </style>
 """
 
@@ -224,22 +261,25 @@ def sidebar_nav(pages: list, current) -> None:
                 st.page_link(page, label=page.title, icon=page.icon, width="stretch")
 
 
-def recent_questions(run_dir: Path | None, settings: Settings, ask_page) -> None:
-    """The selected run's recent chat questions, once the chat is unlocked; a click opens the
-    answer on the Ask Foresight page."""
-    if run_dir is None or not st.session_state.get("chat_unlocked"):
+def recent_questions(run_dir: Path | None, settings: Settings, ask_page, user: str) -> None:
+    """The signed-in person's recent questions about the selected run and about all runs; a
+    click opens the answer on the Ask Foresight page."""
+    if run_dir is None:
         return
     from app import store
     from app.runs import local_time
 
-    items = store.recent_questions(settings, run_dir)
+    items = store.recent_questions(settings, run_dir, user)
     if not items:
         return
     st.sidebar.html('<div class="fs-side-label">Recent questions</div>')
     with st.sidebar.container(key="recent"):
         for i, item in enumerate(items):
+            every = item.get("run") == store.ALL_RUNS
+            scope = "about all runs, " if every else ""
             if st.button(item["question"], key=f"recent-{i}", type="tertiary", width="stretch",
-                         help=f"{item['question']} (asked {local_time(item['time'])})"):
+                         icon=":material/stacks:" if every else None,
+                         help=f"{item['question']} ({scope}asked {local_time(item['time'])})"):
                 st.session_state["chat_open"] = item
                 st.switch_page(ask_page)
 
@@ -254,6 +294,14 @@ def section_label(text: str) -> None:
     st.html(f'<div class="fs-section">{text}</div>')
 
 
+def extended(labels: list[str], key: str) -> str | None:
+    """Extended data: a row of tabs that are all closed until one is pressed (pressing it
+    again closes it). Returns the open tab's label; only that tab is drawn."""
+    section_label("Extended data")
+    return st.segmented_control("Extended data", labels, key=f"extended-{key}",
+                                label_visibility="collapsed")
+
+
 def kpis(items: list[tuple[str, str, str | None, str | None]]) -> None:
     """The page's headline numbers as large glass tiles of equal height: (label, value,
     comparison, help). The comparison is a neutral second line (no arrow, no colour)."""
@@ -264,11 +312,59 @@ def kpis(items: list[tuple[str, str, str | None, str | None]]) -> None:
                           help=note, height="stretch")
 
 
+WRAP_CHARS = 60  # a column with longer text makes the table wrap its cells (Phase 8.7)
+MAX_TABLE_PX = 1000  # wider than a laptop's page: the table wraps its cells instead
+
+
+def _shown(value) -> str:
+    if isinstance(value, float):
+        return f"{value:.4g}"
+    return "" if value is None else str(value)
+
+
+def _formatted(value, config) -> str:
+    """A cell as text with the column's number format ("percent", "%.3f"), when it has one."""
+    fmt = ((config or {}).get("type_config") or {}).get("format") \
+        if isinstance(config, dict) else None
+    try:
+        if fmt and value is not None and not pd.isna(value):
+            return f"{float(value):.1%}" if fmt == "percent" else fmt % float(value)
+    except (TypeError, ValueError):
+        pass
+    return "" if value is None or (isinstance(value, float) and pd.isna(value)) \
+        else _shown(value)
+
+
+def column_widths(frame) -> dict[str, int]:
+    """Each column as wide as its header or its longest value, in pixels, so no header or
+    value is cut off."""
+    return {str(c): int(7.4 * max([len(str(c)), *(len(_shown(v)) for v in frame[c])]) + 30)
+            for c in frame.columns}
+
+
 def table(frame, column_config: dict | None = None, max_rows: int = 12) -> None:
-    """A compact table: columns as wide as their data, height fitted to the rows."""
+    """A compact table that fits its content (Phase 8.7): every column as wide as its header
+    or longest value, height fitted to the rows. A table with long text (more than
+    ``WRAP_CHARS`` characters in a cell), or wider than a laptop's page, is shown with wrapped
+    cells instead, so nothing is hidden behind a cut-off column."""
+    longest = max((len(_shown(v)) for c in frame.columns for v in frame[c]), default=0)
+    widths = column_widths(frame)
+    if longest > WRAP_CHARS or sum(widths.values()) > MAX_TABLE_PX:
+        shown = frame.head(max_rows) if len(frame) > max_rows else frame
+        shown = pd.DataFrame({column: [_formatted(v, (column_config or {}).get(column))
+                                       for v in shown[column]] for column in shown.columns})
+        st.table(shown, hide_index=True)
+        if len(frame) > max_rows:
+            st.caption(f"The first {max_rows} of {len(frame)} rows.")
+        return
+    config = dict(column_config or {})
+    for name, width in widths.items():
+        given = config.get(name, {})
+        if isinstance(given, dict):  # a page's own setting (format, label) keeps the width
+            config[name] = {**given, "width": given.get("width") or width}
     rows = min(len(frame), max_rows)
     st.dataframe(frame, hide_index=True, width="content", row_height=30,
-                 height=38 + 30 * rows + 2, column_config=column_config)
+                 height=38 + 30 * rows + 2, column_config=config)
 
 
 def label(text: str) -> None:
@@ -286,10 +382,17 @@ def environment_badge(settings: Settings) -> None:
     st.sidebar.markdown(f":{ENV_COLORS.get(env, 'blue')}-badge[Environment: {env}]")
 
 
-def passcode_ok(settings: Settings, entered: str) -> bool:
-    if not settings.run_passcode:
-        return False
-    return hmac.compare_digest(entered.encode(), settings.run_passcode.encode())
+def developer() -> bool:
+    """True for the developer view (Phase 8.6): technical details, Extended data, Trends and
+    Users & access. Closed by default: no signed-in developer, no developer view."""
+    viewer = st.session_state.get("viewer")
+    return bool(viewer is not None and viewer.developer)
+
+
+def user_email() -> str:
+    """The signed-in email (empty for a local checkout without sign-in)."""
+    viewer = st.session_state.get("viewer")
+    return viewer.email if viewer is not None else ""
 
 
 def friendly_error(message: str) -> None:

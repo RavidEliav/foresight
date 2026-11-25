@@ -28,8 +28,8 @@ HINTS = {
 }
 # Warnings that are expected for every uploaded file, with the reason.
 EXPECTED_FOR_UPLOADS = {
-    "data_checksums": "Expected for uploads: the checksums identify the original SECOM files, "
-                      "so an uploaded file never matches them.",
+    "data_checksums": "Expected for uploads and synthetic scenarios: the checksums identify "
+                      "the original SECOM files, so any other data never matches them.",
 }
 
 
@@ -58,15 +58,19 @@ def explain_reason(status: str, reason: str | None, test_fraction: float) -> str
     if status == "timeout":
         return "Took longer than the time limit and was stopped."
     if status == "interrupted" and not reason:
-        return "Interrupted, for example because the app restarted."
+        return "Stopped sending updates; the cause was not recorded."
+    if status == "stopped":
+        return "Stopped from the Run Pipeline page."
     if stage := re.match(r"(\w+) (stage|crew) error", reason):
         what = "step" if stage.group(2) == "stage" else "step's crew"
         return f"Something went wrong in the {stage.group(1)} {what}."
     return reason or "Stopped."
 
 
-def explain_failure(progress: RunProgress, test_fraction: float) -> tuple[list[str], str | None]:
-    """Why a run stopped, in plain words, and what to do about it."""
+def explain_failure(progress: RunProgress, test_fraction: float,
+                    cause: tuple[str, str] | None = None) -> tuple[list[str], str | None]:
+    """Why a run stopped, in plain words, and what to do about it. ``cause`` is why an
+    interrupted run stopped sending updates (jobs.interruption_cause), when known."""
     reasons: list[str] = []
     hint = None
     for gate in progress.gates:
@@ -83,12 +87,17 @@ def explain_failure(progress: RunProgress, test_fraction: float) -> tuple[list[s
     status, reason = progress.effective_status(), progress.failure_reason or ""
     if status == "timeout":
         return ["The run took longer than the time limit and was stopped."], \
-            "Continue the run below; if it keeps happening, the LLM service may be slow."
+            "Resume the run below; if it keeps happening, the LLM service may be slow."
     if status == "interrupted":
-        return ["The run was interrupted, for example because the app restarted."], \
-            "Continue the run below: the stages it had finished are reused."
+        if cause is not None:
+            return [cause[0]], cause[1]
+        return [reason or "The run stopped sending updates; the cause was not recorded."], \
+            "Resume the run below: the stages it had finished are reused."
+    if status == "stopped":
+        return ["The run was stopped from this page."], \
+            "Resume it below (the stages it had finished are reused), or start a different run."
     if stage := re.match(r"(\w+) (stage|crew) error", reason):
         what = "step" if stage.group(2) == "stage" else "step's crew"
         return [f"Something went wrong in the {stage.group(1)} {what}."], \
-            "Technical details are below. Continue the run to try that step again."
+            "Resume the run to try that step again."
     return [reason or "The run stopped."], None

@@ -18,7 +18,7 @@ RUN_COLUMNS = (
     "duration_s", "rows", "fail_rate", "selected_model", "pr_auc", "baseline_pr_auc", "roc_auc",
     "recall", "precision", "balanced_accuracy", "runs_flagged", "flag_lift", "total_tokens",
     "llm_model", "llm_mock", "report_pass", "report_warning", "report_error", "gates",
-    "failure_reason", "git_commit", "manifest",
+    "failure_reason", "git_commit", "manifest", "started_by", "progress",
 )
 
 
@@ -39,9 +39,23 @@ def _seconds(start: str | None, end: str | None) -> float | None:
 def _source(run_dir: Path, manifest: dict, dataset: str | None, settings: Settings) -> str:
     if run_dir.resolve() == settings.resolve(settings.paths.reference_run_dir).resolve():
         return "reference"
-    if manifest.get("scenario"):
+    # a timed-out or crashed scenario run has no manifest, but its label and recipe say so
+    if manifest.get("scenario") or (dataset or "").startswith("Scenario") or \
+            (run_dir / "scenario.json").exists():
         return "scenario"
     return "upload" if dataset and dataset.startswith("Uploaded") else "secom"
+
+
+def _failure_reason(run_dir: Path, progress, settings: Settings) -> str | None:
+    """The recorded reason; for a run that stopped sending updates, why (storage, a crash, a
+    restart, memory)."""
+    if progress is None:
+        return None
+    if progress.failure_reason or progress.effective_status() != "interrupted":
+        return progress.failure_reason
+    from foresight.jobs import interruption_cause
+
+    return interruption_cause(settings, run_dir, progress)[0]
 
 
 def run_record(run_dir: Path, settings: Settings) -> dict | None:
@@ -91,9 +105,12 @@ def run_record(run_dir: Path, settings: Settings) -> dict | None:
         "report_warning": checks.get("WARNING"),
         "report_error": checks.get("ERROR"),
         "gates": [{"gate": g["gate"], "status": g["status"]} for g in gates],
-        "failure_reason": (progress.failure_reason if progress else None),
+        "failure_reason": _failure_reason(run_dir, progress, settings),
         "git_commit": manifest.get("git_commit"),
         "manifest": manifest or None,
+        "started_by": (progress.started_by if progress else "") or None,
+        # the whole progress (ADR-033): rebuilds the run's stub on an empty volume
+        "progress": progress.model_dump(mode="json") if progress else None,
     }
 
 

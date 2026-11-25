@@ -4,7 +4,7 @@
 
 Author: **Ravid Eliav** · AI Developers Course, Final Project
 
-> **Status:** Phase 5 (RAG stretch) done: similar-run search, a cited knowledge base for the Investigation crew, and the "Ask Foresight" chat that answers only from a run's reports. Next: Phase 6 (UX and visual design).
+> **Status:** Phase 8 (feature improvements) in progress: the Supabase run registry and Trends page, the All runs chat, the Scenario Lab, the Line Replay with a simulated 3D wafer, stopping and resuming runs, and Google sign-in with access requests and roles are done. Next: PDF export of the report.
 
 | Environment | Branch | URL |
 |---|---|---|
@@ -85,13 +85,13 @@ If a crew's own output fails a check, the crew gets the findings and revises it 
 
 ## RAG and embeddings
 
-Three extensions from requirements §18. Embeddings use a fixed local model (**all-MiniLM-L6-v2** through ONNX Runtime, 384 dimensions): free, no API key, downloaded once (about 80 MB) into `paths.models_dir`, which is on the runs volume on Railway.
+Three extensions from requirements §18. Embeddings use a fixed local model (**all-MiniLM-L6-v2** through ONNX Runtime, 384 dimensions): free, no API key, downloaded once (about 80 MB) into `paths.models_dir` (on Railway the container's own disk, so the runs volume keeps its space for runs).
 
 | Extension | What it does | Where |
 |---|---|---|
 | **Similar-run search** | Each run's sensor profile is embedded (median imputation, scaling and PCA with 30 components, all fitted on training runs). For the riskiest and the failing test runs, the 5 most similar *past* runs are retrieved with their labels and distances. The evidence is reported honestly: on SECOM the neighbours of failing test runs failed 5.8% of the time vs 4.7% for passing ones (training fail rate 6.8%), so a run's overall profile says little about failure | `similar_runs.json`/`.csv`, tool `find_similar_runs`, run map on the Report page |
 | **Knowledge base** | 12 short background documents written for this project from public sources ([`knowledge/SOURCES.md`](knowledge/SOURCES.md)): SPC, robust statistics, yield loss, drift and maintenance, FDC, SECOM, metrics, multiple testing, anomaly detection, missing data, verification practice. Passages are retrieved deterministically for the evidence types in the report and given to the Investigation crew with their exact citations; hypotheses cite them as `[background: file § section]`, labelled Background, never Evidence | `knowledge/`, tool `search_knowledge` |
-| **Ask Foresight** | A passcode-protected chat about the run shown in the sidebar. The run's reports, plus `run_data.md` (the run's tables written out as text from its JSON/CSV files: model metrics, risk ranking, anomalies, similar-run method, the riskiest and most anomalous runs in order, and one section per run that appears in a table, e.g. "Run 1456" with its scores, top signals and similar past runs), are chunked by section (800 characters, 120 overlap) and indexed at the end of the run (`rag_index.npz`, `rag_chunks.json`; parameters in `run_manifest.json`); a run indexed before `run_data.md` existed is re-indexed on its next question. Retrieval is hybrid: cosine similarity plus a bonus when the question's words match a section title, and a larger one when a number in the question (a run id) does. Below similarity 0.25 the chat answers "Not found in this run's artifacts." without calling the LLM; otherwise gpt-4o-mini answers only from the retrieved excerpts, citing `[source: file § section]`, or refuses. An answer that cites no retrieved excerpt is withheld. Every question and answer is logged (`chat_logs/<run>.jsonl` in the runs folder), including questions that failed with an error; there is no question limit | page *Ask Foresight* |
+| **Ask Foresight** | A chat about the run shown in the sidebar. The run's reports, plus `run_data.md` (the run's tables written out as text from its JSON/CSV files: model metrics, risk ranking, anomalies, similar-run method, the riskiest and most anomalous runs in order, and one section per run that appears in a table, e.g. "Run 1456" with its scores, top signals and similar past runs), are chunked by section (800 characters, 120 overlap) and indexed at the end of the run (`rag_index.npz`, `rag_chunks.json`; parameters in `run_manifest.json`); a run indexed before `run_data.md` existed is re-indexed on its next question. Retrieval is hybrid: cosine similarity plus a bonus when the question's words match a section title, and a larger one when a number in the question (a run id) does. Below similarity 0.25 the chat answers "Not found in this run's artifacts." without calling the LLM; otherwise gpt-4o-mini answers only from the retrieved excerpts, citing `[source: file § section]`, or refuses. An answer that cites no retrieved excerpt is withheld. Every question and answer is logged with who asked (`chat_logs/<run>.jsonl` in the runs folder), including questions that failed with an error; there is no question limit | page *Ask Foresight* |
 
 A question costs about 600–1,100 tokens (well under 0.1 cent).
 
@@ -101,30 +101,71 @@ A question costs about 600–1,100 tokens (well under 0.1 cent).
 
 | Page | What it shows |
 |---|---|
-| Run Pipeline | Dataset choice (built-in SECOM or an uploaded CSV), passcode, live progress as five stage tiles (green done, red failed, gray skipped, amber interrupted, cyan with a small animation of the stage's work while it runs; each tile also shows its crew's status) joined by the gates; **Continue run** for an interrupted, timed-out or crashed run; a stopped run says why in plain language and what to do, with the technical details collapsed; run history in local time (status, duration, tokens, report checks, why it stopped) |
+| Run Pipeline | Dataset choice (built-in SECOM, an uploaded CSV, or a synthetic **Scenario**), live progress as five stage tiles (green done, red failed, gray skipped, amber interrupted or stopped, cyan with a small animation of the stage's work while it runs; each tile also shows its crew's status) joined by the gates; **Stop run** while a run is going (it stops within a few seconds, so a different run can start); **Resume run** for a stopped, interrupted, timed-out or crashed run; a stopped run says why in plain language and what to do (developers also get the technical details); run history in local time (status, duration, report checks, why it stopped; developers also see tokens and who started each run) |
 | Data Quality | Headline numbers, Data Contract validation (the checksum warning every upload gets is explained as expected), cleaning decisions; all checks and the contract under Extended data |
 | EDA & Insights | Headline numbers (with a weekly fail-rate sparkline), the Data Analyst crew's summary, interactive fail rate over time and sensor differences; sensor statistics, missing data and the full insights under Extended data |
 | Model | Test metrics with 95% CIs vs random, the selected model and its alarms, interactive risk over time, precision-recall curve, alarms vs outcomes and sensor importance; model comparison, evaluation report and model card under Extended data |
-| Investigation & Report | Headline numbers (failing runs caught, alarm precision, anomaly lift, sensors out of limits, similar runs that failed), key findings and one card per hypothesis (confidence, evidence, how to verify), the anomaly timeline and the run map (2D/3D); the engineering report (download), full investigation, risk ranking, similar runs, anomalies and the safety checks under Extended data |
-| Trends | Every recorded run over time, from the run registry: runs, median run time and tokens, latest PR-AUC; model quality over runs (PR-AUC and fail recall against random guessing), where the run time goes (seconds per stage, crews included), LLM tokens per run, run outcomes with their reasons; the full run table under Extended data. A filter picks the data source (SECOM, upload, reference) |
-| Ask Foresight | Chat about the selected run, answered only from its reports, with sources and similarity scores; the assistant's avatar is the Foresight logo. **All runs** switches the chat to every recorded run: the answer says which run each statement is about and cites it (`[source: <run id>/<file> § <section>]`). Once the chat is unlocked, the sidebar lists the run's recent questions (from its chat log); a click opens the answer |
+| Investigation & Report | Headline numbers (failing runs caught, alarm precision, anomaly lift, sensors out of limits, similar runs that failed), key findings and one card per hypothesis (confidence, evidence, how to verify), the anomaly timeline, the run map (2D/3D) and a simulated 3D wafer of any test-period run (riskiest first); the engineering report (download), full investigation, risk ranking, similar runs, anomalies and the safety checks under Extended data |
+| Line Replay | The run's test period played back run by run, in time order (Play/Pause, next run, end, 4 speeds, a position slider): running totals (runs replayed, alarms, failing runs caught, alarm precision), the risk score of each run as it comes off the line with the alarms appearing as rings, the latest alarms, and a **simulated 3D wafer** of the newest run. Nothing is re-scored: the alarms are the run's own alarm budget, so the totals at the end match the Investigation & Report page. SECOM has no die positions, so the wafer is a labeled simulation reproducible from the run id (scattered defects grow with the risk score; a failing run also gets one typical defect pattern: cluster, edge ring, scratch or center) and feeds nothing back into the analysis |
+| Trends (developers) | Every recorded run over time, from the run registry: runs, median run time and tokens, latest PR-AUC; model quality over runs (PR-AUC and fail recall against random guessing), where the run time goes (seconds per stage, crews included), LLM tokens per run, run outcomes with their reasons; the full run table under Extended data. A filter picks the data source (SECOM, upload, reference) |
+| Ask Foresight | Chat about the selected run, answered only from its reports, with citations (developers also see the sources and similarity scores); the assistant's avatar is the Foresight logo. **All runs** switches the chat to every recorded run: the answer says which run each statement is about and cites it (`[source: <run id>/<file> § <section>]`). The sidebar lists your recent questions about the run and about all runs (from the chat logs); a click opens the answer in its scope |
+| My activity | Your own runs (started, resumed or stopped, kept in the registry after the run folder is pruned) and your chat questions |
+| Users & access (developers) | Waiting access requests (approve or deny), adding a person with a role, the account list, changing a role or removing access |
+
+**Sign-in and roles.** The whole app is behind **Google sign-in** (Streamlit's `st.login`, OpenID Connect; `app/auth.py`), with Google's account picker so a person with several Google accounts chooses which one to use. Someone new signs in, then asks for access (with an optional message): the request is stored and the developers get an email (Resend's HTTP API, since Railway blocks SMTP) with the requester's details and **Approve** / **Deny** links. A link carries a signed token (HMAC with `AUTH_COOKIE_SECRET`) naming that one request; it expires after 7 days, stops working once the request is decided or renewed, and opens a page that asks for one more click, so a mail scanner that opens links decides nothing. From then on the person only clicks "Sign in with Google". There are no passcodes.
+- A session ends on **Sign out**, when the **browser closes** (the sign-in cookie is a session cookie: Streamlit's 30-day cookie is shortened, and a test fails if a Streamlit upgrade changes how it is set) and after **an hour without activity** (a clock per sign-in, saved on the runs volume so a restart does not reset it; an open page is signed out without waiting for a click).
+- Two roles. **Users** get Run Pipeline (run, stop, resume), the result pages' headline numbers, charts and hypothesis cards, the engineering report download, Line Replay, Ask Foresight and My activity. **Developers** (`FORESIGHT_DEVELOPERS`, always approved, plus anyone given the role) also get the environment badge, technical details (failed-run details, tokens, chat sources), every Extended data section, Trends and Users & access. Users see only their own runs (in the run picker, the run history and the All runs chat) plus the reference run; developers see every run.
+- After signing in, "Hi, <first name>" sits at the top right of every page (the account menu: My activity, Privacy, Terms, Sign out), and a greeting appears once per sign-in. Runs record who started, stopped or resumed them (`progress.json`, the registry's `started_by`), and chat questions who asked.
+- Accounts live in Supabase (`foresight.accounts`, private schema, RLS, no client access), else in `.access/accounts.json` on the runs volume; each environment approves separately. The Privacy and Terms pages are public (Google's consent screen links to them).
+- A local checkout without `GOOGLE_CLIENT_ID` (and CI) opens as a local developer; on Railway sign-in is always required, and without the keys nobody gets in.
 
 The sidebar starts with the Foresight wordmark (its "o" is the wafer logo) and the page menu. **Results shown** picks which successful run the result pages display (a short label, the full description under it); it follows the newest run until you choose another one, and the committed reference run is always available. Times are shown in the viewer's time zone (from the browser). A run made before a feature existed says so instead of hiding the section.
 
-**Design.** A dark "cleanroom" theme (`.streamlit/config.toml`): cyan and violet for lithography light, amber (the fab's yellow-room light) for failing runs, a faint die-grid background, a wafer logo, frosted-glass cards, tiles and sidebar (`app/ui.py`). Each page leads with its headline numbers and main charts; the long tables and documents sit under **Extended data**. Charts are Plotly (`app/charts.py`): hover for run ids and values, zoom, and a 3D run map. Fonts (Inter, Space Grotesk, JetBrains Mono) load from Google Fonts.
+**Design.** A dark "cleanroom" theme (`.streamlit/config.toml`): cyan and violet for lithography light, amber (the fab's yellow-room light) for failing runs, a faint die-grid background, a wafer logo, frosted-glass cards, tiles and sidebar (`app/ui.py`). Each page leads with its headline numbers and main charts; the long tables and documents sit under **Extended data**.
+
+**One screen per page (Phase 8.7).** The main part of every page fits a laptop's browser window (1920×1080 at 125%, about 1536×730) without scrolling. To get there, charts and cards share a card through tabs (Model, EDA, Trends, Line Replay, Investigation & Report, My activity), and the "Hi, name" menu sits on the title's line. Only Extended data and technical details need scrolling, and Extended data is a row of tabs that stay closed until one is pressed. Run Pipeline fits with a run in progress and the run history closed. On Ask Foresight the title and the question bar stay in place and the conversation scrolls in its own box. On Line Replay, Play and Pause redraw the same elements in the same places, so the page does not jump. On a phone the headline numbers sit two per row, and the title, the headline and the start of the main content are on the first screen. Every table is as wide as its content: each column fits its header and longest value, and a table with long text, or one wider than the page, wraps its cells instead of cutting columns off. Check it with `python scripts/measure_fit.py` (every page at laptop, desktop and phone size, with screenshots) or the E9 test. Charts are Plotly (`app/charts.py`): hover for run ids and values, zoom, and a 3D run map. Fonts (Inter, Space Grotesk, JetBrains Mono) load from Google Fonts.
 
 **Background runs.** "Run pipeline" starts `python -m foresight.cli run` as a separate process, so a run continues when the page is refreshed or closed. The run writes `progress.json` (stages, gates, a heartbeat every 15 s) and `run.log` into its folder. Guards (`app` in `config/settings.yaml`):
 
 - one run at a time and at most 6 runs per hour (cost control),
 - a timeout guard stops a run after 20 minutes and records why,
-- a run whose heartbeat stopped (for example after a redeploy) is shown as interrupted and can be **continued**: the stages it had finished are reused (their files, gate checks and crew usage are kept in `progress.json`), the data is re-read, and the rest runs again; a continue needs the passcode and counts toward the hourly limit. A run stopped by a gate is not offered a continue (the same data would stop again),
-- only the newest 20 finished runs are kept.
+- **Stop run** writes `stop.requested` into the run folder; the run's process checks every second, records the run as stopped (in the history and the registry, with `failure_report.md`) and exits, keeping the stages it had finished,
+- a run that was stopped, or whose heartbeat stopped (for example after a redeploy, shown as interrupted), can be **resumed**: the stages it had finished are reused (their files, gate checks and crew usage are kept in `progress.json`), the data is re-read, and the rest runs again; a resume counts toward the hourly limit. A run stopped by a gate is not offered a resume (the same data would stop again),
+- a run that stopped sending updates says why: the storage was full, the run crashed (its last error), the app restarted, or the process stopped without a word (usually memory); Start and Resume first check for 50 MB free,
+- with Supabase Storage configured, every finished run is archived there and the server keeps only the newest 3 whole (older runs keep a few-KB stub, and their files are downloaded again when you pick one); without it, the newest 10 finished runs are kept.
 
 **Uploading data.** A CSV with `timestamp` (`dd/mm/yyyy HH:MM:SS` or ISO 8601), `label` (-1 pass, 1 fail) and the 590 sensor columns in SECOM order. The page offers SECOM itself in this format as a template. Uploads are cleaned with the committed Data Contract's feature list (so a smaller or newer batch stays comparable) and validated like the built-in data; a broken file stops at the contract gate with the failed checks listed.
 
-From a terminal: `python -m foresight.cli run [--dataset file.csv] [--timeout 600]`, or `python -m foresight.cli run --run-id <id> --resume` to continue a run.
+From a terminal: `python -m foresight.cli run [--dataset file.csv] [--timeout 600]`, or `python -m foresight.cli run --run-id <id> --resume` to resume a run.
+
+**Scenario Lab (synthetic data).** The third dataset choice builds a synthetic variation of SECOM, reproducible from its seed:
+- **planted fault:** one sensor shifted on the failing runs, a known cause
+- **sensor drift:** a few sensors ramp up over time
+- **sensor outage:** a few sensors missing for a stretch
+- **noisy line:** extra noise on every sensor
+
+A scenario changes **only the training period**. The test period stays the original SECOM runs, so every evaluation metric, PR-AUC included, is computed on real data only and is comparable with a run on the real data. The ingest stage enforces this: a Data Contract check (`test_period_is_original_secom`) cleans the original data too and stops the run if a single test-period value differs.
+
+Synthetic data is labeled and kept separate:
+- The recipe and ground truth are in `scenario.json`, and the generated data in `scenario_data.csv`, in the run folder. The SECOM files are never modified.
+- The run's dataset reads "Scenario (synthetic): …".
+- Every result page shows a SYNTHETIC badge.
+- The manifest records the scenario, the engineering report opens with a deterministic SYNTHETIC note, and Trends lists the run as Synthetic.
+
+At the end of the run, `scenario_check.json` records whether the analysis found the change:
+- each changed sensor's rank among the sensors that differ most (EDA)
+- its rank in model importance on the real test period
+- whether the investigation or report names it
+
+A planted fault that the analysis misses makes the report check `scenario_ground_truth` a WARNING. On SECOM with the default settings, the planted sensor ranks first in the EDA.
 
 **Run registry (Supabase).** Every finished, failed or timed-out run writes one summary row (status, times, data rows and fail rate, selected model and its test metrics, anomaly lift, tokens, gates, report checks, the full manifest) and one row per stage to **Supabase Postgres**, so the history survives pruning and redeploys and the Trends page can chart it. Each Railway environment has its own Supabase project (`foresight-dev`, `foresight-main`). The app connects from the server only, through the **Session pooler** (`SUPABASE_DB_URL`, IPv4); no key reaches the browser. The tables live in a private schema `foresight` that is not exposed to Supabase's REST API, the client roles get no privileges, and Row Level Security is enabled with no policies (deny by default). The schema is a versioned migration in [`supabase/migrations`](supabase/migrations). Without `SUPABASE_DB_URL` (tests, a local checkout), the same rows are built from the run folders, and a database problem never fails a run (it is logged). `python -m foresight.cli registry-sync` records every run still on disk and the reference run (backfill).
+
+**Run files and chat history in Supabase (ADR-033).** The Railway volume is 500 MB and filled up on 2026-11-22. Now everything a run leaves behind is kept in Supabase:
+- **Files:** when a run ends, its folder is packed into one `<run id>.tar.gz` (a few MB) in the private Storage bucket `runs`, using the project's secret key (`SUPABASE_SECRET_KEY`, server-side only; there are no storage policies, so the client roles cannot read it). The registry row also gets the run's whole progress.
+- **The volume** keeps the newest 3 runs whole and, of older ones, only `progress.json`, `run_manifest.json` and `archived.json`, so every list, label and history works. Picking an older run in the sidebar, or resuming it, downloads its files again. On a new or wiped volume the app rebuilds these stubs from the registry at startup.
+- **Chat history** goes to `foresight.questions`; the old `chat_logs/*.jsonl` files are imported at startup and deleted. If the database cannot be reached, a question is written to the file meanwhile and imported later.
+- A Storage problem never fails a run: a run folder stays whole until it is safely archived.
 
 ## Performance
 
@@ -157,7 +198,7 @@ Requires **Python 3.11** (CrewAI supports 3.10–3.13).
 py -3.11 -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements-dev.txt
-copy .env.example .env          # then fill in OPENAI_API_KEY and RUN_PASSCODE
+copy .env.example .env          # then fill in OPENAI_API_KEY (Google keys optional locally)
 streamlit run app/streamlit_app.py
 ```
 
@@ -174,15 +215,18 @@ Set `MOCK_LLM=true` in `.env` to work without any LLM calls.
 
 | E2E | Scenario | Where |
 |---|---|---|
-| E1 | App loads, environment badge | CI, `dev`, `main` |
-| E2 | Every result page shows its content (headline tiles, interactive charts) | CI, `dev`, `main` |
-| E3 | Headline numbers, key findings and hypothesis cards; Facts / Assumptions / Hypotheses labels; report download | CI, `dev`, `main` |
-| E4 | Wrong passcode is rejected, no run starts | CI, `dev`, `main` |
+| E0 | Visitors see only the sign-in screen (a deep link too); Privacy and Terms are public | `dev`, `main` (skipped by an app without sign-in) |
+| E1 | App loads, environment badge | CI |
+| E2 | Every result page shows its content (headline tiles, interactive charts) | CI |
+| E3 | Headline numbers, key findings and hypothesis cards; Facts / Assumptions / Hypotheses labels; report download | CI |
+| E4 | A forged approve/deny link decides nothing | CI, `dev`, `main` |
 | E5 | Broken CSV upload stops at the contract gate with a plain-language error and the failed checks under Technical details | CI only (starts a run) |
 | E6 | Full run: live progress through all crews, then the new run's report | CI only (mock LLM) |
 | E7 | Ask Foresight: an answer with a citation; an off-topic question gets "Not found in this run's artifacts." | CI only (mock LLM) |
+| E8 | Line Replay plays the reference test period and ends on 5 of 24 failing runs caught | CI |
+| E9 | Every page's main part fits a laptop window (1536×730); on a phone (390×844) the headline is on the first screen | CI |
 
-E5–E7 need the app's passcode in `RUN_PASSCODE` (or `E2E_PASSCODE`); start the app with `MOCK_LLM=true` and, for speed, `FORESIGHT_CONFIG=tests/fast_settings.yaml`. The deployed suite (`-m deployed`) is read-only and never spends LLM tokens.
+The deployed apps need Google sign-in, which a test browser cannot do, so the deployed suite (`-m deployed`) checks what a visitor sees before signing in; it is read-only and never spends LLM tokens. E1–E9 run in CI against a local app without Google keys (it opens as a local developer); start it with `MOCK_LLM=true` and, for speed, `FORESIGHT_CONFIG=tests/fast_settings.yaml`. Sign-in itself (users, developers, access requests, emailed links, the idle sign-out) is covered by AppTest with a simulated Google user (`tests/app/test_sign_in.py`).
 
 ## Release workflow
 
@@ -193,9 +237,11 @@ E5–E7 need the app's passcode in `RUN_PASSCODE` (or `E2E_PASSCODE`); start the
 
 ## Deployment (Railway)
 
-One project `foresight`, service `foresight-app`, environments `main` and `dev`. The service is defined with Railway Infrastructure as Code in [`.railway/railway.ts`](.railway/railway.ts): start command, health check, non-secret variables, a **volume** `foresight-runs` (500 MB, one per environment) mounted at `/app/runs` so runs survive redeploys, and a GitHub source whose branch follows the environment name. Railway's Railpack builder reads `.python-version` and `requirements.txt`. Secrets (`OPENAI_API_KEY`, `RUN_PASSCODE`) are set in Railway with the same values in both environments: fill them in your local `.env`, then run `.\scripts\push_secrets_to_railway.ps1` (values are never printed), then redeploy both environments so the new values load. The IaC file keeps them with `preserve()`.
+One project `foresight`, service `foresight-app`, environments `main` and `dev`. The service is defined with Railway Infrastructure as Code in [`.railway/railway.ts`](.railway/railway.ts): start command, health check, non-secret variables, a **volume** `foresight-runs` (500 MB, one per environment) mounted at `/app/runs` so runs survive redeploys, and a GitHub source whose branch follows the environment name. Railway's Railpack builder reads `.python-version` and `requirements.txt`. Secrets (`OPENAI_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_COOKIE_SECRET`, `FORESIGHT_DEVELOPERS`, `RESEND_API_KEY`) are set in Railway with the same values in both environments: fill them in your local `.env`, then run `.\scripts\push_secrets_to_railway.ps1` (values are never printed; a missing `AUTH_COOKIE_SECRET` is generated), and the next deploy loads them. The IaC file keeps them with `preserve()`. The app writes the `[auth]` section `st.login` needs to `.streamlit/secrets.toml` (git-ignored) from these variables, with the redirect URI built from Railway's public domain.
 
-**Supabase.** Two free projects, `foresight-dev` and `foresight-main` (region East US, near the Railway volume). Put each project's Session pooler URL (Dashboard → Connect → Session pooler, with the database password) in `.env` as `SUPABASE_DB_URL_DEV` and `SUPABASE_DB_URL_MAIN`; the push script gives each Railway environment its own `SUPABASE_DB_URL`. A local checkout uses Supabase only when `SUPABASE_DB_URL` itself is set (office networks often block Postgres ports). Every deploy runs `python scripts/db_migrate.py` as Railway's **pre-deploy command**: it applies the migrations its project has not had (recorded in `supabase_migrations.schema_migrations`, the Supabase CLI's table), so `dev` migrates the dev project and `main` the main project; a failing migration stops the deploy, an unreachable database does not. On startup the app records the runs on its volume in the background (backfill; `python -m foresight.cli registry-sync` does the same from a shell). Supabase's security and performance advisors run over HTTPS with an access token:
+**Google sign-in.** An OAuth client (Web application) in Google Cloud, published to production, with the redirect URIs `https://<dev and main domains>/oauth2callback` and `http://localhost:8501/oauth2callback`, and the app's home page, `/privacy` and `/terms` on the consent screen.
+
+**Supabase.** Two free projects, `foresight-dev` and `foresight-main` (region East US, near the Railway volume). Put each project's Session pooler URL (Dashboard → Connect → Session pooler, with the database password) in `.env` as `SUPABASE_DB_URL_DEV` and `SUPABASE_DB_URL_MAIN`; the push script gives each Railway environment its own `SUPABASE_DB_URL`. For the run files, also put each project's secret key (Dashboard → Project Settings → API Keys → Secret keys, `sb_secret_...`) in `.env` as `SUPABASE_SECRET_KEY_DEV` and `SUPABASE_SECRET_KEY_MAIN`; the project URL is derived from the database URL. A local checkout uses Supabase only when `SUPABASE_DB_URL` itself is set (office networks often block Postgres ports). Every deploy runs `python scripts/db_migrate.py` as Railway's **pre-deploy command**: it applies the migrations its project has not had (recorded in `supabase_migrations.schema_migrations`, the Supabase CLI's table), so `dev` migrates the dev project and `main` the main project; a failing migration stops the deploy, an unreachable database does not. On startup the app records the runs on its volume in the background (backfill; `python -m foresight.cli registry-sync` does the same from a shell). Supabase's security and performance advisors run over HTTPS with an access token:
 
 ```powershell
 $env:SUPABASE_ACCESS_TOKEN = "<token>"   # Supabase account → Access Tokens
@@ -222,7 +268,7 @@ src/foresight/  flow.py, jobs.py + cli.py (background runs), progress.py, data/,
 supabase/       Supabase CLI project: config.toml and versioned SQL migrations
 knowledge/      background documents for the Investigation crew (+ SOURCES.md)
 tests/          unit/, integration/, app/, smoke/, e2e/
-scripts/        data download, helper scripts, db_migrate.py (Railway pre-deploy), measure_run.py / measure_app.py / compare_runs.py (performance)
+scripts/        data download, helper scripts, db_migrate.py (Railway pre-deploy), measure_run.py / measure_app.py / compare_runs.py (performance), measure_fit.py (one screen per page)
 data/           raw/ and processed/ (not committed)
 artifacts/      committed reference run
 docs/           Obsidian vault: requirements, decisions, results, lessons learned

@@ -16,7 +16,6 @@ EXAMPLES = ["What is the model's test PR-AUC?", "Which sensors differ most betwe
 EXAMPLES_ALL = ["How did the test PR-AUC differ between runs?", "Which sensors were among the "
                 "most important in several runs?", "Did the data pass the Data Contract in "
                 "every run?"]
-UNLOCKED = "chat_unlocked"
 SCOPES = ["This run", "All runs"]
 
 
@@ -25,32 +24,38 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     if run_dir is None:
         no_run("report to ask about")
         return
-    if st.session_state.get("chat_open"):  # a question from the sidebar belongs to this run
-        st.session_state["chat_scope"] = SCOPES[0]
+    from app.store import ALL_RUNS
+
+    if opened := st.session_state.get("chat_open"):  # a question from the sidebar: its scope
+        st.session_state["chat_scope"] = SCOPES[1] if opened.get("run") == ALL_RUNS \
+            else SCOPES[0]
     st.session_state.setdefault("chat_scope", SCOPES[0])
     scope = st.segmented_control("Scope", SCOPES, key="chat_scope",
                                  label_visibility="collapsed") or SCOPES[0]
     every = scope == "All runs"
     if every:
-        st.caption("All recorded runs · answers come only from the runs' reports, say which run "
+        runs = "All recorded runs" if ui.developer() else "Your runs and the reference run"
+        st.caption(f"{runs} · answers come only from the runs' reports, say which run "
                    "each statement is about and cite it; anything else gets \"Not found in the "
                    "recorded runs.\"")
     else:
         st.caption(f"{run_label(run_dir)} · answers come only from this run's reports and cite "
                    "them; anything else gets \"Not found in this run's artifacts.\"")
 
-    if not st.session_state.get(UNLOCKED):
-        _unlock(settings)
-        return
-
     key = "all_runs" if every else str(run_dir)
     history: list[dict] = st.session_state.setdefault("chat", {}).setdefault(key, [])
     opened = st.session_state.pop("chat_open", None)  # picked in the sidebar's history
-    if not every and opened and opened.get("run") == run_dir.name and (
+    if opened and opened.get("run") == (ALL_RUNS if every else run_dir.name) and (
             not history or history[-1]["question"] != opened["question"]):
         history.append({**opened, "from_history": True})
-    for item in history:
-        _show(item)
+    # the conversation scrolls in its own box (its height follows the window, ui.CSS), so the
+    # title, the scope and the question bar stay in place
+    log = st.container(height=400, key="chat-log", border=False)
+    with log:
+        for item in history:
+            _show(item)
+        if not history:
+            st.caption("Ask a question below, or pick an example.")
 
     turn = st.session_state.setdefault("example_turn", 0)
     picked = st.pills("Examples", EXAMPLES_ALL if every else EXAMPLES,
@@ -59,9 +64,9 @@ def render(run_dir: Path | None, settings: Settings) -> None:
     if picked:
         st.session_state["example_turn"] = turn + 1  # use a picked example only once
     if question:
-        with st.chat_message("user"):
+        with log, st.chat_message("user"):
             st.markdown(question)
-        with st.chat_message("assistant", avatar=ui.LOGO_IMAGE), \
+        with log, st.chat_message("assistant", avatar=ui.LOGO_IMAGE), \
                 st.spinner("Searching all runs' reports..." if every
                            else "Searching this run's reports..."):
             item = _ask(question, None if every else run_dir, settings)
@@ -70,30 +75,19 @@ def render(run_dir: Path | None, settings: Settings) -> None:
             st.rerun()
 
 
-def _unlock(settings: Settings) -> None:
-    if not settings.run_passcode:
-        st.info("The chat is disabled: RUN_PASSCODE is not configured.")
-        return
-    with st.container(key="card-unlock"):
-        ui.label("Unlock the chat")
-        entered = st.text_input("Passcode", type="password", key="chat_passcode", width=360)
-        if st.button("Unlock the chat", key="unlock", type="primary"):
-            if ui.passcode_ok(settings, entered):
-                st.session_state[UNLOCKED] = True
-                st.rerun()
-            ui.friendly_error("Not authorized: wrong or missing passcode.")
-
-
 def _ask(question: str, run_dir: Path | None, settings: Settings) -> dict | None:
-    """``run_dir`` None: a question about all runs."""
+    """``run_dir`` None: a question about all runs. Logged with who asked (Phase 8.6)."""
     from app import store
 
     try:
-        if run_dir is None:
-            return store.ask_all(question, settings)
-        return store.ask(question, run_dir, settings)
+        if run_dir is None:  # a user's question covers their own runs and the reference run
+            return store.ask_all(question, settings, ui.user_email(), store.visible_run_ids(
+                settings, None if ui.developer() else ui.user_email()))
+        return store.ask(question, run_dir, settings, ui.user_email())
     except Exception as exc:  # friendly message, never a stack trace; the store logs it
-        ui.friendly_error(f"The question could not be answered: {exc}")
+        from foresight.utils.logging import redact
+
+        ui.friendly_error(f"The question could not be answered: {redact(exc)}")
         return None
 
 
@@ -108,7 +102,7 @@ def _show(item: dict) -> None:
             st.caption(f"From the chat history, asked {local_time(item['time'])}")
         if item["refused"]:
             st.caption(f"Why: {item['reason']}")
-        if item["sources"]:
+        if item["sources"] and ui.developer():  # technical details (Phase 8.6)
             with st.expander(f"Sources ({len(item['sources'])})"):
                 for s in item["sources"]:
                     if isinstance(s, str):  # logged answers keep "file § section (score)"

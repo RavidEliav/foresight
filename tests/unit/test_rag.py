@@ -246,6 +246,12 @@ def test_questions_about_all_runs_search_every_run_and_cite_the_run(tmp_path, se
     refused = chat.ask_all("What is the capital of France?", settings)
     assert refused.refused and refused.answer == chat.REFUSAL_ALL
 
+    # a user's question covers only their runs (Phase 8.6)
+    only = chat.ask_all("How did the model's PR-AUC differ between runs?", settings,
+                        run_ids=["20260101T000000000000Z"])
+    assert len({s.run for s in only.sources}) == 1
+    assert "20260102" not in only.answer and "0.120" not in only.answer
+
 
 def test_all_runs_answers_may_sum_up_cited_lines_only_with_grounded_numbers():
     hits = [chat.Hit(Chunk("r1/model_card.md", "Metrics", "Test PR-AUC 0.085 (95% CI)."), 0.6),
@@ -258,3 +264,22 @@ def test_all_runs_answers_may_sum_up_cited_lines_only_with_grounded_numbers():
     invented = f"{lines}\n\nOverall, the PR-AUC rose by 41%."
     assert chat.citation_problem(invented, hits, grounded_summaries=True) \
         == "part of it has no citation"
+
+
+def test_a_summary_may_name_a_run_by_its_date():
+    """2026-11-23 on dev: "In summary, all runs except for the one on November 23, 2026,
+    passed" withheld a correct answer: 23 and 2026 were only inside the run id."""
+    hits = [chat.Hit(Chunk("20261123T121533778551Z/insights.md", "Data quality",
+                           "2 warnings: potential data drift."), 0.45),
+            chat.Hit(Chunk("20261122T065618249595Z/insights.md", "Data quality",
+                           "Passed with 16 checks."), 0.44)]
+    lines = ("- 20261123T121533778551Z: 2 warnings [source: 20261123T121533778551Z/insights.md "
+             "§ Data quality]\n- 20261122T065618249595Z: passed with 16 checks [source: "
+             "20261122T065618249595Z/insights.md § Data quality]")
+    for closing in ("In summary, every run except the one on November 23, 2026, passed.",
+                    "Only the run of 2026-11-23 at 12:15 had warnings; the 22 Nov run at 06:56 "
+                    "passed."):
+        assert chat.citation_problem(f"{lines}\n\n{closing}", hits,
+                                     grounded_summaries=True) is None, closing
+    assert chat.citation_problem(f"{lines}\n\nThe run on November 25 failed.", hits,
+                                 grounded_summaries=True) == "part of it has no citation"

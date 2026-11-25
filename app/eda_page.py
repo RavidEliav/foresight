@@ -27,34 +27,36 @@ def render(run_dir: Path | None) -> None:
         ("Sensors differ (q<0.05)", str(eda["significant_features_q_below_0.05"]), None,
          "Mann-Whitney U test, failing vs passing runs, Benjamini-Hochberg corrected"),
     ])
-    if store.exists(run_dir, "insights.md"):
-        with st.container(key="card-insights"):
+    # Phase 8.7: the crew's insights beside one chart card with tabs, so the page fits a screen
+    insights = store.exists(run_dir, "insights.md")
+    left, right = st.columns([2, 3], gap="medium") if insights else (None, st.container())
+    if insights:
+        with left, st.container(key="card-insights", height="stretch"):
             ui.label("Insights from the Data Analyst crew")
             _summary_section(run_dir)
+    with right, st.container(key="card-tabs-eda", height="stretch"):
+        rate, sensors = st.tabs(["Fail rate over time", "Sensors that differ"])
+        with rate:
+            charts.weekly_fail_rate(eda)
+            months = ", ".join(f"{m}: {r:.1%}" for m, r in eda["monthly_fail_rate"].items())
+            st.caption(f"By month: {months}")
+        with sensors:
+            charts.sensor_differences(eda)
+            st.caption("Sensors that differ between failing and passing runs. A difference is "
+                       "a correlation, not a cause. Sensor names are anonymized.")
 
-    left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-chart-failrate", height="stretch"):
-        ui.label("Fail rate over time")
-        charts.weekly_fail_rate(eda)
-        months = ", ".join(f"{m}: {r:.1%}" for m, r in eda["monthly_fail_rate"].items())
-        st.caption(f"By month: {months}")
-    with right, st.container(key="card-chart-sensors", height="stretch"):
-        ui.label("Sensors that differ between failing and passing runs")
-        charts.sensor_differences(eda)
-        st.caption("A difference between failing and passing runs is a correlation, not a "
-                   "cause. Sensor names are anonymized.")
-
-    ui.section_label("Extended data")
-    sensors, missing, insights = st.tabs(["Sensor statistics", "Missing data and redundancy",
-                                          "Full insights"])
-    with sensors:
+    if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
+        return
+    shown = ui.extended(["Sensor statistics", "Missing data and redundancy", "Full insights"],
+                        "eda")
+    if shown == "Sensor statistics":
         table = pd.DataFrame(eda["top_discriminating_features"])
         if not table.empty:
             ui.table(table[["feature", "direction", "effect", "q_value", "median_pass",
                             "median_fail"]],
                      {"effect": st.column_config.NumberColumn(format="%.3f"),
                       "q_value": st.column_config.NumberColumn(format="%.2e")})
-    with missing:
+    elif shown == "Missing data and redundancy":
         m = eda["missingness"]
         st.markdown(f"- {m['features_with_missing']} sensors have gaps\n"
                     f"- Missing values per run: failing {m['mean_missing_per_run_fail']}, "
@@ -69,7 +71,7 @@ def render(run_dir: Path | None) -> None:
         with right, st.container(key="card-chart-correlation", height="stretch"):
             ui.label("Correlation between the sensors that differ most")
             charts.correlation(run_dir, top)
-    with insights:
+    elif shown == "Full insights":
         show_markdown_file(run_dir, "insights.md", "Download insights.md")
         report = store.read_bytes(run_dir, "eda_report.html")
         if report is not None:

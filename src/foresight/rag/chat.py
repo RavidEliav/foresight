@@ -3,7 +3,8 @@
 Two refusal layers: questions whose best match is below ``rag.min_similarity`` are refused
 without calling the LLM; otherwise the LLM must answer only from the retrieved excerpts and cite
 them, or reply exactly with REFUSAL. An answer that cites none of the retrieved excerpts is
-withheld. Every question and answer is logged (``chat_logs/<run>.jsonl`` in the runs folder).
+withheld. Every question and answer is logged: in Supabase (``foresight.questions``, ADR-033)
+when the database is configured, else in ``chat_logs/<run>.jsonl`` in the runs folder.
 """
 
 from __future__ import annotations
@@ -18,6 +19,9 @@ from pydantic import BaseModel, Field
 
 from foresight.rag.index import Hit, retrieve, run_index
 from foresight.settings import Settings
+from foresight.utils.logging import get_logger, redact
+
+log = get_logger("chat")
 
 REFUSAL = "Not found in this run's artifacts."
 CITATION = re.compile(r"\[source:\s*([^\]§]+?)\s*(?:§\s*([^\]]+?))?\s*\]", re.IGNORECASE)
@@ -104,11 +108,23 @@ def citation_problem(answer: str, hits: list[Hit], grounded_summaries: bool = Fa
         is_list = re.search(r"^\s*(?:\d+[.)]|[-*])\s", paragraph, re.MULTILINE)
         if is_list and i + 1 < len(paragraphs) and CITATION.search(paragraphs[i + 1]):
             continue
-        if grounded_summaries and _numbers(paragraph) <= _numbers(
-                " ".join(f"{h.chunk.source} {h.chunk.text}" for h in hits)):
+        if grounded_summaries and _numbers(paragraph) <= _known_numbers(hits):
             continue
         return "part of it has no citation"
     return None
+
+
+RUN_ID = re.compile(r"(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})")
+
+
+def _known_numbers(hits: list[Hit]) -> set[str]:
+    """Numbers a summary may use: those in the excerpts and their sources, and the date and
+    time parts of the run ids ("the run on November 23, 2026" for run 20261123T1215...)."""
+    text = " ".join(f"{h.chunk.source} {h.chunk.text}" for h in hits)
+    found = _numbers(text)
+    for match in RUN_ID.finditer(text):
+        found |= {part for value in match.groups() for part in (value, str(int(value)))}
+    return found
 
 
 def _numbers(text: str) -> set[str]:
@@ -159,13 +175,14 @@ def ask(question: str, run_dir: Path, settings: Settings) -> ChatAnswer:
                    start)
 
 
-def ask_all(question: str, settings: Settings) -> ChatAnswer:
-    """A question about all recorded runs (Supabase pgvector, else this server's runs)."""
+def ask_all(question: str, settings: Settings, run_ids: list[str] | None = None) -> ChatAnswer:
+    """A question about all recorded runs, or only ``run_ids`` (Supabase pgvector, else this
+    server's runs)."""
     from foresight.rag.cross import retrieve_all, split_source
 
     start = time.perf_counter()
     question = question.strip()
-    hits, runs = retrieve_all(question, settings)
+    hits, runs = retrieve_all(question, settings, run_ids)
     sources = []
     for h in hits:
         run_id, file = split_source(h.chunk.source)
@@ -224,30 +241,83 @@ def complete(settings: Settings, system: str, prompt: str) -> tuple[str, dict[st
     return (response.choices[0].message.content or "").strip(), tokens
 
 
-def log_answer(settings: Settings, run_dir: Path, result: ChatAnswer) -> None:
+def log_answer(settings: Settings, run_dir: Path, result: ChatAnswer, user: str = "") -> None:
+    """Log the question and answer with who asked (Phase 8.6): in Supabase when configured;
+    in the run's chat log file without it, or if the database cannot be reached (the next
+    app start moves it to Supabase)."""
+    record = {"time": datetime.now(UTC).isoformat(timespec="seconds"), "run": run_dir.name,
+              "user": user, **result.model_dump(exclude={"sources"}),
+              "sources": [f"{s.file} § {s.section} ({s.score})" for s in result.sources]}
+    if settings.database_url:
+        from foresight.registry import db
+
+        try:
+            db.insert_questions(settings.database_url, [record])
+            return
+        except Exception as exc:
+            log.warning("question kept in the chat log file, not in Supabase: %s", redact(exc))
     path = log_path(settings, run_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    record = {"time": datetime.now(UTC).isoformat(timespec="seconds"), "run": run_dir.name,
-              **result.model_dump(exclude={"sources"}),
-              "sources": [f"{s.file} § {s.section} ({s.score})" for s in result.sources]}
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record) + "\n")
 
 
-def recent_questions(settings: Settings, run_dir: Path, limit: int = 6) -> list[dict]:
-    """The run's latest distinct questions from its chat log, newest first."""
-    path = log_path(settings, run_dir)
-    if not path.exists():
-        return []
-    found: dict[str, dict] = {}
+def import_chat_logs(settings: Settings) -> int:
+    """Move the chat log files into Supabase (older questions, and any the database missed);
+    a file is deleted once its questions are stored. Returns how many questions."""
+    folder = settings.resolve(settings.paths.runs_dir) / "chat_logs"
+    if not settings.database_url or not folder.exists():
+        return 0
+    from foresight.registry import db
+
+    moved = 0
+    for path in sorted(folder.glob("*.jsonl")):
+        records = [{"run": path.stem, **r} for r in _records(path) if r.get("time")]
+        db.insert_questions(settings.database_url, records)
+        path.unlink()
+        moved += len(records)
+    return moved
+
+
+def _logged(settings: Settings, run: str | None, user: str | None, limit: int) -> list[dict]:
+    """Logged records, newest first: about ``run`` and/or by ``user``. From Supabase when
+    configured (the files if it cannot be reached), else from the chat log files."""
+    if settings.database_url:
+        from foresight.registry import db
+
+        try:
+            return db.fetch_questions(settings.database_url, run, user, limit)
+        except Exception as exc:
+            log.warning("chat history read from the files, not Supabase: %s", redact(exc))
+    folder = settings.resolve(settings.paths.runs_dir) / "chat_logs"
+    paths = [folder / f"{run}.jsonl"] if run is not None else sorted(folder.glob("*.jsonl"))
+    found = [r for path in paths if path.exists() for r in _records(path)
+             if user is None or r.get("user", "") == user]
+    return sorted(found, key=lambda r: r.get("time", ""), reverse=True)[:limit]
+
+
+def _records(path: Path):
+    """A chat log's records, newest first."""
     for line in reversed(path.read_text(encoding="utf-8").splitlines()):
         try:
-            record = json.loads(line)
+            yield json.loads(line)
         except json.JSONDecodeError:
             continue
+
+
+def recent_questions(settings: Settings, run_dir: Path, limit: int = 6,
+                     user: str | None = None) -> list[dict]:
+    """The run's latest distinct questions, newest first; only ``user``'s when given."""
+    found: dict[str, dict] = {}
+    for record in _logged(settings, run_dir.name, user, limit * 5):
         key = record.get("question", "").strip().lower()
         if key and key not in found:
             found[key] = record
         if len(found) == limit:
             break
     return list(found.values())
+
+
+def questions_by(settings: Settings, user: str, limit: int = 100) -> list[dict]:
+    """Every question ``user`` asked, about any run or about all runs, newest first."""
+    return _logged(settings, None, user, limit)

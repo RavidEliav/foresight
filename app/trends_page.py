@@ -10,7 +10,8 @@ from app import charts, store, ui
 from app.runs import local_zone
 from foresight.settings import Settings
 
-SOURCES = {"secom": "SECOM", "upload": "Upload", "scenario": "Scenario", "reference": "Reference"}
+SOURCES = {"secom": "SECOM", "upload": "Upload", "scenario": "Synthetic",
+           "reference": "Reference"}
 
 
 def _prepare(frame: pd.DataFrame) -> pd.DataFrame:
@@ -87,34 +88,37 @@ def render(settings: Settings) -> None:
         return
     frame = _prepare(frame)
     names = list(dict.fromkeys(frame.source_name))
-    chosen = st.pills("Data", names, default=names, selection_mode="multi", key="trend-sources")
+    chosen = st.pills("Data", names, default=names, selection_mode="multi", key="trend-sources",
+                      label_visibility="collapsed")
     frame = frame[frame.source_name.isin(chosen or names)]
-    st.caption(f"{len(frame)} runs from {where}. Runs on the built-in SECOM data give the same "
-               "model numbers every time (fixed seed); the lines move when the data changes.")
+    st.caption(f"{len(frame)} runs from {where}.",
+               help="Runs on the built-in SECOM data give the same model numbers every time "
+                    "(fixed seed); the lines move when the data changes.")
     _kpis(frame)
 
+    # Phase 8.7: two cards with two tabs each, so the page's main part fits one screen
     left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-trend-quality", height="stretch"):
-        ui.label("Model quality over runs")
-        charts.quality_trend(frame)
-    with right, st.container(key="card-trend-time", height="stretch"):
-        ui.label("Where the run time goes")
-        recent = frame.sort_values("when").tail(15)
-        charts.run_time_trend(recent, store.stage_history(settings, list(recent.run_id), source))
-    left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-trend-tokens", height="stretch"):
-        ui.label("LLM tokens per run")
-        charts.tokens_trend(frame)
-    with right, st.container(key="card-trend-outcomes", height="stretch"):
-        ui.label("Run outcomes")
-        _outcomes(frame, settings.analytics.test_fraction)
+    with left, st.container(key="card-tabs-trend-quality", height="stretch"):
+        quality, tokens = st.tabs(["Model quality over runs", "LLM tokens per run"])
+        with quality:
+            charts.quality_trend(frame)
+        with tokens:
+            charts.tokens_trend(frame)
+    with right, st.container(key="card-tabs-trend-time", height="stretch"):
+        outcomes, time_tab = st.tabs(["Run outcomes", "Where the run time goes"])
+        with outcomes:
+            _outcomes(frame, settings.analytics.test_fraction)
+        with time_tab:
+            recent = frame.sort_values("when").tail(15)
+            charts.run_time_trend(recent, store.stage_history(settings, list(recent.run_id),
+                                                              source))
 
-    ui.section_label("Extended data")
-    _table(frame.sort_values("when", ascending=False))
+    if ui.extended(["Run table"], "trends") == "Run table":
+        _table(frame.sort_values("when", ascending=False))
 
 
 STATUS_COLORS = {"success": "green", "failed": "red", "timeout": "orange",
-                 "interrupted": "orange"}
+                 "interrupted": "orange", "stopped": "orange"}
 
 
 def _outcomes(frame: pd.DataFrame, test_fraction: float, limit: int = 6) -> None:

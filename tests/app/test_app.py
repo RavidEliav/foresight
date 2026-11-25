@@ -281,6 +281,33 @@ def test_other_data_lights_run_pipeline_up_and_replaces_the_running_run(monkeypa
     assert started and started[0][3]["kind"]  # the scenario run started
 
 
+def test_a_slow_stop_starts_the_new_run_once_the_old_one_has_stopped(monkeypatch):
+    """A run that has just started needs its process up before it can stop (on main it took
+    longer than the 30 s the page used to wait): the new run waits until the old one stopped."""
+    from foresight.progress import ProgressTracker
+    from foresight.settings import load_settings
+
+    settings = load_settings()
+    run_id = "20260101T000000000000Z"
+    tracker = ProgressTracker.create(jobs.runs_dir(settings) / run_id, run_id)
+    tracker.running()
+    stops, started = [], []
+    monkeypatch.setattr(jobs, "stop_run", lambda _s, rid, user="": stops.append(rid))
+    monkeypatch.setattr(jobs, "start_run", lambda *a, **k: started.append(a) or "r2")
+
+    at = _app()
+    at.radio(key="source").set_value("Scenario (synthetic)").run()
+    at.button(key="run").click().run()
+    assert stops == [run_id] and not started  # still stopping: nothing started yet
+    assert at.button(key="run").disabled
+    assert any("the new run starts as soon as it has stopped" in c.value for c in at.caption)
+
+    tracker.finish("stopped", "stopped by the user")  # the old run's process stops
+    at.run()  # the page's next refresh
+    assert not at.exception
+    assert started and started[0][3]["kind"]  # the scenario run started
+
+
 def test_a_running_scenario_is_known_before_and_after_its_first_stage(tmp_path):
     """The run's first stage rewrites scenario.json as {"scenario": recipe, ...}; the launch
     card still knows the run's data (a KeyError on main, 2026-11-25)."""

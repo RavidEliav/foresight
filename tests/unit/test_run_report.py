@@ -53,6 +53,17 @@ def test_a_scenario_run_is_labeled_synthetic_and_a_run_without_some_files_still_
     assert "4. Investigation & Report" in text
 
 
+def test_times_are_in_the_readers_zone_like_the_app():
+    """The reference run started at 14:53 UTC; a reader in Israel sees 16:53, as in the app.
+    Without the reader's zone (the saved report) the time says UTC."""
+    from zoneinfo import ZoneInfo
+
+    _, local = _text(run_report.build(REFERENCE, ZoneInfo("Asia/Jerusalem")))
+    assert "17 Nov 2026, 16:53 (Asia/Jerusalem)" in local and "14:53" not in local
+    _, utc = _text(run_report.build(REFERENCE))
+    assert "17 Nov 2026, 14:53 UTC" in utc
+
+
 def test_save_writes_the_pdf_into_the_run_folder(tmp_path):
     run = tmp_path / "run"
     shutil.copytree(REFERENCE, run)

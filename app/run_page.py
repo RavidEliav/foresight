@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import errno
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -21,6 +23,7 @@ STATUS_TEXT = {"queued": "is starting", "running": "is running", "success": "com
                "interrupted": "was interrupted", "stopped": "was stopped"}
 NEW_RUN_KEY = "new_run"  # read by the sidebar run selector
 PIN_MINUTES = 30  # an interrupted run stays at the top this long after it went quiet
+STOP_WAIT_S = 30  # Run pipeline with other data: how long to wait for the current run to stop
 
 
 def render(settings: Settings, results_page=None) -> None:
@@ -28,14 +31,45 @@ def render(settings: Settings, results_page=None) -> None:
     st.caption("Validate the data, analyze it, investigate failures, write the report.",
                help="Runs continue in the background: you can refresh or leave this page.")
 
-    # on a phone, while a run is going (one at a time), the launch card folds away so the
-    # run's progress fits the screen
-    folded = ui.phone() and store.active_run(settings) is not None
-    with st.expander("Start a run") if folded else st.container(key="card-launch"):
-        if not folded:
-            ui.label("Start a run")
-        source = st.radio("Dataset", [SECOM, UPLOAD, SCENARIO], key="source", horizontal=True,
-                          label_visibility="collapsed")  # the card's label says it
+    watched = st.session_state.get("watch_run")
+    user = None if ui.developer() else ui.user_email()  # a user sees only their own runs
+    active = store.active_run(settings) or _continuable(settings)
+    someone_else = False
+    if active and user is not None and not store.owns(active, user):
+        someone_else = active.effective_status() in ACTIVE and not watched
+        active = None
+    run_id = watched or (active.run_id if active else None)
+    run_dir = store.run_folder(settings, run_id) if run_id else None
+    progress = store.progress(run_dir) if run_dir else None
+    if progress is not None:
+        st.session_state["watch_run"] = run_id  # keep showing it after it finishes
+
+    _launch(settings, run_dir, progress)
+    if someone_else:
+        st.info("Someone else's run is in progress. You can start yours when it finishes, in a "
+                "few minutes.", icon=":material/hourglass_top:")
+    if error := st.session_state.pop(STOP_ERROR, None):
+        ui.friendly_error(error)
+    if progress is not None:
+        _show_run(settings, run_dir, progress, results_page)
+    _history(settings)
+
+
+def _launch(settings: Settings, run_dir: Path | None, progress: RunProgress | None) -> None:
+    """Start a run, with Stop run or Resume run beside Run pipeline. While a run is going,
+    Run pipeline is grayed out for the same data; other data lights it up again, and it then
+    stops the current run and starts the new one (one run at a time)."""
+    running = progress is not None and progress.effective_status() in ACTIVE
+    resumable = (progress is not None and not running and progress.status != "success"
+                 and progress.can_continue)
+    with st.container(key="card-launch"):
+        ui.label("Start a run")
+        if ui.phone():  # one line instead of three options on two lines
+            source = st.selectbox("Dataset", [SECOM, UPLOAD, SCENARIO], key="source",
+                                  label_visibility="collapsed")
+        else:
+            source = st.radio("Dataset", [SECOM, UPLOAD, SCENARIO], key="source",
+                              horizontal=True, label_visibility="collapsed")
         upload = scenario = None
         if source == SCENARIO:
             scenario = _scenario_inputs()
@@ -48,22 +82,53 @@ def render(settings: Settings, results_page=None) -> None:
             if template is not None:
                 st.download_button("Download a template (SECOM in this format)", template,
                                    file_name="secom_upload_format.csv", mime="text/csv")
-        if st.button("Run pipeline", key="run", type="primary"):
+        same = running and _chosen(source, upload, scenario) == store.run_data(run_dir)
+        with st.container(key="launch-actions", horizontal=True, vertical_alignment="center"):
+            clicked = st.button(
+                "Run pipeline", key="run", type="primary", disabled=same,
+                help="A run with this data is in progress. Choose other data to stop it and "
+                     "run that instead." if same else
+                     "Stops the run in progress and starts this one." if running else None)
+            if running:
+                _stop_control(settings, progress, run_dir)
+            elif resumable:
+                done = sum(s.reusable for s in progress.stages)
+                reused = (f"the {done} finished stage{'s' if done != 1 else ''}" if done
+                          else "nothing (no stage had finished)")
+                if st.button("Resume run", key="continue", icon=":material/play_circle:",
+                             help=f"Resume reuses {reused} and runs the rest. It counts toward "
+                                  "the hourly run limit."):
+                    _continue(settings, progress.run_id)
+    if clicked:
+        if running:
+            _replace(settings, progress.run_id, source, upload, scenario)
+        else:
             _start(settings, source, upload, scenario)
 
-    watched = st.session_state.get("watch_run")
-    user = None if ui.developer() else ui.user_email()  # a user sees only their own runs
-    active = store.active_run(settings) or _continuable(settings)
-    if active and user is not None and not store.owns(active, user):
-        if active.effective_status() in ACTIVE and not watched:
-            st.info("Someone else's run is in progress. You can start yours when it finishes, "
-                    "in a few minutes.", icon=":material/hourglass_top:")
-        active = None
-    run_id = watched or (active.run_id if active else None)
-    if run_id:
-        st.session_state["watch_run"] = run_id  # keep showing it after it finishes
-        _show_run(settings, run_id, results_page)
-    _history(settings)
+
+def _chosen(source: str, upload, scenario: dict | None) -> tuple:
+    """The data chosen in the launch card, comparable with ``store.run_data``."""
+    if source == SCENARIO and scenario:
+        return ("scenario", scenario["kind"], round(float(scenario["intensity"]), 4),
+                int(scenario["seed"]))
+    if source == UPLOAD:
+        return ("upload", len(upload.getvalue()) if upload is not None else None)
+    return ("secom",)
+
+
+def _replace(settings: Settings, run_id: str, source: str, upload, scenario) -> None:
+    """Run pipeline with other data while a run is going: stop it (its finished stages stay,
+    so it can be resumed later), wait until it has stopped, then start the new one."""
+    if source == UPLOAD and upload is None:
+        ui.friendly_error("Choose a CSV file to upload first.")
+        return
+    with contextlib.suppress(store.RunLimitError):  # it finished in the meantime
+        store.stop_run(settings, run_id, ui.user_email())
+    with st.spinner("Stopping the run in progress, then starting the new one..."):
+        deadline = time.monotonic() + STOP_WAIT_S
+        while store.active_run(settings) is not None and time.monotonic() < deadline:
+            time.sleep(1)
+    _start(settings, source, upload, scenario)
 
 
 def _scenario_inputs() -> dict:
@@ -103,6 +168,7 @@ def _start(settings: Settings, source: str, upload, scenario=None) -> None:
         ui.friendly_error(_not_written(exc, "start"))
         return
     st.session_state["watch_run"] = run_id
+    st.rerun()  # show the new run
 
 
 def _not_written(exc: OSError, action: str) -> str:
@@ -136,19 +202,15 @@ def _continue(settings: Settings, run_id: str) -> None:
     st.rerun()
 
 
-def _show_run(settings: Settings, run_id: str, results_page) -> None:
-    run_dir = store.run_folder(settings, run_id)
-    progress = store.progress(run_dir)
-    if progress is None:
-        return
+def _show_run(settings: Settings, run_dir: Path, progress: RunProgress,
+              results_page) -> None:
     if progress.effective_status() in ACTIVE:
-        _live(settings, str(run_dir))
+        _live(str(run_dir))
     else:
         cause = (store.interruption_cause(settings, run_dir, progress)
                  if progress.effective_status() == "interrupted"
                  and not progress.failure_reason else None)
-        _render_progress(progress, run_dir, results_page,
-                         on_continue=lambda: _continue(settings, run_id), cause=cause)
+        _render_progress(progress, run_dir, results_page, cause=cause)
 
 
 STOP_ERROR = "stop_error"
@@ -164,28 +226,23 @@ def _stop(settings: Settings, run_id: str) -> None:
 
 
 @st.fragment(run_every=2)
-def _live(settings: Settings, run_dir: str) -> None:
+def _live(run_dir: str) -> None:
     progress = store.progress(Path(run_dir))
     if progress is None:
         return
-    folder = Path(run_dir)
-    _render_progress(progress, folder, actions=lambda: _stop_control(settings, progress, folder))
-    if error := st.session_state.pop(STOP_ERROR, None):
-        ui.friendly_error(error)
-    if progress.effective_status() not in ACTIVE:
+    _render_progress(progress, Path(run_dir))
+    if progress.effective_status() not in ACTIVE:  # Stop run becomes Resume run: redraw all
         if progress.status == "success":
             st.session_state[NEW_RUN_KEY] = progress.run_id
         st.rerun()
 
 
 def _stop_control(settings: Settings, progress: RunProgress, run_dir: Path) -> None:
-    """Stop run, on the gates' line; its note is a tooltip, so a running run and the run
-    history fit one screen (Phase 8.7)."""
-    if progress.effective_status() not in ACTIVE:
-        return
+    """Stop run, beside Run pipeline; grayed out as "Stopping the run" once pressed."""
     if store.stop_requested(run_dir):
-        st.caption("Stopping the run: it records what it has finished and stops within a few "
-                   "seconds.")
+        st.button("Stopping the run...", key="stopping", icon=":material/stop_circle:",
+                  disabled=True, help="It records what it has finished and stops within a "
+                                      "few seconds.")
     else:
         st.button("Stop run", key="stop", icon=":material/stop_circle:", on_click=_stop,
                   args=(settings, progress.run_id),
@@ -198,8 +255,7 @@ GATE_NAMES = {"data_contract": "Data Contract", "features_present": "Features",
 
 
 def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
-                     on_continue=None, cause: tuple[str, str] | None = None,
-                     actions=None) -> None:
+                     cause: tuple[str, str] | None = None) -> None:
     from app.messages import explain_failure
     from app.runs import local_time
 
@@ -210,7 +266,8 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
                + (f" · {took} min" if took is not None and status not in ACTIVE else ""))
     if status in ACTIVE:
         current = progress.current
-        st.info(message + (f" · now: {current.label}" if current else ""),
+        # a phone leaves out the current stage: it is the highlighted row just below
+        st.info(message + (f" · now: {current.label}" if current and not ui.phone() else ""),
                 icon=":material/progress_activity:")
     elif status == "success":
         st.success(message, icon=":material/check_circle:")
@@ -225,28 +282,14 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
             ui.friendly_error(text)
         if hint:
             st.info(hint, icon=":material/lightbulb:")
-        if on_continue is not None and progress.can_continue:
-            done = sum(s.reusable for s in progress.stages)
-            reused = f"the {done} finished stage{'s' if done != 1 else ''}" if done else \
-                "nothing (no stage had finished)"
-            if st.button("Resume run", key="continue", type="primary",
-                         icon=":material/play_circle:"):
-                on_continue()
-            st.caption(f"Resume reuses {reused} and runs the rest. It counts toward the "
-                       "hourly run limit.")
 
     from app.stepper import stepper_html
 
     st.html(stepper_html(progress))
-    with st.container(key="run-gates", horizontal=True, vertical_alignment="center",
-                      gap="medium"):
-        if progress.gates:
-            st.markdown("Gates: " + " ".join(
-                f":{ui.STATUS_COLORS.get(g['status'], 'gray')}-badge["
-                f"{GATE_NAMES.get(g['gate'], g['gate'])}: {g['status']}]"
-                for g in progress.gates), width="content")
-        if actions is not None:  # Stop run while the run is going
-            actions()
+    if progress.gates:
+        st.markdown("Gates: " + " ".join(
+            f":{ui.STATUS_COLORS.get(g['status'], 'gray')}-badge["
+            f"{GATE_NAMES.get(g['gate'], g['gate'])}: {g['status']}]" for g in progress.gates))
 
     if status == "success":
         if results_page is not None:

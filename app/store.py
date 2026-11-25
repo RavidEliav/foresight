@@ -173,6 +173,20 @@ def stop_requested(run_dir: Path) -> bool:
     return jobs.stop_requested(run_dir)
 
 
+def run_data(run_dir: Path) -> tuple:
+    """The data a run was started with, comparable with the launch card's choice: its
+    scenario (kind, intensity, seed), its uploaded file (by size) or SECOM."""
+    from foresight.data.scenarios import SCENARIO_FILE
+
+    if (run_dir / SCENARIO_FILE).exists():
+        s = json.loads((run_dir / SCENARIO_FILE).read_text(encoding="utf-8"))
+        return ("scenario", s["kind"], round(float(s.get("intensity") or 0), 4),
+                int(s.get("seed", 7)))
+    if (run_dir / jobs.UPLOAD_FILE).exists():
+        return ("upload", (run_dir / jobs.UPLOAD_FILE).stat().st_size)
+    return ("secom",)
+
+
 @st.cache_data(show_spinner=False)
 def _template(raw_dir: str) -> bytes:
     from foresight.data.secom import load_raw, to_upload_csv

@@ -131,6 +131,7 @@ The sidebar starts with the Foresight wordmark (its "o" is the wafer logo) and t
 - a timeout guard stops a run after 20 minutes and records why,
 - **Stop run** writes `stop.requested` into the run folder; the run's process checks every second, records the run as stopped (in the history and the registry, with `failure_report.md`) and exits, keeping the stages it had finished,
 - a run that was stopped, or whose heartbeat stopped (for example after a redeploy, shown as interrupted), can be **resumed**: the stages it had finished are reused (their files, gate checks and crew usage are kept in `progress.json`), the data is re-read, and the rest runs again; a resume counts toward the hourly limit. A run stopped by a gate is not offered a resume (the same data would stop again),
+- **Stop run** and **Resume run** sit beside **Run pipeline**. While a run is going, Run pipeline is grayed out for the same data. Choosing other data (another dataset, upload or scenario setting) lights it up again, and it then stops the running run (which can be resumed later) and starts the new one,
 - a run that stopped sending updates says why: the storage was full, the run crashed (its last error), the app restarted, or the process stopped without a word (usually memory); Start and Resume first check for 50 MB free,
 - with Supabase Storage configured, every finished run is archived there and the server keeps only the newest 3 whole (older runs keep a few-KB stub, and their files are downloaded again when you pick one); without it, the newest 10 finished runs are kept.
 

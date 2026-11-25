@@ -228,7 +228,8 @@ def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_pa
     _broken_csv(upload)
     app_page.get_by_text("Upload a CSV").click()
     app_page.get_by_test_id("stFileUploaderDropzoneInput").set_input_files(str(upload))
-    expect(app_page.get_by_text("broken.csv")).to_be_visible(timeout=30_000)
+    expect(app_page.get_by_test_id("stFileChipName").filter(has_text="broken.csv")  # the chip
+           ).to_be_visible(timeout=30_000)
     app_page.get_by_role("button", name="Run pipeline").click()
 
     expect(app_page.get_by_test_id("stAlertContentError").filter(

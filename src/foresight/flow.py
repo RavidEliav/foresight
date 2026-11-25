@@ -254,6 +254,7 @@ class ForesightFlow(Flow[ForesightState]):
     def finalize(self):
         self.state.status = "success"
         self._write_manifest()
+        self._save_run_report()
         self.tracker.finish("success")
         record_run(Path(self.state.run_dir), self.settings)
 
@@ -273,6 +274,19 @@ class ForesightFlow(Flow[ForesightState]):
         self._write_manifest()
         self.tracker.finish("failed", self.state.failure_reason)
         record_run(Path(self.state.run_dir), self.settings)
+
+    def _save_run_report(self) -> None:
+        """The run report PDF (Phase 8.8): every result page in one file. A PDF that cannot
+        be made is logged and does not fail the run (the app builds it on demand)."""
+        from foresight.run_report import save
+
+        try:
+            path = save(Path(self.state.run_dir))
+        except Exception as exc:
+            log.warning("run report PDF not saved: %s", exc)
+            return
+        self.state.artifacts["run_report"] = str(path)
+        self._write_manifest()  # list it among the artifacts
 
     def _write_manifest(self) -> None:
         chunks = Path(self.state.run_dir) / CHUNKS_FILE

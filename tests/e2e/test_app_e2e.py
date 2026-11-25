@@ -127,6 +127,12 @@ def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
     text = Path(download.value.path()).read_text(encoding="utf-8")
     assert download.value.suggested_filename == "engineering_report.md"
     assert text.startswith("# Engineering report") and "## Hypotheses" in text
+    # Phase 8.8: the whole run in one PDF, from under the sidebar's run choice
+    with app_page.expect_download(timeout=60_000) as report:
+        app_page.get_by_test_id("stSidebar").get_by_role(
+            "button", name="Download full run report").click()
+    assert report.value.suggested_filename == "foresight-run-report-reference.pdf"
+    assert Path(report.value.path()).read_bytes().startswith(b"%PDF")
 
 
 def test_e8_line_replay_plays_the_reference_test_period(app_page: Page):  # needs sign-in: CI

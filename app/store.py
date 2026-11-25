@@ -173,6 +173,15 @@ def stop_requested(run_dir: Path) -> bool:
     return jobs.stop_requested(run_dir)
 
 
+def run_report(run_dir: Path) -> bytes:
+    """The run report PDF (Phase 8.8): the one the run saved, else built from its files (runs
+    from before 8.8, the reference run)."""
+    from foresight.run_report import RUN_REPORT_FILE, build
+
+    saved = run_dir / RUN_REPORT_FILE
+    return saved.read_bytes() if saved.exists() else build(run_dir)
+
+
 def run_data(run_dir: Path) -> tuple:
     """The data a run was started with, comparable with the launch card's choice: its
     scenario (kind, intensity, seed), its uploaded file (by size) or SECOM."""

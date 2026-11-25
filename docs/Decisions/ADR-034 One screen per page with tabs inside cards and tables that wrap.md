@@ -34,6 +34,7 @@ After 8.6, Ravid asked that the main part of each page fit one screen, on a lapt
   - A phone's browser (user agent with Mobile or iPhone, `ui.phone`) gets each page's cards as the tabs of one card (`ui.cards`).
   - Charts are at most 210 px, the headline tiles are compact, a long tab scrolls inside its card and Extended data is one dropdown.
   - Run Pipeline's stages become one-line rows, and the launch card folds away while a run is going.
+  - Text fields use 16 px (an iPhone zooms into smaller ones), and 2D charts are still pictures, so a pinch zooms them like the rest of the page (#59).
   - Every page fits 390×664 (an iPhone's Safari with its bars shown); E9 checks it with an iPhone user agent.
 - **Ask Foresight** (#56): the conversation scrolls in its own box sized to the window, under a fixed title and question bar.
 - **Checks:**

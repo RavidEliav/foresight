@@ -127,7 +127,7 @@ def _frozen(stage: StageProgress) -> StageProgress:
     return stage.model_copy(update={"status": status, "crew_status": crew})
 
 
-def _tile(stage: StageProgress) -> str:
+def _tile(stage: StageProgress, meta: str | None = None) -> str:
     if stage.crew:
         state = CREW_TEXT.get(stage.crew_status or "", "")
         crew = (f'<span class="fs-dot fs-{stage.crew_status or "none"}"></span>'
@@ -139,7 +139,7 @@ def _tile(stage: StageProgress) -> str:
             f'<img class="fs-art" alt="" src="{art(stage.name, stage.status)}">'
             f'<div class="fs-stage-title">{escape(stage.label)}</div>'
             f'<div class="fs-stage-crew">{crew}</div>'
-            f'<div class="fs-stage-meta">{_status_text(stage)}</div></div>')
+            f'<div class="fs-stage-meta">{meta or _status_text(stage)}</div></div>')
 
 
 def _link(stage: StageProgress, gates: dict[str, str]) -> str:
@@ -156,8 +156,14 @@ def stepper_html(progress: RunProgress) -> str:
     gates = {g["gate"]: g["status"] for g in progress.gates}
     parts = []
     live = progress.effective_status() in ACTIVE
+    # the run's process takes a few seconds to start before its first stage: the first tile
+    # already spins ("starting"), so the page does not look stuck
+    starting = live and all(s.status == "pending" for s in progress.stages)
     for i, stage in enumerate(progress.stages):
-        parts.append(_tile(_shown(stage) if live else _frozen(stage)))
+        if starting and i == 0:
+            parts.append(_tile(stage.model_copy(update={"status": "running"}), "starting"))
+        else:
+            parts.append(_tile(_shown(stage) if live else _frozen(stage)))
         if i < len(progress.stages) - 1:
             parts.append(_link(stage, gates))
     return f'<div class="fs-stepper">{"".join(parts)}</div>'

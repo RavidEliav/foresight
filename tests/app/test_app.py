@@ -126,6 +126,8 @@ def test_stage_tile_matches_its_crew_line(tmp_path):
     from foresight.progress import ProgressTracker
 
     tracker = ProgressTracker.create(tmp_path, "r")
+    first = stepper_html(tracker.progress).split('<div class="fs-stage ')[1]
+    assert first.startswith("fs-running") and "starting" in first  # the process starts up
     tracker.running()
     tracker.stage_started("analyze")
     tracker.crew("analyst", "running")

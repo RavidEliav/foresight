@@ -30,16 +30,23 @@ pio.templates["foresight"] = go.layout.Template(layout=go.Layout(
 
 
 PHONE_HEIGHT = 210  # the tallest chart on a phone, so a page fits its screen
+THREE_D = {"scatter3d", "mesh3d", "surface"}
 
 
 def show(fig: go.Figure, key: str, height: int = 380) -> None:
     from app import ui
 
+    config = {"displaylogo": False, "scrollZoom": True,
+              "modeBarButtonsToRemove": ["lasso2d", "select2d"]}
     if ui.phone():
         height = min(height, PHONE_HEIGHT)
+        # Plotly takes every touch on a 2D chart (it has no pinch zoom of its own), so a
+        # pinch did nothing there: on a phone a 2D chart is a still picture and a pinch zooms
+        # it like the rest of the page. 3D charts keep their own pinch and turn.
+        if not any(trace.type in THREE_D for trace in fig.data):
+            config["staticPlot"] = True
     fig.update_layout(template="foresight", height=height)
-    st.plotly_chart(fig, key=key, config={"displaylogo": False, "scrollZoom": True,
-                                          "modeBarButtonsToRemove": ["lasso2d", "select2d"]})
+    st.plotly_chart(fig, key=key, config=config)
 
 
 def read_csv(run_dir: Path, name: str,

@@ -350,21 +350,19 @@ def section_label(text: str) -> None:
     st.html(f'<div class="fs-section">{text}</div>')
 
 
-def run_report_button(run_dir: Path, key: str, sidebar: bool = False) -> None:
-    """Download the run report: every result page of the run in one PDF (Phase 8.8). The PDF
-    is made when the button is pressed, not on every page."""
+def run_report_button(run_dir: Path) -> None:
+    """In the sidebar under the run choice: download the run report, every result page of
+    that run in one PDF (Phase 8.8; the one place for it). The PDF is made when the button is
+    pressed, not on every page."""
     from app import store
 
-    where = st.sidebar if sidebar else st
-    where.download_button(
+    st.sidebar.download_button(
         "Download full run report", data=lambda: store.run_report(run_dir),
         file_name=f"foresight-run-report-{run_dir.name}.pdf", mime="application/pdf",
-        key=f"run-report-{key}", icon=":material/picture_as_pdf:", width="stretch",
-        type="primary" if sidebar else "secondary",
+        key="run-report", icon=":material/picture_as_pdf:", width="stretch", type="primary",
         help="Every result page of this run in one PDF: Data Quality, EDA & Insights, Model, "
              "Investigation & Report (with the engineering report) and the report's checks.")
-    if sidebar:  # under the run choice: say that it is the whole run, not one page
-        st.sidebar.caption("All result pages of this run in one PDF.")
+    st.sidebar.caption("All result pages of this run in one PDF.")  # the whole run, not a page
 
 
 def extended(labels: list[str], key: str) -> str | None:

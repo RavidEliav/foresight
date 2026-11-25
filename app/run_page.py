@@ -311,12 +311,9 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
             f"{GATE_NAMES.get(g['gate'], g['gate'])}: {g['status']}]" for g in progress.gates))
 
     if status == "success":
-        with st.container(key="run-done", horizontal=True, vertical_alignment="center"):
-            if results_page is not None:
-                st.page_link(results_page, label="See the results, starting with Data Quality",
-                             icon=":material/verified:", width="content")
-            with st.container(width=220):
-                ui.run_report_button(run_dir, "run-page")
+        if results_page is not None:
+            st.page_link(results_page, label="See the results, starting with Data Quality",
+                         icon=":material/verified:")
     elif status not in ACTIVE and ui.developer():
         with st.expander("Technical details"):
             if progress.failure_reason:

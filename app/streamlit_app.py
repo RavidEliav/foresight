@@ -68,6 +68,7 @@ def _run_selector() -> Path | None:
     if not st.session_state.get(PINNED_KEY) or st.session_state.get(VIEW_KEY) not in options:
         st.session_state[VIEW_KEY] = options[0]  # follow the newest run until one is picked
     choice = st.sidebar.selectbox("Results shown", options, key=VIEW_KEY,
+                                  filter_mode=ui.search(),  # a phone: a tap opens the list
                                   format_func=lambda p: describe_run(Path(p)),
                                   help="The run whose results the pages show. Times are in "
                                        "your local time zone.",

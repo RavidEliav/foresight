@@ -46,7 +46,7 @@ def render(settings: Settings, viewer) -> None:
             email = left.text_input("Google account email", key="add-email",
                                     placeholder="name@gmail.com")
             role = right.selectbox("Role", list(ROLE_LABELS), format_func=ROLE_LABELS.get,
-                                   key="add-role")
+                                   key="add-role", filter_mode=None)
             if st.form_submit_button("Add", type="primary", icon=":material/person_add:"):
                 try:
                     added = store.add_account(settings, email, role, viewer.email)
@@ -96,10 +96,11 @@ def _accounts(settings: Settings, viewer, everyone: list) -> None:
             return
         emails = [row["email"] for row in stored]
         left, middle, right = st.columns([3, 1, 2], vertical_alignment="bottom")
-        chosen = left.selectbox("Change an account", emails, key="manage-email")
+        chosen = left.selectbox("Change an account", emails, key="manage-email",
+                                filter_mode=ui.search())
         current = next(a for a in everyone if a.email == chosen)
         role = middle.selectbox("Role", list(ROLE_LABELS), format_func=ROLE_LABELS.get,
-                                index=list(ROLE_LABELS).index(current.role),
+                                index=list(ROLE_LABELS).index(current.role), filter_mode=None,
                                 key=f"manage-role-{chosen}")
         with right:
             save, remove = st.columns(2)

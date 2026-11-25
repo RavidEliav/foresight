@@ -83,7 +83,7 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - Run pipeline with other data, the first time: the page waited at most 30 s for the running run to stop, but a run that has just started needs its process up first (45 to 90 s on `main`), so it gave up. The new run now waits in the session and starts as soon as the old one has stopped.
   - Line Replay, End while playing, the first time: on the server a slow first page run can let the slider's old position arrive after the 2 s guard. Positions the playback showed are remembered and never count as a drag. A phone shows Play, Restart, Next and End as words (Next run's icon looked like End's).
 - **Release to `main`** (#66, Nov 25).
-- **8.8 Run report** (#69) ([[ADR-036 A run report PDF of every result page, built from the run's files]]):
+- **8.8 Run report** (#68) ([[ADR-036 A run report PDF of every result page, built from the run's files]]):
   - every result page of a run in one PDF (about 10 pages): cover with the numbers at a glance, Data Quality, EDA & Insights, Model, Investigation & Report with the engineering report in full, appendix with the report's checks
   - citations kept; built only from the run's files, so older runs and the reference run get it too; a new run saves `run_report.pdf`
   - "Download full run report" in the sidebar under "Results shown" (Ravid's choice), and beside "See the results" when a run completes

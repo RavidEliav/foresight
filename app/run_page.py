@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import errno
-import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -23,13 +22,26 @@ STATUS_TEXT = {"queued": "is starting", "running": "is running", "success": "com
                "interrupted": "was interrupted", "stopped": "was stopped"}
 NEW_RUN_KEY = "new_run"  # read by the sidebar run selector
 PIN_MINUTES = 30  # an interrupted run stays at the top this long after it went quiet
-STOP_WAIT_S = 30  # Run pipeline with other data: how long to wait for the current run to stop
+PENDING = "pending_run"  # Run pipeline with other data: started once the current run stopped
+
+
+class _Upload:
+    """An uploaded file kept for a pending run (the uploader's own object is per rerun)."""
+
+    def __init__(self, name: str, data: bytes) -> None:
+        self.name, self._data = name, data
+
+    def getvalue(self) -> bytes:
+        return self._data
 
 
 def render(settings: Settings, results_page=None) -> None:
     ui.page_header("Run Pipeline")
     st.caption("Validate the data, analyze it, investigate failures, write the report.",
                help="Runs continue in the background: you can refresh or leave this page.")
+    if (pending := st.session_state.get(PENDING)) and store.active_run(settings) is None:
+        del st.session_state[PENDING]  # the run it replaces has stopped: start it now
+        _start(settings, pending["source"], pending["upload"], pending["scenario"])
 
     watched = st.session_state.get("watch_run")
     user = None if ui.developer() else ui.user_email()  # a user sees only their own runs
@@ -83,11 +95,13 @@ def _launch(settings: Settings, run_dir: Path | None, progress: RunProgress | No
                 st.download_button("Download a template (SECOM in this format)", template,
                                    file_name="secom_upload_format.csv", mime="text/csv")
         same = running and _chosen(source, upload, scenario) == store.run_data(run_dir)
+        pending = running and PENDING in st.session_state
         with st.container(key="launch-actions", horizontal=True, vertical_alignment="center"):
             clicked = st.button(
-                "Run pipeline", key="run", type="primary", disabled=same,
-                help="A run with this data is in progress. Choose other data to stop it and "
-                     "run that instead." if same else
+                "Run pipeline", key="run", type="primary", disabled=same or pending,
+                help="The new run starts as soon as the current one has stopped." if pending
+                     else "A run with this data is in progress. Choose other data to stop it and "
+                          "run that instead." if same else
                      "Stops the run in progress and starts this one." if running else None)
             if running:
                 _stop_control(settings, progress, run_dir)
@@ -99,6 +113,9 @@ def _launch(settings: Settings, run_dir: Path | None, progress: RunProgress | No
                              help=f"Resume reuses {reused} and runs the rest. It counts toward "
                                   "the hourly run limit."):
                     _continue(settings, progress.run_id)
+        if pending:
+            st.caption("Stopping the run in progress: the new run starts as soon as it has "
+                       "stopped (keep this page open).")
     if clicked:
         if running:
             _replace(settings, progress.run_id, source, upload, scenario)
@@ -118,17 +135,19 @@ def _chosen(source: str, upload, scenario: dict | None) -> tuple:
 
 def _replace(settings: Settings, run_id: str, source: str, upload, scenario) -> None:
     """Run pipeline with other data while a run is going: stop it (its finished stages stay,
-    so it can be resumed later), wait until it has stopped, then start the new one."""
+    so it can be resumed later) and start the new one as soon as it has stopped. A run that
+    has just been started needs its process up before it can stop (up to a minute on the
+    server), so the new run waits in the session instead of a fixed time (it once gave up
+    after 30 s on main)."""
     if source == UPLOAD and upload is None:
         ui.friendly_error("Choose a CSV file to upload first.")
         return
     with contextlib.suppress(store.RunLimitError):  # it finished in the meantime
         store.stop_run(settings, run_id, ui.user_email())
-    with st.spinner("Stopping the run in progress, then starting the new one..."):
-        deadline = time.monotonic() + STOP_WAIT_S
-        while store.active_run(settings) is not None and time.monotonic() < deadline:
-            time.sleep(1)
-    _start(settings, source, upload, scenario)
+    st.session_state[PENDING] = {
+        "source": source, "scenario": scenario,
+        "upload": _Upload(upload.name, upload.getvalue()) if upload is not None else None}
+    st.rerun()
 
 
 def _scenario_inputs() -> dict:

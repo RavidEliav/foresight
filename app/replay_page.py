@@ -27,6 +27,7 @@ POS, PLAYING, SPEED, SCRUB, SHOWN_RUN = ("replay_pos", "replay_playing", "replay
 TICK_S = 1.0
 MOVED = "replay_moved"  # when a button last moved the line (time.monotonic)
 SETTLE_S = 2.0  # slider changes this soon after a button are echoes, not drags
+ECHOES = "replay_echoes"  # positions the playback itself showed: the browser may send them back
 
 
 def load(run_dir: Path) -> pd.DataFrame | None:
@@ -89,6 +90,7 @@ def _replay(run_dir: str, ticking: bool) -> None:
     n = len(frame)
     if ticking and state[PLAYING]:
         state[POS] = min(state[POS] + SPEEDS.get(state.get(SPEED) or "", 3), n)
+        state.setdefault(ECHOES, set()).add(state[POS])
         if state[POS] >= n:
             state[PLAYING] = False
             state[MOVED] = time.monotonic()
@@ -104,16 +106,21 @@ def _controls(n: int) -> None:
         play, restart, step, end, speed = st.columns([1.2, 1, 1, 1, 3],
                                                      vertical_alignment="bottom")
         # one button whose label changes (the key is its identity): swapping two buttons
-        # showed both for a moment and moved the page
-        playing = bool(state[PLAYING])
+        # showed both for a moment and moved the page. A phone shows short words, not
+        # icons: Next run's icon looked like End's.
+        phone, playing = ui.phone(), bool(state[PLAYING])
+
+        def icon(name: str) -> str | None:
+            return None if phone else f":material/{name}:"
+
         play.button("Pause" if playing else "Play", key="replay-toggle",
-                    icon=":material/pause:" if playing else ":material/play_arrow:",
+                    icon=icon("pause" if playing else "play_arrow"),
                     type="primary", on_click=_toggle, args=(n,), width="stretch")
-        restart.button("Restart", key="replay-restart", icon=":material/replay:",
+        restart.button("Restart", key="replay-restart", icon=icon("replay"),
                        on_click=_move, args=(lambda: 0,), width="stretch")
-        step.button("Next run", key="replay-step", icon=":material/skip_next:",
+        step.button("Next" if phone else "Next run", key="replay-step", icon=icon("skip_next"),
                     on_click=_move, args=(lambda: min(state[POS] + 1, n),), width="stretch")
-        end.button("End", key="replay-end", icon=":material/last_page:",
+        end.button("End", key="replay-end", icon=icon("last_page"),
                    on_click=_move, args=(lambda: n,), width="stretch")
         speed.segmented_control("Speed", list(SPEEDS), key=SPEED, default="3 runs/s",
                                 label_visibility="collapsed")
@@ -129,13 +136,16 @@ def _move(position) -> None:
 
 
 def _scrubbed() -> None:
-    """The slider moved. While playing, and just after a button, a change is the browser
-    sending back a position it showed a moment ago (a tick in flight), not a drag: ignored.
-    Without this, End reached the end and then jumped back to where the line had been."""
+    """The slider moved. While playing, just after a button, or to a position the playback
+    itself showed, a change is the browser sending back what it showed a moment ago (a tick
+    in flight), not a drag: ignored. Without this, End reached the end and then jumped back to
+    where the line had been; on the server a slow first page run let the echo arrive after
+    the settle time, so the positions are remembered too."""
     state = st.session_state
-    if state[PLAYING] or time.monotonic() - state.get(MOVED, 0.0) < SETTLE_S:
+    echo = state[SCRUB] in state.get(ECHOES, ())
+    if state[PLAYING] or echo or time.monotonic() - state.get(MOVED, 0.0) < SETTLE_S:
         return
-    state[POS] = state[SCRUB]
+    state[POS], state[ECHOES] = state[SCRUB], set()  # a real drag
 
 
 def _toggle(n: int) -> None:
@@ -147,7 +157,7 @@ def _toggle(n: int) -> None:
         return
     if state[POS] >= n:
         state[POS] = 0
-    state[PLAYING] = True
+    state[PLAYING], state[ECHOES] = True, {state[POS]}
 
 
 def _view(frame: pd.DataFrame, shown: int) -> None:

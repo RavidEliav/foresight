@@ -64,6 +64,9 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
     - the Run Pipeline stage cards no longer overflow
     - a signed-out link to a page such as `/activity` opens the sign-in screen instead of "Page not found"
     - Stop run and Resume run sit beside Run pipeline, which is grayed out while a run with the same data is going; other data lights it up, and it then stops the running run and starts the new one
+  - **Validation on main (#65):**
+    - Run pipeline with other data, the first time: the page waited at most 30 s for the running run to stop, but a run that has just started needs its process up first (45 to 90 s on main), so it gave up. The new run now waits in the session and starts as soon as the old one has stopped.
+    - Line Replay, End while playing, the first time: on the server a slow first page run let the slider's old position arrive after the 2 s guard. Positions the playback showed are now remembered and never count as a drag. A phone shows Play, Restart, Next and End as words (Next run's icon looked like End's).
   - **Check of main after the release (#62):**
     - Stop run and Resume run on a scenario run showed KeyError 'kind': the run's first stage rewrites scenario.json as {"scenario": recipe, ...}, and the new launch card read only the first form
     - Line Replay: End reached the end, then jumped back. A timer tick in flight sent the slider's old position, which counted as a drag; slider changes while playing or just after a button are now ignored

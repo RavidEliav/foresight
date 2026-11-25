@@ -86,7 +86,7 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
 - **8.8 Run report** (#68) ([[ADR-036 A run report PDF of every result page, built from the run's files]]):
   - every result page of a run in one PDF (about 10 pages): cover with the numbers at a glance, Data Quality, EDA & Insights, Model, Investigation & Report with the engineering report in full, appendix with the report's checks
   - citations kept; built only from the run's files, so older runs and the reference run get it too; a new run saves `run_report.pdf`
-  - "Download full run report" in the sidebar under "Results shown" (Ravid's choice), and beside "See the results" when a run completes
+  - "Download full run report" in the sidebar under "Results shown" (Ravid's choice), the one place for it (the second button on Run Pipeline was taken out, #69)
 
 Everything above is on `main` (#66, Nov 25); `main` and `dev` are the same.
 

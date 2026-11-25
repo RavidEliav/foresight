@@ -32,7 +32,7 @@ The requirements list an HTML or PDF version of `engineering_report.md` as an op
   - If the PDF cannot be made, the run still succeeds (logged).
 - **The same run gives the same file:** the PDF's date is the run's start.
 - **Fonts:** DejaVu Sans from matplotlib, so §, ≤ and → print.
-- **The button:** "Download full run report" (accent) in the sidebar under "Results shown", with "All result pages of this run in one PDF". The same button sits beside "See the results" on Run Pipeline when a run completes.
+- **The button:** "Download full run report" (accent) in the sidebar under "Results shown", with "All result pages of this run in one PDF". It is the one place for the report: a second button beside "See the results" on Run Pipeline was taken out at Ravid's request (#69).
   - The PDF is made when the button is pressed (a callable download), not on every page.
 
 ## Consequences

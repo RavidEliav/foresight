@@ -64,10 +64,10 @@ def render(run_dir: Path | None) -> None:
                     icon=":material/history:")
         return
 
-    st.caption(f"{run_label(run_dir)} · the test period run by run, with this run's own "
-               "alarms: nothing is re-scored.",
-               help="Alarms are the riskiest share of the test period (the run's alarm "
-                    "budget), so the totals at the end match Investigation & Report.")
+    st.caption(run_label(run_dir),
+               help="The test period run by run, with this run's own alarms: nothing is "
+                    "re-scored. Alarms are the riskiest share of the test period (the run's "
+                    "alarm budget), so the totals at the end match Investigation & Report.")
     state = st.session_state
     if state.get(SHOWN_RUN) != str(run_dir):  # another run: start from the beginning
         state[SHOWN_RUN], state[POS], state[PLAYING] = str(run_dir), 0, False
@@ -153,32 +153,38 @@ def _view(frame: pd.DataFrame, shown: int) -> None:
                    f"{t['fails']} failing runs, the same totals as the Investigation & Report "
                    "page.", icon=":material/flag:")
 
-    left, right = st.columns([3, 2], gap="medium")
-    with left, st.container(key="card-replay-stream", height="stretch"):
-        ui.label("Risk score of each run as it comes off the line")
-        charts.replay_stream(frame, shown, alarm_cutoff(frame), "replay-stream")
-        st.caption("Rings: alarms. Amber: runs that failed. Dotted line: the alarm cutoff.")
     alarms = frame.iloc[:shown]
     alarms = alarms[alarms.flagged == 1].iloc[::-1].head(8)
-    # Phase 8.7: the wafer and the latest alarms share one card, so the page fits a screen
-    with right, st.container(key="card-tabs-replay-wafer", height="stretch"):
-        wafer_tab, alarms_tab = st.tabs(["Newest run: simulated wafer", "Latest alarms"])
-    with wafer_tab:
+
+    def stream() -> None:
+        charts.replay_stream(frame, shown, alarm_cutoff(frame), "replay-stream")
+        st.caption("Rings: alarms. Amber: runs that failed. Dotted line: the alarm cutoff.")
+
+    def wafer() -> None:
         if current is None:
             st.caption("Press Play or Next run to start the line.")
         else:
             wafer_view(current, "replay-wafer", height=200, compact=True)
-    with alarms_tab:
-        if alarms.empty:
-            st.caption("No alarm yet.")
-        else:
-            ui.table(pd.DataFrame({
-                "time": alarms.timestamp.dt.strftime("%d %b %H:%M"),
-                "run": alarms.run_id,
-                "risk score": alarms.risk_score,
-                "outcome": alarms.label.map({1: "failed: caught", 0: "passed: false alarm"}),
-                "top signals": alarms.top_signals.fillna(""),
-            }), {"risk score": st.column_config.NumberColumn(format="%.3f")}, max_rows=8)
+
+    # Phase 8.7: the stream beside the wafer and the latest alarms (on a phone, three tabs)
+    ui.cards([[("Risk score of each run as it comes off the line", stream, "Risk stream")],
+              [("Newest run: simulated wafer", wafer, "Wafer"),
+               ("Latest alarms", lambda: _latest(alarms), "Alarms")]], "replay",
+             widths=[3, 2])
+
+
+def _latest(alarms: pd.DataFrame) -> None:
+    """The newest alarms first."""
+    if alarms.empty:
+        st.caption("No alarm yet.")
+        return
+    ui.table(pd.DataFrame({
+        "time": alarms.timestamp.dt.strftime("%d %b %H:%M"),
+        "run": alarms.run_id,
+        "risk score": alarms.risk_score,
+        "outcome": alarms.label.map({1: "failed: caught", 0: "passed: false alarm"}),
+        "top signals": alarms.top_signals.fillna(""),
+    }), {"risk score": st.column_config.NumberColumn(format="%.3f")}, max_rows=8)
 
 
 def wafer_view(run: pd.Series, key: str, height: int = 300, compact: bool = False) -> None:

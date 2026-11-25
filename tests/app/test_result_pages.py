@@ -97,6 +97,18 @@ def test_eda_page_shows_overview_and_top_sensor(run_dir):
     assert any("## Summary" in md.value for md in _open(at, "Full insights").markdown)
 
 
+def test_a_phone_gets_one_card_with_tabs_and_a_closed_extended_data(run_dir, monkeypatch):
+    """A phone's browser (ui.phone) gets the selected model as the first tab of one card, so
+    the page fits its screen, and Extended data as one closed dropdown."""
+    monkeypatch.setattr("app.ui.phone", lambda: True)
+    at = _render("app.model_page", run_dir)
+    assert not at.exception
+    assert [t.label for t in at.tabs] == ["Selected model", "Risk scores", "Important sensors",
+                                          "Alarms vs outcomes", "Precision-recall"]
+    assert at.selectbox(key="extended-model").value is None
+    assert not at.table  # closed until a tab is chosen
+
+
 def test_model_page_shows_metrics_with_confidence_intervals(run_dir):
     at = _render("app.model_page", run_dir)
     assert not at.exception

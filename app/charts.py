@@ -29,7 +29,14 @@ pio.templates["foresight"] = go.layout.Template(layout=go.Layout(
 ))
 
 
+PHONE_HEIGHT = 210  # the tallest chart on a phone, so a page fits its screen
+
+
 def show(fig: go.Figure, key: str, height: int = 380) -> None:
+    from app import ui
+
+    if ui.phone():
+        height = min(height, PHONE_HEIGHT)
     fig.update_layout(template="foresight", height=height)
     st.plotly_chart(fig, key=key, config={"displaylogo": False, "scrollZoom": True,
                                           "modeBarButtonsToRemove": ["lasso2d", "select2d"]})
@@ -396,7 +403,9 @@ def replay_stream(frame: pd.DataFrame, shown: int, cutoff: float, key: str) -> N
                              "title": None},
                       yaxis={"range": [0, 1.05], "title": "risk score"},
                       uirevision="replay")
-    show(fig, key, height=REPLAY_HEIGHT)
+    from app import ui
+
+    show(fig, key, height=170 if ui.phone() else REPLAY_HEIGHT)  # a phone: below the controls
 
 
 # Two triangles per face of a box: bottom, top, then the four sides

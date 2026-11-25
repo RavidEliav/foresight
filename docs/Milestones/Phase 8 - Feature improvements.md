@@ -58,9 +58,15 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - on a phone, headline numbers two per row, and the title, headline and the start of the main content on the first screen
   - tables: columns fit their header or longest value; long or wide tables wrap instead of cutting columns off
   - E9 checks the fit in CI; `scripts/measure_fit.py` measures and screenshots every page
+  - **Phone check (#58):**
+    - the "Hi, name" menu opens with a tap (Streamlit's transparent header lay over it)
+    - every page fits a phone (a phone view with one card of tabs)
+    - the Run Pipeline stage cards no longer overflow
+    - a signed-out link to a page such as `/activity` opens the sign-in screen instead of "Page not found"
+    - Stop run and Resume run sit beside Run pipeline, which is grayed out while a run with the same data is going; other data lights it up, and it then stops the running run and starts the new one
   - **After Ravid's check (#56):** Extended data tabs stay closed until pressed; Run Pipeline fits with a run in progress; the Ask Foresight conversation scrolls in its own box under a fixed title and question bar; Play/Pause on Line Replay no longer moves the page; the sign-in page's Privacy and Terms links are no longer cut
 
-8.3 to 8.7 and storage are on `dev`; `main` runs 8.1 and 8.2 (#40). The release to `main` waits for Ravid's check of `dev` and main's Google redirect address.
+8.1 to 8.7 and storage are on `main` (#57, 2026-11-25).
 
 ## Test results
 - 285 tests pass locally, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)

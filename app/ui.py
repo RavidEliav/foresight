@@ -352,7 +352,8 @@ def extended(labels: list[str], key: str) -> str | None:
     dropdown, so the page fits the screen."""
     if phone():
         return st.selectbox("Extended data", labels, index=None, key=f"extended-{key}",
-                            placeholder="Extended data", label_visibility="collapsed")
+                            placeholder="Extended data", label_visibility="collapsed",
+                            filter_mode=None)
     section_label("Extended data")
     return st.segmented_control("Extended data", labels, key=f"extended-{key}",
                                 label_visibility="collapsed")
@@ -366,6 +367,12 @@ def phone() -> bool:
     except Exception:  # no browser (tests, bare mode)
         return False
     return "Mobi" in agent or "iPhone" in agent
+
+
+def search() -> str | None:
+    """A long dropdown's search: typing filters it on a computer. On a phone a tap opened the
+    keyboard to type instead of the list, so there it only opens the list (None)."""
+    return None if phone() else "fuzzy"
 
 
 def cards(groups: list[list[tuple]], key: str, widths: list[int] | None = None) -> None:

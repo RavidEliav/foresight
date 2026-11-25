@@ -156,7 +156,7 @@ def _render_wafer(run_dir: Path) -> None:
         left, right = st.columns([1, 2], gap="medium")
         with left:
             run_id = st.selectbox("Run (riskiest first)", list(rows), format_func=describe,
-                                  key="wafer-run")
+                                  key="wafer-run", filter_mode=ui.search())
             st.caption("The Line Replay page plays the whole test period with a wafer for "
                        "each run.")
         with right:

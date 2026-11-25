@@ -66,7 +66,7 @@ def _launch(settings: Settings, run_dir: Path | None, progress: RunProgress | No
         ui.label("Start a run")
         if ui.phone():  # one line instead of three options on two lines
             source = st.selectbox("Dataset", [SECOM, UPLOAD, SCENARIO], key="source",
-                                  label_visibility="collapsed")
+                                  label_visibility="collapsed", filter_mode=None)
         else:
             source = st.radio("Dataset", [SECOM, UPLOAD, SCENARIO], key="source",
                               horizontal=True, label_visibility="collapsed")
@@ -136,7 +136,7 @@ def _scenario_inputs() -> dict:
     reproducible."""
     kinds = store.scenario_kinds()
     kind = st.selectbox("Scenario", list(kinds), format_func=lambda k: kinds[k][0],
-                        key="scenario_kind", width=360)
+                        key="scenario_kind", width=360, filter_mode=None)
     title, description, default, _ = kinds[kind]
     st.caption(f"{description} **Only the training period changes**: the test period stays "
                "the original SECOM data, so every metric is computed on real runs. The run is "

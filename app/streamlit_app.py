@@ -181,8 +181,9 @@ PUBLIC = [PRIVACY, TERMS, REVIEW]
 
 SESSION = auth.session(settings)
 if SESSION.status != "ok":  # sign in, ask for access or wait for approval
-    navigation = st.navigation([st.Page(gate_page, title="Sign in", icon=":material/login:",
-                                        default=True), *PUBLIC, *_placeholders(gate_page, PATHS)],
+    SIGN_IN = st.Page(gate_page, title="Sign in", icon=":material/login:", default=True)
+    legal_page.back_to(SIGN_IN, "Back to sign-in")  # Privacy and Terms have no menu here
+    navigation = st.navigation([SIGN_IN, *PUBLIC, *_placeholders(gate_page, PATHS)],
                                position="hidden")
     ui.brand()
     navigation.run()
@@ -212,6 +213,7 @@ MENU = [
 ]
 # Streamlit draws its own page menu above everything else in the sidebar; it is hidden so that
 # the brand comes first and the menu is drawn with page links (ui.sidebar_nav).
+legal_page.back_to(MENU[0], "Back to Foresight")
 navigation = st.navigation(
     [*MENU, *PUBLIC, *([] if VIEWER.developer else
                        _placeholders(developer_only_page, DEVELOPER_PATHS))], position="hidden")

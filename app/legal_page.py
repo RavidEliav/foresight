@@ -84,13 +84,28 @@ Last updated: {UPDATED}.
 """
 
 
+BACK = "legal_back"  # this session's (page, label) to return to
+
+
+def back_to(page, label: str) -> None:
+    """Where Privacy and Terms lead back to: the sign-in screen, or the app."""
+    st.session_state[BACK] = (page, label)
+
+
+def _back() -> None:
+    if back := st.session_state.get(BACK):
+        st.page_link(back[0], label=back[1], icon=":material/arrow_back:")
+
+
 def privacy() -> None:
+    _back()
     ui.page_header("Privacy")
     with st.container(key="card-privacy"):
         st.markdown(PRIVACY)
 
 
 def terms() -> None:
+    _back()
     ui.page_header("Terms of use")
     with st.container(key="card-terms"):
         st.markdown(TERMS)

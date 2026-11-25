@@ -64,6 +64,12 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
     - the Run Pipeline stage cards no longer overflow
     - a signed-out link to a page such as `/activity` opens the sign-in screen instead of "Page not found"
     - Stop run and Resume run sit beside Run pipeline, which is grayed out while a run with the same data is going; other data lights it up, and it then stops the running run and starts the new one
+  - **Check of main after the release (#62):**
+    - Stop run and Resume run on a scenario run showed KeyError 'kind': the run's first stage rewrites scenario.json as {"scenario": recipe, ...}, and the new launch card read only the first form
+    - Line Replay: End reached the end, then jumped back. A timer tick in flight sent the slider's old position, which counted as a drag; slider changes while playing or just after a button are now ignored
+    - All runs chat: an answer citing a section that was not retrieved (another run's section) gets one more try with what was wrong, before it is withheld
+    - Ask Foresight: the examples sit right above the question bar, compact
+    - Privacy and Terms opened from the sign-in screen lead back to it
   - **Second phone check (#59):**
     - tapping the question bar or the Extended data dropdown no longer zooms the page (an iPhone zooms into text fields under 16 px)
     - a pinch on a 2D chart zooms it like the rest of the page (Plotly takes every touch on a 2D chart and has no pinch zoom; on a phone those charts are still pictures, 3D charts keep their own pinch)

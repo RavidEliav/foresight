@@ -222,8 +222,12 @@ section[data-testid="stSidebar"] {
   white-space: normal; vertical-align: top; }
 /* Ask Foresight: the conversation scrolls in a box that fills the window between the scope
    line and the examples above the question bar, so those stay in place */
+/* the examples right above the question bar, compact */
+.st-key-ask-bottom [data-testid="stButtonGroup"] button { min-height: 1.7rem;
+  padding: .1rem .6rem; }
+.st-key-ask-bottom [data-testid="stButtonGroup"] p { font-size: .8rem; }
 .st-key-chat-log, [data-testid="stLayoutWrapper"]:has(.st-key-chat-log) {
-  height: calc(100dvh - 32.5rem) !important; min-height: 12rem !important;
+  height: calc(100dvh - 27rem) !important; min-height: 12rem !important;
   max-height: none !important; flex: 0 0 auto !important; }
 @media (max-width: 640px) {
   [data-testid="stMainBlockContainer"] { padding: 1.4rem .75rem 2rem .75rem; }
@@ -234,7 +238,7 @@ section[data-testid="stSidebar"] {
   .st-key-kpis [data-testid="stMetricValue"] > div { font-size: 1.45rem; }
   [class*="st-key-card-"] { padding: .75rem .8rem; }
   .st-key-chat-log, [data-testid="stLayoutWrapper"]:has(.st-key-chat-log) {
-    height: calc(100dvh - 38rem) !important; }
+    height: calc(100dvh - 31.5rem) !important; }
   /* phone view: one screen per page (the pages draw one card with tabs, ui.phone) */
   /* an iPhone zooms the page into a text field under 16 px when it is tapped */
   [data-testid="stApp"] input, [data-testid="stApp"] textarea {

@@ -58,9 +58,15 @@ def render(run_dir: Path | None, settings: Settings) -> None:
             st.caption("Ask a question below, or pick an example.")
 
     turn = st.session_state.setdefault("example_turn", 0)
-    picked = st.pills("Examples", EXAMPLES_ALL if every else EXAMPLES,
-                      key=f"examples-{scope}-{turn}", label_visibility="collapsed")
-    question = st.chat_input("Ask about all runs" if every else "Ask about this run") or picked
+    # the examples sit right above the question bar: on a computer both in one box under the
+    # conversation (a chat input inside a container is not pinned to the window's bottom); on
+    # a phone both pinned to the bottom of the screen (Streamlit's bottom area, st.bottom)
+    with st.bottom if ui.phone() else st.container(), \
+            st.container(key="ask-bottom", gap="small"):
+        picked = st.pills("Examples", EXAMPLES_ALL if every else EXAMPLES,
+                          key=f"examples-{scope}-{turn}", label_visibility="collapsed")
+        prompt = "Ask about all runs" if every else "Ask about this run"
+        question = st.chat_input(prompt) or picked
     if picked:
         st.session_state["example_turn"] = turn + 1  # use a picked example only once
     if question:

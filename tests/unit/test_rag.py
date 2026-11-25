@@ -119,6 +119,30 @@ def test_uncited_or_refusing_llm_answers_become_the_refusal(run_dir, settings, m
     assert chat.ask("What was the model's PR-AUC?", run_dir, settings).refused
 
 
+def test_an_answer_with_a_wrong_citation_gets_one_more_try(run_dir, settings, monkeypatch):
+    """A model sometimes cites a section that was not retrieved; the answer is asked for once
+    more, with what was wrong, before it is withheld."""
+    good = "The PR-AUC was 0.085 [source: engineering_report.md § Supporting statistical evidence]."
+    drafts = ["The PR-AUC was 0.085 [source: insights.md § Data quality].", good]
+    prompts = []
+
+    def complete(_settings, _system, prompt):
+        prompts.append(prompt)
+        return drafts[len(prompts) - 1], {"total_tokens": 10}
+
+    monkeypatch.setattr(chat, "complete", complete)
+    real = settings.model_copy(update={"mock_llm": False})
+    result = chat.ask("What was the model's PR-AUC?", run_dir, real)
+    assert not result.refused and result.answer == good
+    assert "Your previous answer was withheld because it cited" in prompts[1]
+    assert result.usage["total_tokens"] == 20  # both calls count
+
+    drafts[1] = drafts[0]  # wrong twice: withheld
+    prompts.clear()
+    result = chat.ask("What was the model's PR-AUC?", run_dir, real)
+    assert result.refused and result.reason.startswith("answer withheld") and len(prompts) == 2
+
+
 def test_citations_must_name_retrieved_sections_and_cover_every_paragraph():
     from foresight.rag.index import Hit
 

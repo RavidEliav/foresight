@@ -25,3 +25,6 @@ tags: [decision, rag, supabase]
 ## Consequences
 - Live on `dev`: SECOM runs at PR-AUC 0.085 compared with an uploaded run at 0.104, each statement cited with its run; an off-topic question was refused without an LLM call.
 - Limitation: a summary sentence without numbers can still generalize more than its cited lines ("Yes, in every run").
+
+## Update (2026-11-25, #62)
+On `main`, "Did the data pass the Data Contract in every run?" was withheld once: the model cited one run's section under another run's id, which was not retrieved; asked again, it answered. A draft that fails the citation check now gets one more try, told what was wrong, before it is withheld.

@@ -238,7 +238,7 @@ section[data-testid="stSidebar"] {
   .st-key-kpis [data-testid="stMetricValue"] > div { font-size: 1.45rem; }
   [class*="st-key-card-"] { padding: .75rem .8rem; }
   .st-key-chat-log, [data-testid="stLayoutWrapper"]:has(.st-key-chat-log) {
-    height: calc(100dvh - 27.5rem) !important; }
+    height: calc(100dvh - 31.5rem) !important; }
   /* phone view: one screen per page (the pages draw one card with tabs, ui.phone) */
   /* an iPhone zooms the page into a text field under 16 px when it is tapped */
   [data-testid="stApp"] input, [data-testid="stApp"] textarea {

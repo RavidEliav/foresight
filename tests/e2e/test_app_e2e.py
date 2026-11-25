@@ -145,8 +145,9 @@ def test_e8_line_replay_plays_the_reference_test_period(app_page: Page):  # need
 
 
 # Phase 8.7: the main part of every page (above Extended data and technical details) fits the
-# browser window of a laptop (1920x1080 at 125%: about 1536x730), and on a phone the title,
-# the headline numbers and the start of the main content are on the first screen.
+# browser window of a laptop (1920x1080 at 125%: about 1536x730). A phone's browser gets the
+# phone view (one card with tabs, lower charts), and the whole page fits an iPhone's Safari
+# with its bars shown (390x664).
 FIT = r"""() => {
   const content = document.querySelector(
     '[data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]');
@@ -156,35 +157,39 @@ FIT = r"""() => {
     if (['extended data', 'technical details', 'run history', 'your runs']
         .some(x => label.includes(x))) { fold = Math.min(fold, e.getBoundingClientRect().top); }
   }
-  const kpis = document.querySelector('.st-key-kpis');
-  return {main: fold, headline: kpis ? kpis.getBoundingClientRect().bottom : 0,
+  return {main: fold, page: content.getBoundingClientRect().bottom,
           screen: window.innerHeight};
 }"""
+PHONE_AGENT = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
+               "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
 PATHS = {"Run Pipeline": "", "Data Quality": "data-quality", "EDA & Insights": "eda",
          "Model": "model", "Investigation & Report": "report", "Line Replay": "replay",
          "Trends": "trends", "Ask Foresight": "ask", "My activity": "activity",
          "Users & access": "users"}
 
 
-@pytest.mark.parametrize(("width", "height"), [(1536, 730), (390, 844)])
-def test_e9_every_page_fits_one_screen(app_page: Page, app_url, width, height):
-    app_page.set_viewport_size({"width": width, "height": height})
+@pytest.mark.parametrize(("width", "height"), [(1536, 730), (390, 664)])
+def test_e9_every_page_fits_one_screen(browser, app_url, width, height):
     phone = width <= 640
+    context = browser.new_context(viewport={"width": width, "height": height},
+                                  is_mobile=phone, has_touch=phone,
+                                  user_agent=PHONE_AGENT if phone else None)
+    page = context.new_page()
     too_tall = {}
     for title, path in PATHS.items():
-        app_page.goto(f"{app_url.rstrip('/')}/{path}")
-        expect(app_page.get_by_role("heading", name=title, level=1)).to_be_visible(
-            timeout=60_000)
-        expect(app_page.get_by_test_id("stStatusWidget")).to_have_count(0, timeout=60_000)
-        app_page.wait_for_timeout(1500)  # charts take their height
-        m = app_page.evaluate(FIT)
-        # a phone stacks the cards: there the title, the headline numbers and the start of
-        # what follows (100 px) must be on the first screen
-        measured, limit = (m["headline"], m["screen"] - 100) if phone else (m["main"],
-                                                                            m["screen"])
-        if measured > limit:
+        page.goto(f"{app_url.rstrip('/')}/{path}")
+        expect(page.get_by_role("heading", name=title, level=1)).to_be_visible(timeout=60_000)
+        expect(page.get_by_test_id("stStatusWidget")).to_have_count(0, timeout=60_000)
+        page.wait_for_timeout(1500)  # charts take their height
+        m = page.evaluate(FIT)
+        measured = m["page"] if phone else m["main"]
+        if measured > m["screen"]:
             too_tall[title] = round(measured)
     assert not too_tall, f"taller than the screen at {width}x{height}: {too_tall}"
+    if phone:  # the "Hi, name" menu opens with a tap (Streamlit's header lay over it)
+        page.get_by_test_id("stPopover").get_by_role("button").tap()
+        expect(page.get_by_text("My activity").last).to_be_visible(timeout=10_000)
+    context.close()
 
 
 
@@ -223,7 +228,8 @@ def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_pa
     _broken_csv(upload)
     app_page.get_by_text("Upload a CSV").click()
     app_page.get_by_test_id("stFileUploaderDropzoneInput").set_input_files(str(upload))
-    expect(app_page.get_by_text("broken.csv")).to_be_visible(timeout=30_000)
+    expect(app_page.get_by_test_id("stFileChipName").filter(has_text="broken.csv")  # the chip
+           ).to_be_visible(timeout=30_000)
     app_page.get_by_role("button", name="Run pipeline").click()
 
     expect(app_page.get_by_test_id("stAlertContentError").filter(

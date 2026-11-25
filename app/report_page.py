@@ -40,7 +40,8 @@ def render(run_dir: Path | None) -> None:
 
     # Phase 8.7: the main part is the headline and one tab at a time, so it fits a screen
     names = ([SCENARIO_TAB] if scenario else []) + MAIN_TABS
-    tabs = dict(zip(names, st.tabs(names), strict=True))
+    # in a keyed box: on a phone its tabs get a lower height than other pages' (ui.STYLE)
+    tabs = dict(zip(names, st.container(key="report-main").tabs(names), strict=True))
     if scenario:
         with tabs[SCENARIO_TAB]:
             _render_scenario(scenario)
@@ -155,7 +156,7 @@ def _render_wafer(run_dir: Path) -> None:
         left, right = st.columns([1, 2], gap="medium")
         with left:
             run_id = st.selectbox("Run (riskiest first)", list(rows), format_func=describe,
-                                  key="wafer-run")
+                                  key="wafer-run", filter_mode=ui.search())
             st.caption("The Line Replay page plays the whole test period with a wafer for "
                        "each run.")
         with right:

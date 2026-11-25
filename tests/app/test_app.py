@@ -126,6 +126,8 @@ def test_stage_tile_matches_its_crew_line(tmp_path):
     from foresight.progress import ProgressTracker
 
     tracker = ProgressTracker.create(tmp_path, "r")
+    first = stepper_html(tracker.progress).split('<div class="fs-stage ')[1]
+    assert first.startswith("fs-running") and "starting" in first  # the process starts up
     tracker.running()
     tracker.stage_started("analyze")
     tracker.crew("analyst", "running")
@@ -227,9 +229,10 @@ def test_a_running_run_can_be_stopped_then_resumed(monkeypatch):
 
     at = _app()
     assert any("is running" in i.value for i in at.info)
+    assert at.button(key="run").disabled  # the same data is running: grayed out
     at.button(key="stop").click().run()
     assert jobs.stop_requested(run_dir)
-    assert any("Stopping the run" in c.value for c in at.caption)
+    assert at.button(key="stopping").disabled  # "Stopping the run..." beside Run pipeline
 
     tracker.finish("stopped", "stopped by the user")  # what the run's process does
     resumed = []
@@ -241,6 +244,41 @@ def test_a_running_run_can_be_stopped_then_resumed(monkeypatch):
     assert at.button(key="continue").label == "Resume run"
     at.button(key="continue").click().run()
     assert resumed == [run_id]
+
+
+def test_other_data_lights_run_pipeline_up_and_replaces_the_running_run(monkeypatch):
+    """While a run is going, Run pipeline is grayed out for the same data. Other data lights
+    it up again: it stops the running run (which can be resumed later) and starts the new
+    one."""
+    from foresight.progress import ProgressTracker, load_progress
+    from foresight.settings import load_settings
+
+    settings = load_settings()
+    run_id = "20260101T000000000000Z"
+    run_dir = jobs.runs_dir(settings) / run_id
+    tracker = ProgressTracker.create(run_dir, run_id)
+    tracker.running()
+    tracker.stage_started("ingest")
+    started = []
+
+    def stop(_settings, rid, user=""):  # what the run's process does when asked to stop
+        assert rid == run_id
+        tracker.finish("stopped", "stopped by the user")
+
+    monkeypatch.setattr(jobs, "stop_run", stop)
+    monkeypatch.setattr(jobs, "start_run", lambda *a, **k: started.append(a) or "r2")
+
+    at = _app()
+    assert at.button(key="run").disabled
+    at.radio(key="source").set_value("Scenario (synthetic)").run()
+    assert not at.button(key="run").disabled  # other data: Run pipeline lights up
+    at.radio(key="source").set_value("SECOM (UCI, built in)").run()
+    assert at.button(key="run").disabled  # back to the running run's data
+    at.radio(key="source").set_value("Scenario (synthetic)").run()
+    at.button(key="run").click().run()
+    assert not at.exception
+    assert load_progress(run_dir).status == "stopped"
+    assert started and started[0][3]["kind"]  # the scenario run started
 
 
 def test_an_archived_run_is_loaded_again_when_picked(monkeypatch):

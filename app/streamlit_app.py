@@ -68,6 +68,7 @@ def _run_selector() -> Path | None:
     if not st.session_state.get(PINNED_KEY) or st.session_state.get(VIEW_KEY) not in options:
         st.session_state[VIEW_KEY] = options[0]  # follow the newest run until one is picked
     choice = st.sidebar.selectbox("Results shown", options, key=VIEW_KEY,
+                                  filter_mode=ui.search(),  # a phone: a tap opens the list
                                   format_func=lambda p: describe_run(Path(p)),
                                   help="The run whose results the pages show. Times are in "
                                        "your local time zone.",
@@ -152,6 +153,23 @@ def gate_page() -> None:
     auth.gate_page(settings, SESSION, PRIVACY, TERMS)
 
 
+def developer_only_page() -> None:
+    ui.page_header("For developers")
+    st.info("This page is part of the developer view. Choose a page in the menu.",
+            icon=":material/lock:")
+
+
+# Every page's address, so a saved link or a home-screen shortcut opens the app (signed out:
+# the sign-in screen; a developer page for a user: a note) instead of "Page not found"
+PATHS = ["data-quality", "eda", "model", "report", "replay", "trends", "ask", "activity",
+         "users"]
+DEVELOPER_PATHS = ["trends", "users"]
+
+
+def _placeholders(page, paths: list[str]) -> list:
+    return [st.Page(page, title="Foresight", url_path=path) for path in paths]
+
+
 # Public pages: Google's sign-in screen links to Privacy and Terms, and the access-request
 # email links to Review (a signed link, Phase 8.6)
 PRIVACY = st.Page(legal_page.privacy, title="Privacy", icon=":material/shield:",
@@ -164,7 +182,8 @@ PUBLIC = [PRIVACY, TERMS, REVIEW]
 SESSION = auth.session(settings)
 if SESSION.status != "ok":  # sign in, ask for access or wait for approval
     navigation = st.navigation([st.Page(gate_page, title="Sign in", icon=":material/login:",
-                                        default=True), *PUBLIC], position="hidden")
+                                        default=True), *PUBLIC, *_placeholders(gate_page, PATHS)],
+                               position="hidden")
     ui.brand()
     navigation.run()
     st.stop()
@@ -193,7 +212,9 @@ MENU = [
 ]
 # Streamlit draws its own page menu above everything else in the sidebar; it is hidden so that
 # the brand comes first and the menu is drawn with page links (ui.sidebar_nav).
-navigation = st.navigation([*MENU, *PUBLIC], position="hidden")
+navigation = st.navigation(
+    [*MENU, *PUBLIC, *([] if VIEWER.developer else
+                       _placeholders(developer_only_page, DEVELOPER_PATHS))], position="hidden")
 ui.brand()
 if VIEWER.developer:
     ui.environment_badge(settings)

@@ -158,6 +158,8 @@ section[data-testid="stSidebar"] {
 .fs-gate-error, .fs-gate-error::after { background: #F87171 !important; }
 .fs-art { width: 100%; height: 46px; margin: .1rem 0 .15rem 0; }
 @keyframes fs-spin { to { transform: rotate(360deg); } }
+@keyframes fs-spin-row { from { transform: translateY(-50%) rotate(0deg); }
+  to { transform: translateY(-50%) rotate(360deg); } }  /* a phone: the badge is centered */
 @keyframes fs-glow {
   50% { box-shadow: var(--fs-glass-shadow), 0 0 26px -4px rgba(34,211,238,.6); } }
 @keyframes fs-blink { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
@@ -201,6 +203,11 @@ section[data-testid="stSidebar"] {
 [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] {
   position: relative; }
 .st-key-topbar [data-testid="stPopover"] button p { font-weight: 600; color: #E2E8F0; }
+/* Streamlit's header is a transparent strip over the top of the page; on a phone it lay over
+   the "Hi, name" menu and took its taps. Only its own buttons take taps now. */
+[data-testid="stHeader"], [data-testid="stHeader"] * { pointer-events: none; }
+[data-testid="stHeader"] button, [data-testid="stHeader"] button *,
+[data-testid="stHeader"] a { pointer-events: auto; }
 .fs-gap { height: .4rem; }
 /* Phase 8.7: one screen per page. Less space above the title, compact headline tiles, and
    tables whose long text wraps instead of being cut off. */
@@ -228,6 +235,51 @@ section[data-testid="stSidebar"] {
   [class*="st-key-card-"] { padding: .75rem .8rem; }
   .st-key-chat-log, [data-testid="stLayoutWrapper"]:has(.st-key-chat-log) {
     height: calc(100dvh - 38rem) !important; }
+  /* phone view: one screen per page (the pages draw one card with tabs, ui.phone) */
+  /* an iPhone zooms the page into a text field under 16 px when it is tapped */
+  [data-testid="stApp"] input, [data-testid="stApp"] textarea {
+    font-size: 16px !important; }
+  [data-testid="stMainBlockContainer"] { padding-top: 2.2rem; }
+  [data-testid="stMain"] h1 { font-size: 1.4rem; padding: 0 0 .15rem 0; }
+  [data-testid="stMainBlockContainer"] [data-testid="stCaptionContainer"] { font-size: .7rem; }
+  [data-testid="stMainBlockContainer"] [data-testid="stVerticalBlock"] { gap: .55rem; }
+  .st-key-kpis [data-testid="stHorizontalBlock"] { gap: .4rem; }
+  .st-key-kpis [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"]:nth-child(5))
+    > [data-testid="stColumn"] { flex: 1 1 30% !important; min-width: 30% !important; }
+  .st-key-kpis [data-testid="stMetric"] { padding: .3rem .5rem; }
+  .st-key-kpis [data-testid="stMetricLabel"] p { font-size: .62rem; }
+  .st-key-kpis [data-testid="stMetricValue"] > div { font-size: 1.05rem; }
+  .st-key-kpis [data-testid="stMetricDelta"] { font-size: .64rem; padding: 0 .3rem; }
+  [class*="st-key-card-"] { padding: .55rem .65rem; }
+  [data-baseweb="tab"] p { font-size: .82rem; }
+  /* a long tab scrolls inside its card, so the page itself fits */
+  [data-testid="stMainBlockContainer"] [data-testid="stTabPanel"] {
+    max-height: max(13rem, calc(100dvh - 26rem)); overflow-y: auto; }
+  .st-key-report-main [data-testid="stTabPanel"] {
+    max-height: max(11rem, calc(100dvh - 31rem)); }
+  .st-key-card-cleaning { max-height: max(12rem, calc(100dvh - 30rem)); overflow-y: auto; }
+  /* Run Pipeline: the stages as one-line rows */
+  .fs-stepper { flex-direction: column; gap: .3rem; }
+  .fs-link { display: none; }
+  .fs-stage { flex-direction: row; align-items: center; gap: .6rem; padding: .4rem .6rem; }
+  .fs-art { flex: 0 0 40px; width: 40px; height: 26px; margin: 0; }
+  .fs-stage-title { flex: 1 1 auto; font-size: .8rem; padding-right: 0; }
+  .fs-stage-crew { display: none; }
+  .fs-stage-meta { margin: 0 1.7rem 0 0; white-space: nowrap; font-size: .7rem; }
+  .fs-badge { top: 50%; transform: translateY(-50%); width: 18px; height: 18px; }
+  .fs-running .fs-badge { animation: fs-spin-row .9s linear infinite; }
+  /* Line Replay: the four buttons on one line (icons only), the speed under them */
+  .st-key-card-replay-controls [data-testid="stHorizontalBlock"] { flex-wrap: wrap;
+    gap: .35rem; }
+  .st-key-card-replay-controls [data-testid="stColumn"] { flex: 1 1 18% !important;
+    min-width: 18% !important; }
+  .st-key-card-replay-controls [data-testid="stColumn"]:last-child {
+    flex: 1 1 100% !important; min-width: 100% !important; }
+  .st-key-card-replay-controls [data-testid="stSliderThumbValue"] { display: none; }
+  .st-key-card-replay-controls { padding-top: .45rem; padding-bottom: .2rem; }
+  .st-key-card-replay-controls [data-testid="stSlider"] { margin-top: -.9rem; }
+  .st-key-card-replay-controls [data-testid="stColumn"]:not(:last-child) button
+    [data-testid="stMarkdownContainer"] { display: none; }
 }
 </style>
 """
@@ -296,10 +348,57 @@ def section_label(text: str) -> None:
 
 def extended(labels: list[str], key: str) -> str | None:
     """Extended data: a row of tabs that are all closed until one is pressed (pressing it
-    again closes it). Returns the open tab's label; only that tab is drawn."""
+    again closes it). Returns the open tab's label; only that tab is drawn. On a phone, one
+    dropdown, so the page fits the screen."""
+    if phone():
+        return st.selectbox("Extended data", labels, index=None, key=f"extended-{key}",
+                            placeholder="Extended data", label_visibility="collapsed",
+                            filter_mode=None)
     section_label("Extended data")
     return st.segmented_control("Extended data", labels, key=f"extended-{key}",
                                 label_visibility="collapsed")
+
+
+def phone() -> bool:
+    """A phone's browser (its user agent says Mobile, or iPhone): the pages put their cards
+    into one card with tabs, and charts are lower, so a page fits the phone's screen."""
+    try:
+        agent = st.context.headers.get("User-Agent") or ""
+    except Exception:  # no browser (tests, bare mode)
+        return False
+    return "Mobi" in agent or "iPhone" in agent
+
+
+def search() -> str | None:
+    """A long dropdown's search: typing filters it on a computer. On a phone a tap opened the
+    keyboard to type instead of the list, so there it only opens the list (None)."""
+    return None if phone() else "fuzzy"
+
+
+def cards(groups: list[list[tuple]], key: str, widths: list[int] | None = None) -> None:
+    """The main cards of a page. ``groups`` are lists of (label, draw) or (label, draw,
+    short label). On a computer each group is a card, side by side: a group of one is a card
+    under its label, a group of several a card with tabs. On a phone every item is a tab of
+    one card (with the short label), so the page fits the screen."""
+    if phone():
+        items = [item for group in groups for item in group]
+        with st.container(key=f"card-tabs-{key}"):
+            for item, tab in zip(items, st.tabs([i[2] if len(i) > 2 else i[0] for i in items]),
+                                 strict=True):
+                with tab:
+                    item[1]()
+        return
+    columns = st.columns(widths or [1] * len(groups), gap="medium")
+    for i, (column, group) in enumerate(zip(columns, groups, strict=True)):
+        if len(group) == 1:
+            with column, st.container(key=f"card-{key}-{i}", height="stretch"):
+                label(group[0][0])
+                group[0][1]()
+            continue
+        with column, st.container(key=f"card-tabs-{key}-{i}", height="stretch"):
+            for item, tab in zip(group, st.tabs([item[0] for item in group]), strict=True):
+                with tab:
+                    item[1]()
 
 
 def kpis(items: list[tuple[str, str, str | None, str | None]]) -> None:

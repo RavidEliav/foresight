@@ -355,9 +355,11 @@ def run_report_button(run_dir: Path) -> None:
     that run in one PDF (Phase 8.8; the one place for it). The PDF is made when the button is
     pressed, not on every page."""
     from app import store
+    from app.runs import local_zone
 
+    zone = local_zone()  # read now: the PDF is made outside the page run, without the browser
     st.sidebar.download_button(
-        "Download full run report", data=lambda: store.run_report(run_dir),
+        "Download full run report", data=lambda: store.run_report(run_dir, zone),
         file_name=f"foresight-run-report-{run_dir.name}.pdf", mime="application/pdf",
         key="run-report", icon=":material/picture_as_pdf:", width="stretch", type="primary",
         help="Every result page of this run in one PDF: Data Quality, EDA & Insights, Model, "

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 
 from fpdf import FPDF
@@ -41,6 +41,17 @@ def _when(value: str | None) -> datetime | None:
         return datetime.fromisoformat(value).astimezone(UTC) if value else None
     except ValueError:
         return None
+
+
+def _shown(moment: datetime, zone: tzinfo, with_zone: bool = False) -> str:
+    """A time in the reader's zone, like the app shows it; UTC says so. ``with_zone`` names
+    the zone, so a forwarded report stays clear."""
+    local = moment.astimezone(zone)
+    text = local.strftime("%d %b %Y, %H:%M")
+    if zone is UTC:
+        return text + " UTC"
+    return f"{text} ({getattr(zone, 'key', None) or local.strftime('%Z')})" if with_zone \
+        else text
 
 
 def _run_time(run_id: str) -> datetime | None:
@@ -459,7 +470,8 @@ def _appendix(pdf: _Report, run_dir: Path, manifest: dict | None) -> None:
         pdf.grid(None, rows, (32, 142), 8)
 
 
-def _facts(run_dir: Path, manifest: dict | None, progress: dict | None) -> dict:
+def _facts(run_dir: Path, manifest: dict | None, progress: dict | None,
+           zone: tzinfo = UTC) -> dict:
     """The cover's facts and the numbers at a glance."""
     run_id = run_dir.name
     dataset = (progress or {}).get("dataset") or "SECOM (UCI)"
@@ -472,7 +484,7 @@ def _facts(run_dir: Path, manifest: dict | None, progress: dict | None) -> dict:
             else run_id)
     rows = [["Run", name],
             ["Dataset", dataset],
-            ["Started", started.strftime("%d %b %Y, %H:%M UTC") if started else "n/a"]]
+            ["Started", _shown(started, zone, with_zone=True) if started else "n/a"]]
     if started and finished:
         rows.append(["Run time", f"{(finished - started).total_seconds() / 60:.1f} min"])
     if metrics:
@@ -505,17 +517,18 @@ def _facts(run_dir: Path, manifest: dict | None, progress: dict | None) -> dict:
         if "fails_found" in test:
             glance.append(("Failing runs caught", f"{test['fails_found']} of "
                            f"{test['fails_total']}", f"with {test['alarms']} alarms"))
-    label = f"{dataset} · {started.strftime('%d %b %Y, %H:%M UTC')}" if started else dataset
+    label = f"{dataset} · {_shown(started, zone)}" if started else dataset
     return {"rows": rows, "glance": glance, "synthetic": dataset.startswith("Scenario"),
             "created": finished or started, "label": label}
 
 
-def build(run_dir: Path) -> bytes:
-    """The run report of ``run_dir`` as PDF bytes."""
+def build(run_dir: Path, zone: tzinfo = UTC) -> bytes:
+    """The run report of ``run_dir`` as PDF bytes, with its times in ``zone`` (the reader's,
+    as in the app; the saved report uses UTC)."""
     run_dir = Path(run_dir)
     manifest = _json(run_dir, "run_manifest.json")
     progress = _json(run_dir, "progress.json")
-    facts = _facts(run_dir, manifest, progress)
+    facts = _facts(run_dir, manifest, progress, zone)
     pdf = _Report(facts["label"])
     if facts["created"]:
         pdf.set_creation_date(facts["created"])  # the same run gives the same file

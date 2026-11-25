@@ -272,7 +272,7 @@ section[data-testid="stSidebar"] {
   .fs-stage-meta { margin: 0 1.7rem 0 0; white-space: nowrap; font-size: .7rem; }
   .fs-badge { top: 50%; transform: translateY(-50%); width: 18px; height: 18px; }
   .fs-running .fs-badge { animation: fs-spin-row .9s linear infinite; }
-  /* Line Replay: the four buttons on one line (icons only), the speed under them */
+  /* Line Replay: the four buttons on one line (short words), the speed under them */
   .st-key-card-replay-controls [data-testid="stHorizontalBlock"] { flex-wrap: wrap;
     gap: .35rem; }
   .st-key-card-replay-controls [data-testid="stColumn"] { flex: 1 1 18% !important;
@@ -282,8 +282,8 @@ section[data-testid="stSidebar"] {
   .st-key-card-replay-controls [data-testid="stSliderThumbValue"] { display: none; }
   .st-key-card-replay-controls { padding-top: .45rem; padding-bottom: .2rem; }
   .st-key-card-replay-controls [data-testid="stSlider"] { margin-top: -.9rem; }
-  .st-key-card-replay-controls [data-testid="stColumn"]:not(:last-child) button
-    [data-testid="stMarkdownContainer"] { display: none; }
+  .st-key-card-replay-controls [data-testid="stColumn"]:not(:last-child) button p {
+    font-size: .8rem; }  /* short words, no icons (replay_page) */
 }
 </style>
 """

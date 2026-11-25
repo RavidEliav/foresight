@@ -25,11 +25,15 @@ PIN_MINUTES = 30  # an interrupted run stays at the top this long after it went 
 
 def render(settings: Settings, results_page=None) -> None:
     ui.page_header("Run Pipeline")
-    st.caption("Validate the data, analyze it, investigate failures and write the report. "
-               "Runs continue in the background: you can refresh or leave this page.")
+    st.caption("Validate the data, analyze it, investigate failures, write the report.",
+               help="Runs continue in the background: you can refresh or leave this page.")
 
-    with st.container(key="card-launch"):
-        ui.label("Start a run")
+    # on a phone, while a run is going (one at a time), the launch card folds away so the
+    # run's progress fits the screen
+    folded = ui.phone() and store.active_run(settings) is not None
+    with st.expander("Start a run") if folded else st.container(key="card-launch"):
+        if not folded:
+            ui.label("Start a run")
         source = st.radio("Dataset", [SECOM, UPLOAD, SCENARIO], key="source", horizontal=True,
                           label_visibility="collapsed")  # the card's label says it
         upload = scenario = None

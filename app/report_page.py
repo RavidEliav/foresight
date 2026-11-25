@@ -40,7 +40,8 @@ def render(run_dir: Path | None) -> None:
 
     # Phase 8.7: the main part is the headline and one tab at a time, so it fits a screen
     names = ([SCENARIO_TAB] if scenario else []) + MAIN_TABS
-    tabs = dict(zip(names, st.tabs(names), strict=True))
+    # in a keyed box: on a phone its tabs get a lower height than other pages' (ui.STYLE)
+    tabs = dict(zip(names, st.container(key="report-main").tabs(names), strict=True))
     if scenario:
         with tabs[SCENARIO_TAB]:
             _render_scenario(scenario)

@@ -27,23 +27,23 @@ def render(run_dir: Path | None) -> None:
         ("Sensors differ (q<0.05)", str(eda["significant_features_q_below_0.05"]), None,
          "Mann-Whitney U test, failing vs passing runs, Benjamini-Hochberg corrected"),
     ])
-    # Phase 8.7: the crew's insights beside one chart card with tabs, so the page fits a screen
-    insights = store.exists(run_dir, "insights.md")
-    left, right = st.columns([2, 3], gap="medium") if insights else (None, st.container())
-    if insights:
-        with left, st.container(key="card-insights", height="stretch"):
-            ui.label("Insights from the Data Analyst crew")
-            _summary_section(run_dir)
-    with right, st.container(key="card-tabs-eda", height="stretch"):
-        rate, sensors = st.tabs(["Fail rate over time", "Sensors that differ"])
-        with rate:
-            charts.weekly_fail_rate(eda)
-            months = ", ".join(f"{m}: {r:.1%}" for m, r in eda["monthly_fail_rate"].items())
-            st.caption(f"By month: {months}")
-        with sensors:
-            charts.sensor_differences(eda)
-            st.caption("Sensors that differ between failing and passing runs. A difference is "
-                       "a correlation, not a cause. Sensor names are anonymized.")
+    def rate() -> None:
+        charts.weekly_fail_rate(eda)
+        months = ", ".join(f"{m}: {r:.1%}" for m, r in eda["monthly_fail_rate"].items())
+        st.caption(f"By month: {months}")
+
+    def sensors() -> None:
+        charts.sensor_differences(eda)
+        st.caption("Sensors that differ between failing and passing runs. A difference is "
+                   "a correlation, not a cause. Sensor names are anonymized.")
+
+    # Phase 8.7: the crew's insights beside one chart card with tabs (on a phone, all tabs)
+    tabs = [("Fail rate over time", rate), ("Sensors that differ", sensors)]
+    if store.exists(run_dir, "insights.md"):
+        ui.cards([[("Insights from the Data Analyst crew", lambda: _summary_section(run_dir),
+                    "Insights")], tabs], "eda", widths=[2, 3])
+    else:
+        ui.cards([tabs], "eda")
 
     if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
         return

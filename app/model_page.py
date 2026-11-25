@@ -41,10 +41,7 @@ def render(run_dir: Path | None) -> None:
 
     cm = metrics["confusion_matrix"]
     fixed = metrics["test_metrics_fixed_threshold"]
-    # Phase 8.7: the selected model beside one chart card with tabs, so the page fits a screen
-    left, right = st.columns([2, 3], gap="medium")
-    with left, st.container(key="card-model-summary", height="stretch"):
-        ui.label("Selected model")
+    def summary() -> None:
         st.markdown(f"**`{metrics['selected_model']}`** · {op['rule']}.")
         st.markdown(f"On the test period it raised **{op['alarms_in_test']}** alarms: "
                     f"**{cm['tp']}** failing runs caught, **{cm['fn']}** missed, "
@@ -53,18 +50,16 @@ def render(run_dir: Path | None) -> None:
                     f"caught {fixed['recall_fail']:.0%} of failing runs.")
         st.caption("Drift moves the scores; the alarm budget adapts, a fixed threshold does "
                    "not.")
-    with right, st.container(key="card-tabs-model", height="stretch"):
-        risk, sensors, outcomes, curve = st.tabs(["Risk scores", "Important sensors",
-                                                  "Alarms vs outcomes", "Precision-recall"])
-        with risk:
-            charts.risk_over_time(run_dir, op.get("cutoff_probability_in_test"),
-                                  metrics.get("threshold"))
-        with sensors:
-            charts.importance(metrics)
-        with outcomes:
-            charts.confusion(cm)
-        with curve:
-            charts.pr_curve(run_dir, metrics["baseline_pr_auc"])
+
+    # Phase 8.7: the selected model beside one chart card with tabs (on a phone, all tabs)
+    ui.cards([[("Selected model", summary)],
+              [("Risk scores", lambda: charts.risk_over_time(
+                  run_dir, op.get("cutoff_probability_in_test"), metrics.get("threshold"))),
+               ("Important sensors", lambda: charts.importance(metrics)),
+               ("Alarms vs outcomes", lambda: charts.confusion(cm)),
+               ("Precision-recall", lambda: charts.pr_curve(run_dir,
+                                                            metrics["baseline_pr_auc"]))]],
+             "model", widths=[2, 3])
 
     if not ui.developer():  # Extended data is part of the developer view (Phase 8.6)
         return

@@ -96,22 +96,16 @@ def render(settings: Settings) -> None:
                     "(fixed seed); the lines move when the data changes.")
     _kpis(frame)
 
-    # Phase 8.7: two cards with two tabs each, so the page's main part fits one screen
-    left, right = st.columns(2, gap="medium")
-    with left, st.container(key="card-tabs-trend-quality", height="stretch"):
-        quality, tokens = st.tabs(["Model quality over runs", "LLM tokens per run"])
-        with quality:
-            charts.quality_trend(frame)
-        with tokens:
-            charts.tokens_trend(frame)
-    with right, st.container(key="card-tabs-trend-time", height="stretch"):
-        outcomes, time_tab = st.tabs(["Run outcomes", "Where the run time goes"])
-        with outcomes:
-            _outcomes(frame, settings.analytics.test_fraction)
-        with time_tab:
-            recent = frame.sort_values("when").tail(15)
-            charts.run_time_trend(recent, store.stage_history(settings, list(recent.run_id),
-                                                              source))
+    def run_time() -> None:
+        recent = frame.sort_values("when").tail(15)
+        charts.run_time_trend(recent, store.stage_history(settings, list(recent.run_id), source))
+
+    # Phase 8.7: two cards with two tabs each (on a phone, one card with four tabs)
+    ui.cards([[("Model quality over runs", lambda: charts.quality_trend(frame), "Model quality"),
+               ("LLM tokens per run", lambda: charts.tokens_trend(frame), "Tokens")],
+              [("Run outcomes", lambda: _outcomes(frame, settings.analytics.test_fraction),
+                "Outcomes"),
+               ("Where the run time goes", run_time, "Run time")]], "trends")
 
     if ui.extended(["Run table"], "trends") == "Run table":
         _table(frame.sort_values("when", ascending=False))

@@ -23,7 +23,10 @@ PAGES = {"run": "", "data-quality": "data-quality", "eda": "eda", "model": "mode
          "activity": "activity", "users": "users"}
 # The browser window, not the screen: a laptop at 1920x1080 with 125% scaling (the Windows
 # default) shows about 1536x730 under the browser bars; a desktop at 1920x1080, 1920x960.
-SCREENS = {"laptop": (1536, 730), "desktop": (1920, 960), "phone": (390, 844)}
+SCREENS = {"laptop": (1536, 730), "desktop": (1920, 960), "phone": (390, 844),
+           "phone-small": (390, 664)}  # an iPhone's Safari with its bars shown
+PHONE_AGENT = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
+               "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
 EXTRA = ("Extended data", "Technical details", "Run history", "Your runs")
 
 # Positions from the top of the page (it is not scrolled): the bottom of the content, and the
@@ -59,8 +62,10 @@ def main() -> int:
             browser = p.chromium.launch()
             print(f"{'page':<14}{'screen':<9}{'main':>6}{'page':>6}{'screen':>8}  fits")
             for screen, (width, height) in SCREENS.items():
+                phone = screen.startswith("phone")  # the app draws its phone view
                 page = browser.new_page(viewport={"width": width, "height": height},
-                                        is_mobile=screen == "phone")
+                                        is_mobile=phone, has_touch=phone,
+                                        user_agent=PHONE_AGENT if phone else None)
                 for name, path in PAGES.items():
                     page.goto(f"http://localhost:{PORT}/{path}")
                     page.wait_for_selector('[data-testid="stMainBlockContainer"]',
@@ -71,7 +76,9 @@ def main() -> int:
                         status.wait_for(state="detached", timeout=60_000)
                     page.wait_for_timeout(2000)
                     m = page.evaluate(MEASURE, list(EXTRA))
-                    fits = m["main"] <= m["screen"]
+                    # a phone shows the whole page on one screen (Extended data is a closed
+                    # row of tabs); a computer, the main part above the extra sections
+                    fits = (m["page"] if phone else m["main"]) <= m["screen"]
                     failures += not fits
                     print(f"{name:<14}{screen:<9}{m['main']:>6}{m['page']:>6}{m['screen']:>8}"
                           f"  {'yes' if fits else 'NO'}")

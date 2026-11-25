@@ -146,6 +146,9 @@ def test_a_wiped_volume_gets_its_stubs_back_from_the_registry(supabase):
 
 
 def test_an_interrupted_run_is_archived_with_its_cause(supabase, monkeypatch):
+    # "the app restarted": the run went quiet before this app started. Pin the start, so the
+    # test does not depend on how long the test session has been running (it took over 5 min)
+    monkeypatch.setattr(jobs, "SERVER_STARTED", datetime.now(UTC))
     settings = load_settings()
     folder = jobs.runs_dir(settings) / RUN
     tracker = ProgressTracker.create(folder, RUN)

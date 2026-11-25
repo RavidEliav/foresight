@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -164,6 +165,14 @@ def test_finished_run_shows_stages_gates_and_becomes_viewable(monkeypatch, secom
     at.run()  # the next rerun lists the new run first in the sidebar selector
     selector = at.sidebar.selectbox(key="view_run")
     assert Path(selector.value).parent == jobs.runs_dir(secom_env)
+    # Phase 8.8: the run saved its run report; it can be downloaded beside "See the results"
+    # and under the sidebar's run choice
+    run_dir = Path(selector.value)
+    assert (run_dir / "run_report.pdf").read_bytes().startswith(b"%PDF")
+    manifest = json.loads((run_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert "run_report.pdf" in manifest["artifacts"]
+    assert {"run-report-run-page", "run-report-sidebar"} <= {
+        b.key for b in at.get("download_button")}
 
 
 def test_failed_upload_run_lists_the_failed_data_checks(monkeypatch, secom_env, tmp_path):

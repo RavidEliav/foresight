@@ -79,6 +79,7 @@ def _run_selector() -> Path | None:
             if not store.ensure_full(settings, Path(choice)):
                 st.sidebar.warning("This run's files could not be loaded. Please try again in "
                                    "a minute.", icon=":material/cloud_off:")
+    ui.run_report_button(Path(choice), "sidebar", sidebar=True)  # the whole run in one PDF
     return Path(choice)
 
 

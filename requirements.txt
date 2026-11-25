@@ -1,5 +1,6 @@
 Authlib==1.9.10
 crewai==1.15.41
+fpdf2==2.9.0
 joblib==1.6.0
 matplotlib==3.11.2
 openai==2.54.0

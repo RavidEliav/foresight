@@ -46,6 +46,22 @@ def test_upload_without_a_file_is_rejected():
     assert any("Choose a CSV file" in err.value for err in at.error)
 
 
+def test_the_upload_template_is_always_offered():
+    """Phase 8.10: a small template from the repo, so it is there even before this server has
+    the SECOM files; it reads like an upload (the same loader)."""
+    from app.store import UPLOAD_TEMPLATE
+    from foresight.data.secom import N_FEATURES, load_csv
+
+    at = _app()
+    at.radio(key="source").set_value("Upload a CSV").run()
+    keys = [b.key for b in at.get("download_button")]
+    assert "upload-template" in keys and "upload-example" in keys
+    frame = load_csv(UPLOAD_TEMPLATE)
+    assert len(frame) == 10 and frame.shape[1] == 3 + N_FEATURES
+    assert sorted(frame["label_raw"].unique()) == [-1, 1]
+    assert frame["timestamp"].notna().all() and frame["timestamp"].is_monotonic_increasing
+
+
 def test_run_limit_is_explained(monkeypatch):
     def busy(*_args, **_kwargs):
         raise jobs.RunLimitError("Run X is still in progress.")

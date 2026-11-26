@@ -1,4 +1,5 @@
-"""Run Pipeline page: choose the data, start a background run, follow it live, see past runs."""
+"""New analysis page (was Run Pipeline): choose the data, start a background run, follow it
+live, see past runs. A run is an "analysis" to the reader (Phase 8.10)."""
 
 from __future__ import annotations
 
@@ -36,9 +37,10 @@ class _Upload:
 
 
 def render(settings: Settings, results_page=None) -> None:
-    ui.page_header("Run Pipeline")
-    st.caption("Validate the data, analyze it, investigate failures, write the report.",
-               help="Runs continue in the background: you can refresh or leave this page.")
+    ui.page_header("New analysis")
+    st.caption("Check the data, find what goes with failing runs, and get a cited report.",
+               help="An analysis continues in the background: you can refresh or leave this "
+                    "page.")
     if (pending := st.session_state.get(PENDING)) and store.active_run(settings) is None:
         del st.session_state[PENDING]  # the run it replaces has stopped: start it now
         _start(settings, pending["source"], pending["upload"], pending["scenario"])
@@ -58,8 +60,8 @@ def render(settings: Settings, results_page=None) -> None:
 
     _launch(settings, run_dir, progress)
     if someone_else:
-        st.info("Someone else's run is in progress. You can start yours when it finishes, in a "
-                "few minutes.", icon=":material/hourglass_top:")
+        st.info("Someone else's analysis is running. You can start yours when it finishes, "
+                "in a few minutes.", icon=":material/hourglass_top:")
     if error := st.session_state.pop(STOP_ERROR, None):
         ui.friendly_error(error)
     if progress is not None:
@@ -75,7 +77,7 @@ def _launch(settings: Settings, run_dir: Path | None, progress: RunProgress | No
     resumable = (progress is not None and not running and progress.status != "success"
                  and progress.can_continue)
     with st.container(key="card-launch"):
-        ui.label("Start a run")
+        ui.label("Start an analysis")
         if ui.phone():  # one line instead of three options on two lines
             source = st.selectbox("Dataset", [SECOM, UPLOAD, SCENARIO], key="source",
                                   label_visibility="collapsed", filter_mode=None)
@@ -92,30 +94,32 @@ def _launch(settings: Settings, run_dir: Path | None, progress: RunProgress | No
                        "through the same Data Contract checks as the built-in data.")
             template = store.upload_template(settings)
             if template is not None:
-                st.download_button("Download a template (SECOM in this format)", template,
+                st.download_button("Download a template (the SECOM data in this format)",
+                                   template,
                                    file_name="secom_upload_format.csv", mime="text/csv")
         same = running and _chosen(source, upload, scenario) == store.run_data(run_dir)
         pending = running and PENDING in st.session_state
         with st.container(key="launch-actions", horizontal=True, vertical_alignment="center"):
             clicked = st.button(
-                "Run pipeline", key="run", type="primary", disabled=same or pending,
-                help="The new run starts as soon as the current one has stopped." if pending
-                     else "A run with this data is in progress. Choose other data to stop it and "
-                          "run that instead." if same else
-                     "Stops the run in progress and starts this one." if running else None)
+                "Run analysis", key="run", type="primary", disabled=same or pending,
+                help="The new analysis starts as soon as the current one has stopped." if pending
+                     else "An analysis of this data is running. Choose other data to stop it "
+                          "and analyse that instead." if same else
+                     "Stops the analysis that is running and starts this one." if running
+                     else None)
             if running:
                 _stop_control(settings, progress, run_dir)
             elif resumable:
                 done = sum(s.reusable for s in progress.stages)
                 reused = (f"the {done} finished stage{'s' if done != 1 else ''}" if done
                           else "nothing (no stage had finished)")
-                if st.button("Resume run", key="continue", icon=":material/play_circle:",
+                if st.button("Resume analysis", key="continue", icon=":material/play_circle:",
                              help=f"Resume reuses {reused} and runs the rest. It counts toward "
                                   "the hourly run limit."):
                     _continue(settings, progress.run_id)
         if pending:
-            st.caption("Stopping the run in progress: the new run starts as soon as it has "
-                       "stopped (keep this page open).")
+            st.caption("Stopping the analysis that is running: the new one starts as soon as "
+                       "it has stopped (keep this page open).")
     if clicked:
         if running:
             _replace(settings, progress.run_id, source, upload, scenario)
@@ -192,9 +196,9 @@ def _start(settings: Settings, source: str, upload, scenario=None) -> None:
 
 def _not_written(exc: OSError, action: str) -> str:
     if exc.errno == errno.ENOSPC:
-        return (f"The run could not {action}: the server's storage is full. Please tell the "
+        return (f"The analysis could not {action}: the server's storage is full. Please tell the "
                 "developer.")
-    return (f"The run could not {action}: the server could not write its files "
+    return (f"The analysis could not {action}: the server could not write its files "
             f"({exc.strerror or type(exc).__name__}).")
 
 
@@ -257,16 +261,16 @@ def _live(run_dir: str) -> None:
 
 
 def _stop_control(settings: Settings, progress: RunProgress, run_dir: Path) -> None:
-    """Stop run, beside Run pipeline; grayed out as "Stopping the run" once pressed."""
+    """Stop analysis, beside Run analysis; grayed out as "Stopping..." once pressed."""
     if store.stop_requested(run_dir):
-        st.button("Stopping the run...", key="stopping", icon=":material/stop_circle:",
+        st.button("Stopping...", key="stopping", icon=":material/stop_circle:",
                   disabled=True, help="It records what it has finished and stops within a "
                                       "few seconds.")
     else:
-        st.button("Stop run", key="stop", icon=":material/stop_circle:", on_click=_stop,
+        st.button("Stop analysis", key="stop", icon=":material/stop_circle:", on_click=_stop,
                   args=(settings, progress.run_id),
-                  help="Stopping keeps the stages that have finished, so the run can be "
-                       "resumed later. You can then start a different run.")
+                  help="Stopping keeps the stages that have finished, so the analysis can be "
+                       "resumed later. You can then start a different one.")
 
 
 GATE_NAMES = {"data_contract": "Data Contract", "features_present": "Features",
@@ -280,7 +284,10 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
 
     status = progress.effective_status()
     took = _minutes(progress)
-    message = (f"Run {STATUS_TEXT.get(status, status)} · {progress.dataset} · started "
+    from app.runs import analysis_name
+
+    message = (f"{analysis_name(run_dir)} {STATUS_TEXT.get(status, status)} · {progress.dataset} · "
+               f"started "
                f"{local_time(progress.started_at)}"
                + (f" · {took} min" if took is not None and status not in ACTIVE else ""))
     if status in ACTIVE:
@@ -306,13 +313,13 @@ def _render_progress(progress: RunProgress, run_dir: Path, results_page=None,
 
     st.html(stepper_html(progress))
     if progress.gates:
-        st.markdown("Gates: " + " ".join(
+        st.markdown("Checks: " + " ".join(
             f":{ui.STATUS_COLORS.get(g['status'], 'gray')}-badge["
             f"{GATE_NAMES.get(g['gate'], g['gate'])}: {g['status']}]" for g in progress.gates))
 
     if status == "success":
         if results_page is not None:
-            st.page_link(results_page, label="See the results, starting with Data Quality",
+            st.page_link(results_page, label="See the results, starting with Data quality",
                          icon=":material/verified:")
     elif status not in ACTIVE and ui.developer():
         with st.expander("Technical details"):
@@ -339,13 +346,14 @@ def _show_failed_checks(run_dir: Path) -> None:
 
 def _history(settings: Settings) -> None:
     from app.messages import explain_failure
-    from app.runs import local_time
+    from app.runs import analysis_name, local_time
 
     developer = ui.developer()
     runs = store.all_runs(settings) if developer else store.runs_of(settings, ui.user_email())
     if not runs:
         return
-    with st.expander(f"Run history ({len(runs)})" if developer else f"Your runs ({len(runs)})"):
+    with st.expander(f"Analysis history ({len(runs)})" if developer
+                     else f"Your analyses ({len(runs)})"):
         rows = []
         for p in runs[:30]:
             folder = store.run_folder(settings, p.run_id)
@@ -358,6 +366,7 @@ def _history(settings: Settings) -> None:
             reason = ("" if status in (*ACTIVE, "success") else " ".join(
                 explain_failure(p, settings.analytics.test_fraction, cause)[0]))
             row = {
+                "analysis": analysis_name(folder),
                 "started": local_time(p.started_at, "%d %b, %H:%M"),
                 "dataset": p.dataset,
                 "status": status,

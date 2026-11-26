@@ -68,7 +68,7 @@ def test_users_see_the_results_without_the_extended_data(run_dir, module):
     assert user.get("metric") and len(user.get("metric")) == len(developer.get("metric"))
     if module == "app.report_page":
         assert [b.proto.label for b in user.get("download_button")] == [
-            "Download engineering_report.md"]
+            "Download the engineering report"]
         assert "Safety checks tab" not in " ".join(m.value for m in user.markdown)
 
 
@@ -200,9 +200,9 @@ def test_investigation_is_split_into_labelled_blocks(run_dir):
               if "-badge[" in md.value]
     assert [label for label in labels if label in sections] == [
         "Facts", "Assumptions", "Hypotheses", "Suggested verification"]
-    assert "Download investigation.md" in {b.label for b in at.get("download_button")}
+    assert "Download the investigation" in {b.label for b in at.get("download_button")}
     _open(at, "Engineering report")
-    assert "Download engineering_report.md" in {b.label for b in at.get("download_button")}
+    assert "Download the engineering report" in {b.label for b in at.get("download_button")}
 
 
 def test_model_page_shows_the_model_card(run_dir):
@@ -246,7 +246,9 @@ def test_ask_page_answers_with_citations_and_logs_who_asked(run_dir):
     at.chat_input[0].set_value("Which sensors differ between failing and passing runs?").run()
     assert not at.exception
     answers = [m for m in at.chat_message if m.name == "assistant"]
-    assert "[source: " in answers[-1].markdown[0].value
+    # Phase 8.10: the citation shows as a plain-name chip, not the tag
+    shown = answers[-1].markdown[0].value
+    assert ":gray-badge[" in shown and "[source:" not in shown and ".md" not in shown
     assert any(e.label.startswith("Sources") for e in answers[-1].expander)  # developer view
     asked = questions_by(load_settings(), "ada@example.com")
     assert asked[0]["question"].startswith("Which sensors") and asked[0]["run"] == run_dir.name
@@ -254,7 +256,7 @@ def test_ask_page_answers_with_citations_and_logs_who_asked(run_dir):
     user = _ask_page(run_dir, "user")
     user.chat_input[0].set_value("Which sensors differ between failing and passing runs?").run()
     answer = [m for m in user.chat_message if m.name == "assistant"][-1]
-    assert "[source: " in answer.markdown[0].value and not answer.expander  # no sources
+    assert ":gray-badge[" in answer.markdown[0].value and not answer.expander  # no sources
 
     at.chat_input[0].set_value("What is the capital of France?").run()
     answers = [m for m in at.chat_message if m.name == "assistant"]
@@ -266,7 +268,9 @@ def test_ask_page_answers_with_citations_and_logs_who_asked(run_dir):
     at.chat_input[0].set_value("What is the model's test PR-AUC?").run()
     assert not at.exception
     answer = [m for m in at.chat_message if m.name == "assistant"][-1]
-    assert "/" in answer.markdown[0].value and "[source: " in answer.markdown[0].value
+    # the run is named: the reference run has no number
+    assert ":gray-badge[Reference analysis › " in answer.markdown[0].value
+    assert "[source:" not in answer.markdown[0].value
     assert any(e.label.startswith("Sources") for e in answer.expander)
 
     # a question opened from the sidebar's history belongs to this run: the scope follows
@@ -301,8 +305,10 @@ def test_viewable_runs_are_successful_runs_then_the_reference(tmp_path, run_dir)
     found = viewable_runs(settings)
     assert [p.name for p in found] == ["20261116T120000000000Z", "20261116T100000000000Z",
                                       "reference"]
-    assert describe_run(found[0]) == "16 Nov, 12:00 UTC · SECOM"  # no browser zone in tests
-    assert describe_run(found[-1]) == "Reference run"
+    # Phase 8.10: an analysis by its number among all recorded (failed ones too), its data and
+    # its start (no browser zone in tests)
+    assert describe_run(found[0]) == "Analysis 3 · SECOM · 16 Nov, 12:00 UTC"
+    assert describe_run(found[-1]) == "Reference analysis · SECOM"
     settings.paths.runs_dir = settings.paths.reference_run_dir = tmp_path / "none"
     assert viewable_runs(settings) == []
 
@@ -349,7 +355,7 @@ def test_trends_page_reads_the_run_folders_without_supabase():
 
     at = AppTest.from_function(page, default_timeout=60).run()
     assert not at.exception
-    assert at.metric[0].label == "Runs recorded" and at.metric[0].value == "1"
+    assert at.metric[0].label == "Analyses recorded" and at.metric[0].value == "1"
     assert any("run folders on this server" in c.value for c in at.caption)
     assert "trend-quality" in [c.key for c in at.get("plotly_chart")]
     assert any("No stage times recorded yet." in c.value for c in at.caption)
@@ -403,7 +409,8 @@ def test_a_synthetic_run_is_labeled_and_shows_its_ground_truth(run_dir, tmp_path
                                                  "in_reports": True}]}))
     at = _render("app.report_page", scenario_run)
     assert not at.exception
-    assert "SYNTHETIC" in at.caption[0].value  # every result page's run line
+    assert "Synthetic" in at.caption[0].value  # every result page's run line (short)
+    assert "training data was changed on purpose" in at.caption[0].proto.help  # its tooltip
     assert any("named **1 of 1**" in m.value for m in at.markdown)
     assert any("11 of 112 training runs changed" in m.value for m in at.markdown)
     table = next(d.value for d in at.dataframe if "EDA rank" in d.value.columns)

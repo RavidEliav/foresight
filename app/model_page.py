@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app import charts, store, ui
-from app.runs import no_run, read_json, run_label, show_markdown_file
+from app.runs import cited, download, no_run, read_json, run_line, show_markdown_file
 
 METRICS = [("pr_auc", "PR-AUC"), ("recall_fail", "Fail recall"),
            ("precision_fail", "Precision"), ("balanced_accuracy", "Balanced accuracy")]
@@ -26,9 +26,10 @@ def render(run_dir: Path | None) -> None:
         return
 
     split = metrics["split"]
-    st.caption(f"{run_label(run_dir)} · trained on {split['train']['runs']} runs "
-               f"({split['train']['fails']} fails), tested on the next {split['test']['runs']} "
-               f"runs ({split['test']['fails']} fails) from {metrics['test_start'][:10]}")
+    run_line(run_dir, f"Trained on {split['train']['runs']} production runs "
+                      f"({split['train']['fails']} failing), tested on the next "
+                      f"{split['test']['runs']} ({split['test']['fails']} failing) from "
+                      f"{metrics['test_start'][:10]}.")
     op = metrics["operating_point"]
     tiles = []
     for key, label in METRICS:
@@ -78,9 +79,8 @@ def render(run_dir: Path | None) -> None:
     elif shown == "Evaluation report":
         report = store.read_text(run_dir, "evaluation_report.md")
         if report is not None:
-            st.markdown(report)
-            st.download_button("Download evaluation_report.md", report.encode("utf-8"),
-                               file_name="evaluation_report.md", mime="text/markdown")
+            st.markdown(cited(report))
+            download(run_dir, "evaluation_report.md")
     elif shown == "Model card" and not show_markdown_file(run_dir, "model_card.md",
-                                                          "Download model_card.md"):
+                                                          downloadable=True):
         st.info("No model card in this run.")

@@ -16,7 +16,7 @@ import pandas as pd
 import streamlit as st
 
 from app import charts, store, ui
-from app.runs import no_run, run_label
+from app.runs import no_run, run_line
 from app.wafer import NOTE, simulate
 
 RISK_FILE = "risk_scores.csv"
@@ -57,7 +57,7 @@ def totals(frame: pd.DataFrame, shown: int) -> dict:
 
 
 def render(run_dir: Path | None) -> None:
-    ui.page_header("Line Replay")
+    ui.page_header("Line replay")
     frame = load(run_dir) if run_dir else None
     if frame is None or frame.empty:
         if run_dir is None:
@@ -68,10 +68,10 @@ def render(run_dir: Path | None) -> None:
                     icon=":material/history:")
         return
 
-    st.caption(run_label(run_dir),
-               help="The test period run by run, with this run's own alarms: nothing is "
-                    "re-scored. Alarms are the riskiest share of the test period (the run's "
-                    "alarm budget), so the totals at the end match Investigation & Report.")
+    run_line(run_dir, "The test period production run by production run, with this "
+                      "analysis's own alarms: nothing is re-scored. Alarms are the riskiest "
+                      "share of the test period (the alarm budget), so the totals at the end "
+                      "match Findings.")
     state = st.session_state
     if state.get(SHOWN_RUN) != str(run_dir):  # another run: start from the beginning
         state[SHOWN_RUN], state[POS], state[PLAYING] = str(run_dir), 0, False
@@ -178,8 +178,8 @@ def _view(frame: pd.DataFrame, shown: int) -> None:
     ])
     if shown == n:
         st.success(f"Replay finished: {t['alarms']} alarms caught {t['caught']} of "
-                   f"{t['fails']} failing runs, the same totals as the Investigation & Report "
-                   "page.", icon=":material/flag:")
+                   f"{t['fails']} failing runs, the same totals as the Findings page.",
+                   icon=":material/flag:")
 
     alarms = frame.iloc[:shown]
     alarms = alarms[alarms.flagged == 1].iloc[::-1].head(8)

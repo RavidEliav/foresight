@@ -7,8 +7,9 @@ from pathlib import Path
 import streamlit as st
 
 from app import ui
-from app.runs import no_run, run_label
+from app.runs import cited, no_run, run_line
 from foresight.settings import Settings
+from foresight.sources import file_title
 
 EXAMPLES = ["What is the model's test PR-AUC?", "Which sensors differ most between failing "
             "and passing runs?", "What are the hypotheses and how confident are they?",
@@ -34,13 +35,13 @@ def render(run_dir: Path | None, settings: Settings) -> None:
                                  label_visibility="collapsed") or SCOPES[0]
     every = scope == "All runs"
     if every:
-        runs = "All recorded runs" if ui.developer() else "Your runs and the reference run"
-        st.caption(f"{runs} · answers come only from the runs' reports, say which run "
-                   "each statement is about and cite it; anything else gets \"Not found in the "
-                   "recorded runs.\"")
+        runs = "All analyses" if ui.developer() else "Your analyses and the reference analysis"
+        st.caption(runs, help="Answers come only from the analyses' reports, say which "
+                   "analysis each statement is about and show its sources; anything else gets "
+                   "\"Not found in the recorded runs.\"")
     else:
-        st.caption(f"{run_label(run_dir)} · answers come only from this run's reports and cite "
-                   "them; anything else gets \"Not found in this run's artifacts.\"")
+        run_line(run_dir, "Answers come only from this analysis's reports and show their "
+                          "sources; anything else gets \"Not found in this run's artifacts.\"")
 
     key = "all_runs" if every else str(run_dir)
     history: list[dict] = st.session_state.setdefault("chat", {}).setdefault(key, [])
@@ -101,7 +102,7 @@ def _show(item: dict) -> None:
     with st.chat_message("user"):
         st.markdown(item["question"])
     with st.chat_message("assistant", avatar=ui.LOGO_IMAGE):
-        st.markdown(item["answer"])
+        st.markdown(cited(item["answer"]))  # Phase 8.10: sources as plain-name chips
         if item.get("from_history"):
             from app.runs import local_time
 
@@ -114,7 +115,20 @@ def _show(item: dict) -> None:
                     if isinstance(s, str):  # logged answers keep "file § section (score)"
                         st.markdown(f"**{s}**")
                         continue
-                    run = f"{s['run']} · " if s.get("run") else ""
-                    st.markdown(f"**{run}{s['file']} § {s['section']}** · similarity "
-                                f"{s['score']:.2f}")
+                    run = f"{_run_name(s['run'])} › " if s.get("run") else ""
+                    st.markdown(f"**{run}{file_title(s['file'])} › {s['section']}** · "
+                                f"similarity {s['score']:.2f}")
                     st.caption(s["text"])
+
+
+def _run_name(label: str) -> str:
+    """An All runs source's run ("run 20261118T201632841000Z: started ...") as its analysis
+    name."""
+    from app import store
+    from foresight.sources import RUN_ID, run_name
+
+    found = RUN_ID.search(label)
+    if not found:
+        return label
+    numbers = store.analysis_numbers()
+    return run_name(found.group(0), {r: f"Analysis {n}" for r, n in numbers.items()})

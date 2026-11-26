@@ -22,13 +22,15 @@ def test_the_reference_run_report_holds_every_result_page():
     assert pdf.startswith(b"%PDF")
     pages, text = _text(pdf)
     assert pages >= 8
-    for section in ("Foresight run report", "At a glance", "1. Data Quality",
-                    "2. EDA & Insights", "3. Model", "4. Investigation & Report", "5. Appendix"):
+    for section in ("Foresight analysis report", "At a glance", "1. Data quality",
+                    "2. Data insights", "3. Model", "4. Findings", "5. Appendix"):
         assert section in text, section
     # the numbers the result pages show, the engineering report and its citations
-    assert "Reference run (committed with the app)" in text
+    assert "Reference analysis" in text
     assert "rf_regularized" in text and "5 of 24" in text and "PASS (26 of 26 passed)" in text
-    assert "Hypotheses" in text and "[source: eda_summary.json]" in text
+    # Phase 8.10: sources by their plain names
+    assert "Hypotheses" in text and "(Data insights)" in text and "[source:" not in text
+    assert "Sources cited" in text
     assert "Model comparison" in text and "Cleaning decisions" in text
     assert "SYNTHETIC" not in text
 
@@ -50,7 +52,7 @@ def test_a_scenario_run_is_labeled_synthetic_and_a_run_without_some_files_still_
     _, text = _text(run_report.build(run))
     assert "SYNTHETIC SCENARIO" in text and "planted fault on f_031" in text
     assert "05 Jan 2026, 00:00 UTC" in text and "2.5 min" in text
-    assert "4. Investigation & Report" in text
+    assert "4. Findings" in text
 
 
 def test_times_are_in_the_readers_zone_like_the_app():
@@ -69,3 +71,20 @@ def test_save_writes_the_pdf_into_the_run_folder(tmp_path):
     shutil.copytree(REFERENCE, run)
     path = run_report.save(run)
     assert path == run / run_report.RUN_REPORT_FILE and path.read_bytes().startswith(b"%PDF")
+
+
+def test_every_download_is_a_pdf_of_one_document():
+    """Phase 8.10: the page downloads are PDFs, titled and named like the full report, with
+    sources by their plain names and markdown tables as tables."""
+    for name, title in run_report.DOCUMENTS.items():
+        pdf = run_report.document(REFERENCE, name, analysis="Reference analysis")
+        assert pdf.startswith(b"%PDF"), name
+        _, text = _text(pdf)
+        assert text.startswith(title) and "Reference analysis" in text, name
+        assert "[source:" not in text and "](" not in text, name
+    _, evaluation = _text(run_report.document(REFERENCE, "evaluation_report.md"))
+    assert "|---" not in evaluation and "rf_regularized" in evaluation  # a table, not pipes
+    _, contract = _text(run_report.document(REFERENCE, "dataset_contract.json"))
+    assert "label: 0 = pass, 1 = fail" in contract and "f_000: 2743 to 3356" in contract
+    _, insights = _text(run_report.document(REFERENCE, "insights.md"))
+    assert "Sensors that differ most" in insights and "Sources cited" in insights

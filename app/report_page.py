@@ -11,8 +11,9 @@ import pandas as pd
 import streamlit as st
 
 from app import charts, store, ui
-from app.runs import no_run, read_json, run_label, show_markdown_file
+from app.runs import cited, download, no_run, read_json, run_line, show_markdown_file
 from foresight.crews.summary import SUMMARY_FILE, InvestigationSummary
+from foresight.sources import file_title
 
 STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:",
                "ERROR": ":material/cancel:"}
@@ -23,13 +24,13 @@ SCENARIO_TAB = "Synthetic scenario"
 
 
 def render(run_dir: Path | None) -> None:
-    ui.page_header("Investigation & Report")
+    ui.page_header("Findings")
     summary = read_json(run_dir, "anomaly_summary.json") if run_dir else None
     if not summary:
         no_run("investigation")
         return
 
-    st.caption(run_label(run_dir))
+    run_line(run_dir)
     checks = read_json(run_dir, "report_checks.json")
     risk = read_json(run_dir, "risk_summary.json")
     similar = read_json(run_dir, "similar_runs.json")
@@ -74,11 +75,8 @@ def render(run_dir: Path | None) -> None:
         _render_wafer(run_dir)
 
     if not ui.developer():  # users get the report; Extended data is the developer view
-        report = store.read_bytes(run_dir, "engineering_report.md")
-        if report is not None:
-            st.download_button("Download engineering_report.md", report,
-                               file_name="engineering_report.md", mime="text/markdown",
-                               type="primary", icon=":material/download:")
+        if store.exists(run_dir, "engineering_report.md"):
+            download(run_dir, "engineering_report.md", type="primary")
         return
     shown = ui.extended(TABS, "report")
     if shown == "Engineering report":
@@ -157,8 +155,8 @@ def _render_wafer(run_dir: Path) -> None:
         with left:
             run_id = st.selectbox("Run (riskiest first)", list(rows), format_func=describe,
                                   key="wafer-run", filter_mode=ui.search())
-            st.caption("The Line Replay page plays the whole test period with a wafer for "
-                       "each run.")
+            st.caption("The Line replay page plays the whole test period with a wafer for "
+                       "each production run.")
         with right:
             wafer_view(ranked[ranked.run_id == run_id].iloc[0], "report-wafer")
 
@@ -199,7 +197,7 @@ def _render_findings(overview: InvestigationSummary) -> None:
     with st.container(key="card-summary"):
         ui.label("Key findings")
         st.html(f'<div class="fs-headline">{_escape(overview.headline)}</div>')
-        st.markdown("\n".join(f"- {ui.md(f.text)} :gray-badge[{f.source}]"
+        st.markdown("\n".join(f"- {cited(ui.md(f.text))} :gray-badge[{file_title(f.source)}]"
                               for f in overview.key_findings))
 
 
@@ -216,8 +214,8 @@ def _render_hypotheses(overview: InvestigationSummary) -> None:
                 color = ui.CONFIDENCE_COLORS[card.confidence]
                 st.markdown(f"**H{card.number}** :{color}-badge[{card.confidence} confidence]")
                 st.markdown(f"**{ui.md(card.title)}**")
-                st.markdown(f":gray[Evidence:] {ui.md(card.evidence)}")
-                st.markdown(f":blue[Verify:] {ui.md(card.verify)}")
+                st.markdown(f":gray[Evidence:] {cited(ui.md(card.evidence))}")
+                st.markdown(f":blue[Verify:] {cited(ui.md(card.verify))}")
 
 
 def _escape(text: str) -> str:
@@ -256,7 +254,7 @@ def _render_report(run_dir: Path) -> None:
         st.info("No engineering report in this run.")
         return
     with st.container(border=True):
-        show_markdown_file(run_dir, "engineering_report.md", "Download engineering_report.md")
+        show_markdown_file(run_dir, "engineering_report.md", downloadable=True)
 
 
 INVESTIGATION_SECTIONS = [
@@ -281,10 +279,8 @@ def _render_investigation(run_dir: Path) -> None:
             continue
         with st.container(border=True):
             st.markdown(f":{color}-badge[{title}] :gray[{meaning}]")
-            st.markdown(body)
-    st.download_button("Download investigation.md", text.encode("utf-8"),
-                       file_name="investigation.md", mime="text/markdown",
-                       key="download-investigation.md")
+            st.markdown(cited(body))
+    download(run_dir, "investigation.md")
 
 
 def _render_checks(checks: dict | None) -> None:

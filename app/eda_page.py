@@ -8,17 +8,17 @@ import pandas as pd
 import streamlit as st
 
 from app import charts, store, ui
-from app.runs import no_run, read_json, run_label, show_markdown_file
+from app.runs import no_run, read_json, run_line, show_markdown_file
 
 
 def render(run_dir: Path | None) -> None:
-    ui.page_header("EDA & Insights")
+    ui.page_header("Data insights")
     eda = read_json(run_dir, "eda_summary.json") if run_dir else None
     if not eda:
         no_run("analysis")
         return
 
-    st.caption(f"{run_label(run_dir)} · descriptive statistics over the whole dataset")
+    run_line(run_dir, "Descriptive statistics over the whole dataset.")
     overview = eda["overview"]
     ui.kpis([
         ("Runs", f"{overview['rows']:,}", None, None),
@@ -40,7 +40,7 @@ def render(run_dir: Path | None) -> None:
     # Phase 8.7: the crew's insights beside one chart card with tabs (on a phone, all tabs)
     tabs = [("Fail rate over time", rate), ("Sensors that differ", sensors)]
     if store.exists(run_dir, "insights.md"):
-        ui.cards([[("Insights from the Data Analyst crew", lambda: _summary_section(run_dir),
+        ui.cards([[("Insights from the AI data analyst", lambda: _summary_section(run_dir),
                     "Insights")], tabs], "eda", widths=[2, 3])
     else:
         ui.cards([tabs], "eda")
@@ -72,11 +72,9 @@ def render(run_dir: Path | None) -> None:
             ui.label("Correlation between the sensors that differ most")
             charts.correlation(run_dir, top)
     elif shown == "Full insights":
-        show_markdown_file(run_dir, "insights.md", "Download insights.md")
-        report = store.read_bytes(run_dir, "eda_report.html")
-        if report is not None:
-            st.download_button("Download eda_report.html", report,
-                               file_name="eda_report.html", mime="text/html")
+        # one PDF: the numbers, these insights, the fail-rate chart and the sensors that
+        # differ (Phase 8.10: it replaces the HTML data report)
+        show_markdown_file(run_dir, "insights.md", downloadable=True)
 
 
 def _summary_section(run_dir: Path) -> None:

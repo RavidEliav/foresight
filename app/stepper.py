@@ -49,9 +49,9 @@ ART = {
 <rect class="fill line l3" x="25" y="27" width="16" height="3" rx="1"/>
 <rect class="fill line l4" x="25" y="33" width="20" height="3" rx="1"/>""",
 }
-GATE_AFTER = {"ingest": ("data_contract", "Data Contract gate"),
-              "analyze": ("features_present", "Features gate"),
-              "investigate": ("evidence_present", "Evidence gate")}
+GATE_AFTER = {"ingest": ("data_contract", "Data Contract check"),
+              "analyze": ("features_present", "Features check"),
+              "investigate": ("evidence_present", "Evidence check")}
 BADGE = {"done": "&#10003;", "failed": "&#10005;", "skipped": "&ndash;", "interrupted": "!",
          "stopped": "&#9632;"}
 CREW_TEXT = {"running": "working", "done": "done", "skipped": "skipped (not needed)",
@@ -127,13 +127,20 @@ def _frozen(stage: StageProgress) -> StageProgress:
     return stage.model_copy(update={"status": status, "crew_status": crew})
 
 
+# Phase 8.10: the reader sees who does the work, not the CrewAI word "crew"
+AI_NAMES = {"Data Analyst crew": "AI data analyst", "Data Scientist crew": "AI data scientist",
+            "Investigation crew": "AI investigator",
+            "Engineering Report crew": "AI report writer"}
+
+
 def _tile(stage: StageProgress, meta: str | None = None) -> str:
     if stage.crew:
         state = CREW_TEXT.get(stage.crew_status or "", "")
         crew = (f'<span class="fs-dot fs-{stage.crew_status or "none"}"></span>'
-                f"{escape(stage.crew)}" + (f" · {state}" if state else ""))
+                f"{escape(AI_NAMES.get(stage.crew, stage.crew))}"
+                + (f" · {state}" if state else ""))
     else:
-        crew = '<span class="fs-dot fs-none"></span>deterministic only'
+        crew = '<span class="fs-dot fs-none"></span>no AI: computed'
     return (f'<div class="fs-stage fs-{stage.status}">'
             f'<div class="fs-badge">{BADGE.get(stage.status, "")}</div>'
             f'<img class="fs-art" alt="" src="{art(stage.name, stage.status)}">'

@@ -46,6 +46,13 @@ def _sync_registry(database_url: str) -> bool:
 _sync_registry(settings.database_url)
 
 
+def home_page() -> None:
+    from app import home_page as page
+
+    page.render(settings, VIEWER, SELECTED, {"new": NEW_ANALYSIS, "ask": ASK,
+                                             "findings": FINDINGS})
+
+
 def run_pipeline_page() -> None:
     from app import run_page
 
@@ -67,11 +74,11 @@ def _run_selector() -> Path | None:
         st.session_state[PINNED_KEY] = False
     if not st.session_state.get(PINNED_KEY) or st.session_state.get(VIEW_KEY) not in options:
         st.session_state[VIEW_KEY] = options[0]  # follow the newest run until one is picked
-    choice = st.sidebar.selectbox("Results shown", options, key=VIEW_KEY,
+    choice = st.sidebar.selectbox("Analysis shown", options, key=VIEW_KEY,
                                   filter_mode=ui.search(),  # a phone: a tap opens the list
                                   format_func=lambda p: describe_run(Path(p)),
-                                  help="The run whose results the pages show. Times are in "
-                                       "your local time zone.",
+                                  help="The analysis whose results the pages show. Times "
+                                       "are in your local time zone.",
                                   on_change=lambda: st.session_state.update({PINNED_KEY: True}))
     st.sidebar.caption(run_details(Path(choice)))
     if store.is_stub(Path(choice)):  # an older run: its files are in Supabase (ADR-033)
@@ -162,8 +169,8 @@ def developer_only_page() -> None:
 
 # Every page's address, so a saved link or a home-screen shortcut opens the app (signed out:
 # the sign-in screen; a developer page for a user: a note) instead of "Page not found"
-PATHS = ["data-quality", "eda", "model", "report", "replay", "trends", "ask", "activity",
-         "users"]
+PATHS = ["new", "data-quality", "eda", "model", "report", "replay", "trends", "ask",
+         "activity", "users"]
 DEVELOPER_PATHS = ["trends", "users"]
 
 
@@ -191,19 +198,24 @@ if SESSION.status != "ok":  # sign in, ask for access or wait for approval
     st.stop()
 
 VIEWER = SESSION.viewer
-DATA_QUALITY = st.Page(data_quality_page, title="Data Quality", icon=":material/verified:",
+DATA_QUALITY = st.Page(data_quality_page, title="Data quality", icon=":material/verified:",
                        url_path="data-quality")
 ASK = st.Page(ask_page, title="Ask Foresight", icon=":material/forum:", url_path="ask")
 ACTIVITY = st.Page(activity_page, title="My activity", icon=":material/history:",
                    url_path="activity")
+# Phase 8.10: the app opens on Home; New analysis has its own address
+NEW_ANALYSIS = st.Page(run_pipeline_page, title="New analysis", icon=":material/play_arrow:",
+                       url_path="new")
+FINDINGS = st.Page(report_page, title="Findings", icon=":material/description:",
+                   url_path="report")
 MENU = [
-    st.Page(run_pipeline_page, title="Run Pipeline", icon=":material/play_arrow:", default=True),
+    st.Page(home_page, title="Home", icon=":material/home:", default=True),
+    NEW_ANALYSIS,
     DATA_QUALITY,
-    st.Page(eda_page, title="EDA & Insights", icon=":material/bar_chart:", url_path="eda"),
+    st.Page(eda_page, title="Data insights", icon=":material/bar_chart:", url_path="eda"),
     st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),
-    st.Page(report_page, title="Investigation & Report", icon=":material/description:",
-            url_path="report"),
-    st.Page(replay_page, title="Line Replay", icon=":material/slow_motion_video:",
+    FINDINGS,
+    st.Page(replay_page, title="Line replay", icon=":material/slow_motion_video:",
             url_path="replay"),
     *([st.Page(trends_page, title="Trends", icon=":material/trending_up:", url_path="trends")]
       if VIEWER.developer else []),
@@ -218,6 +230,7 @@ legal_page.back_to(MENU[0], "Back to Foresight")
 navigation = st.navigation(
     [*MENU, *PUBLIC, *([] if VIEWER.developer else
                        _placeholders(developer_only_page, DEVELOPER_PATHS))], position="hidden")
+st.set_page_config(page_title=f"{navigation.title} · Foresight")  # the browser tab (8.10)
 ui.brand()
 if VIEWER.developer:
     ui.environment_badge(settings)

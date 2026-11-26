@@ -142,7 +142,7 @@ def interruption_cause(settings: Settings, run_dir: Path,
     without a word (usually memory)."""
     from foresight.utils.logging import redact
 
-    resume = "Resume the run below: the stages it had finished are reused."
+    resume = "Resume it with Resume analysis above: the steps it had finished are reused."
     tail = log_tail(run_dir)
     free = free_mb(settings)
     if DISK_FULL in tail or (free is not None and free < MIN_FREE_MB):

@@ -95,7 +95,14 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - `tests/unit/test_injection.py`: a stand-in model that obeys every attack; every unsafe answer withheld, an honest one still answered
   - [[Prompt injection evaluation]] (live, gpt-4o-mini): 23 attacks plus 8 ordinary questions. Over four runs it found a misleading "pretend" answer (prompt sentence added), a dictated sentence the model wrote once (guard added) and a causal guard that withheld a real answer (narrowed to sensors). Final run: 0 unsafe, 8 of 8 ordinary questions answered
 
-8.1 to 8.8 are on `main` (#71, Nov 26, approved by Ravid); 8.9 is in review.
+- **Release to `main`** (#73, Nov 26).
+- **8.10 A real app, not a project** (Ravid's step before the close-out):
+  - **PR 1 (#74):** each run is an analysis with a number, "Analysis 12 · SECOM · 25 Nov, 15:18"; plain page names (New analysis, Data quality, Data insights, Findings, Line replay); "AI data analyst" instead of crews, "checks" instead of gates; a short run line with the details in its tooltip; plain download names; no environment badge on `main` ([[ADR-038 Runs are analyses with a number and plain names]])
+  - **PR 2 (#75):** a **Home** page where the app opens (start a new analysis, ask, the analysis shown at a glance with its top finding, recent analyses and questions; on a phone the finding is a tab of the card); a sign-in page that is one centred card (wordmark, what Foresight does for an engineer, a white "Continue with Google" button, Privacy and Terms); less Streamlit (no colour strip, the Foresight logo as the spinner, "Findings · Foresight" in the browser tab, a thin cyan loading line after 0.6 s)
+  - **PR 3 (#76):** sources by plain names in the chat, the result pages and the PDF ("Analysis 12 › Insights › Data quality", "Model metrics"; run ids in an All runs answer become analysis names; the stored tags are unchanged for the checks); a developer's My activity shows anyone's analyses and questions ("Activity of"); the sign-in pitch fits two lines on a computer
+  - **PR 4 (#77):** every download is a PDF, not markdown (Ravid: .md is no use to a user): the engineering report, investigation, model card, evaluation report, Data insights (replaces the HTML data report) and Data Contract, each titled and named like the full report and made when the button is pressed; the upload template stays a CSV
+
+8.1 to 8.9 are on `main` (#73, Nov 26); 8.10 is in progress.
 
 ## Test results
 - 290 tests (unit, integration, app and E2E) pass locally and in CI, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)
@@ -136,8 +143,14 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
 - **A guard needs a control:** blocking every attack is easy if real questions are blocked too. The live injection test asks 8 ordinary questions with the same guards, and that is how the over-strict causal guard showed up.
 - **Run a live test more than once:** the model refused a dictated sentence in one run and wrote it in the next.
 - **Wording:** "1175 training runs changed" counted the training period, not the 80 runs actually shifted.
+- **Check that the element exists before styling it:** CSS for Streamlit's "Running..." badge did nothing, because `toolbarMode = "minimal"` never renders it. The loading line keys on the app's script state instead, after a delay so the timed refreshes don't flash it.
+- **A `.gitignore` path with a slash is anchored:** `.streamlit/secrets.toml` matched only the root, so the secrets the app writes when started from `app/` showed as untracked. The rule is now `**/.streamlit/secrets.toml`.
 
 ## Next
-Plan changed on Nov 25 (Ravid): voice and the MCP server are future features, built after the submission (Dec 4), not part of it.
-- **8.10** Vault close-out, README and release to `main`
+Plan changed on Nov 25 (Ravid): voice and the MCP server are future features, built after the submission (Dec 4), not part of it. On Nov 26 he added 8.10, making the app look like a real app:
+- **8.10 A real app:**
+  - PR 2 (#75): the home page, the Streamlit look and the sign-in page
+  - PR 3 (#76): readable source chips, and a developer's My activity for anyone
+  - **the main app's address** (done, Nov 26): `main` moved from `foresight-app-main.up.railway.app` to **https://foresight-ai.up.railway.app** (Railway's free address; `foresight` is reserved by Railway). Ravid added the Google redirect URI first; then the Railway rename, a fresh deploy (`RAILWAY_PUBLIC_DOMAIN` gives the app its address), the repository variable `MAIN_URL` for the deployed tests, README and Home. Checked: health 200, sign-in sends Google the new callback, deployed tests 6 passed. The old address now returns 404.
+- **8.11** Vault close-out, README and release to `main`
 - **After the submission:** voice (ask by voice, answers read aloud) and an MCP server exposing Foresight's tools

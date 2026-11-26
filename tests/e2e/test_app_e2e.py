@@ -25,16 +25,16 @@ def _goto(page: Page, title: str) -> None:
 def _show_reference_run(page: Page) -> None:
     """Deployed apps may hold older runs; the read-only checks look at the committed one."""
     page.get_by_test_id("stSidebar").get_by_test_id("stSelectbox").click()
-    page.get_by_role("option", name="Reference run").click()
-    expect(page.get_by_test_id("stSidebar").get_by_text("Committed reference run")
+    page.get_by_role("option", name="Reference analysis · SECOM").click()
+    expect(page.get_by_test_id("stSidebar").get_by_text("The reference analysis of the SECOM data")
            ).to_be_visible(timeout=30_000)
 
 
 def _open_signed_out(page: Page, url: str) -> None:
     """The sign-in screen of an app with sign-in; skips for an app without (local, CI)."""
     page.goto(url)
-    sign_in = page.get_by_role("button", name="Sign in with Google")
-    expect(sign_in.or_(page.get_by_role("heading", name="Run Pipeline"))).to_be_visible(
+    sign_in = page.get_by_role("button", name="Continue with Google")
+    expect(sign_in.or_(page.get_by_role("heading", name="Home"))).to_be_visible(
         timeout=60_000)
     if not sign_in.is_visible():
         pytest.skip("this app has no sign-in configured (a local checkout)")
@@ -43,10 +43,11 @@ def _open_signed_out(page: Page, url: str) -> None:
 @deployed
 def test_e0_visitors_see_only_the_sign_in_screen(page: Page, app_url):
     _open_signed_out(page, app_url)
-    expect(page.get_by_text("ask for access")).to_be_visible()
+    # Phase 8.10 (#75): the sign-in card says how a newcomer gets in
+    expect(page.get_by_text("then request access")).to_be_visible()
     expect(page.get_by_test_id("stSidebar").get_by_role("link", name="Model")).to_have_count(0)
     page.goto(f"{app_url}/report")  # a deep link shows the sign-in screen, not the page
-    expect(page.get_by_role("button", name="Sign in with Google")).to_be_visible(timeout=60_000)
+    expect(page.get_by_role("button", name="Continue with Google")).to_be_visible(timeout=60_000)
     expect(page.get_by_text("Key findings")).to_have_count(0)
     expect(page.get_by_test_id("stException")).to_have_count(0)
 
@@ -81,13 +82,13 @@ def test_e1_app_loads_and_shows_environment(app_page: Page, expected_env):
 
 def test_e2_every_result_page_shows_its_content(app_page: Page):
     _show_reference_run(app_page)
-    _goto(app_page, "Data Quality")
+    _goto(app_page, "Data quality")
     expect(app_page.get_by_text("Data Contract validation")).to_be_visible()
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Failing runs")).to_be_visible()
 
-    _goto(app_page, "EDA & Insights")
+    _goto(app_page, "Data insights")
     expect(app_page.get_by_test_id("stPlotlyChart").first).to_be_visible(timeout=30_000)
-    expect(app_page.get_by_text("Insights from the Data Analyst crew")).to_be_visible()
+    expect(app_page.get_by_text("Insights from the AI data analyst")).to_be_visible()
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Fail rate")).to_be_visible()
 
     _goto(app_page, "Model")
@@ -109,7 +110,7 @@ def _open_extended(page: Page, tab: str) -> None:
 
 def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
     _show_reference_run(app_page)
-    _goto(app_page, "Investigation & Report")
+    _goto(app_page, "Findings")
     expect(app_page.get_by_test_id("stMetric").filter(has_text="Failing runs caught")
            ).to_be_visible()
     expect(app_page.get_by_text("Key findings").last).to_be_visible()  # the first tab
@@ -123,21 +124,22 @@ def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
         expect(app_page.locator("span:visible", has_text=label).first).to_be_visible()
     _open_extended(app_page, "Engineering report")
     with app_page.expect_download() as download:
-        app_page.get_by_role("button", name="Download engineering_report.md").click()
-    text = Path(download.value.path()).read_text(encoding="utf-8")
-    assert download.value.suggested_filename == "engineering_report.md"
-    assert text.startswith("# Engineering report") and "## Hypotheses" in text
+        app_page.get_by_role("button", name="Download the engineering report").click()
+    # Phase 8.10: every download is a PDF
+    assert download.value.suggested_filename == (
+        "Foresight - Reference analysis - Engineering report.pdf")
+    assert Path(download.value.path()).read_bytes().startswith(b"%PDF")
     # Phase 8.8: the whole run in one PDF, from under the sidebar's run choice
     with app_page.expect_download(timeout=60_000) as report:
         app_page.get_by_test_id("stSidebar").get_by_role(
-            "button", name="Download full run report").click()
-    assert report.value.suggested_filename == "foresight-run-report-reference.pdf"
+            "button", name="Download the full report").click()
+    assert report.value.suggested_filename == "Foresight - Reference analysis - Full report.pdf"
     assert Path(report.value.path()).read_bytes().startswith(b"%PDF")
 
 
 def test_e8_line_replay_plays_the_reference_test_period(app_page: Page):  # needs sign-in: CI
     _show_reference_run(app_page)
-    _goto(app_page, "Line Replay")
+    _goto(app_page, "Line replay")
     replayed = app_page.get_by_test_id("stMetric").filter(has_text="Runs replayed")
     expect(replayed).to_contain_text("0 of 392")
     app_page.get_by_role("button", name="Play", exact=True).click()
@@ -168,8 +170,8 @@ FIT = r"""() => {
 }"""
 PHONE_AGENT = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
                "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
-PATHS = {"Run Pipeline": "", "Data Quality": "data-quality", "EDA & Insights": "eda",
-         "Model": "model", "Investigation & Report": "report", "Line Replay": "replay",
+PATHS = {"Home": "", "New analysis": "new", "Data quality": "data-quality", "Data insights": "eda",
+         "Model": "model", "Findings": "report", "Line replay": "replay",
          "Trends": "trends", "Ask Foresight": "ask", "My activity": "activity",
          "Users & access": "users"}
 
@@ -207,7 +209,9 @@ def test_e7_ask_foresight_cites_sources_and_refuses_off_topic(app_page: Page, e2
 
     chat.fill("Which sensors differ between failing and passing runs?")
     chat.press("Enter")
-    answers = page.get_by_test_id("stChatMessage").filter(has_text="[source:")
+    # Phase 8.10: each source shows as a chip with its plain name
+    answers = page.get_by_test_id("stChatMessage").filter(
+        has=page.locator(".stMarkdownBadge"))
     expect(answers.first).to_be_visible(timeout=120_000)
 
     chat.fill("What is the capital of France?")
@@ -232,11 +236,12 @@ def _broken_csv(path) -> None:
 def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_path, e2e_runs):
     upload = tmp_path / "broken.csv"
     _broken_csv(upload)
+    _goto(app_page, "New analysis")  # the app opens on Home (Phase 8.10)
     app_page.get_by_text("Upload a CSV").click()
     app_page.get_by_test_id("stFileUploaderDropzoneInput").set_input_files(str(upload))
     expect(app_page.get_by_test_id("stFileChipName").filter(has_text="broken.csv")  # the chip
            ).to_be_visible(timeout=30_000)
-    app_page.get_by_role("button", name="Run pipeline").click()
+    app_page.get_by_role("button", name="Run analysis").click()
 
     expect(app_page.get_by_test_id("stAlertContentError").filter(
         has_text="Some labels are not -1 (pass) or 1 (fail)")).to_be_visible(timeout=180_000)
@@ -256,19 +261,19 @@ def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_pa
 
 def test_e6_full_run_shows_progress_then_the_new_report(app_page: Page, e2e_runs):
     page = app_page
-    page.get_by_role("button", name="Run pipeline").click()
+    _goto(page, "New analysis")
+    page.get_by_role("button", name="Run analysis").click()
 
-    expect(page.get_by_text("Data Analyst crew")).to_be_visible(timeout=60_000)
+    expect(page.get_by_text("AI data analyst")).to_be_visible(timeout=60_000)
     expect(page.get_by_test_id("stAlertContentSuccess").filter(has_text="completed")).to_be_visible(
         timeout=900_000)
-    for crew in ("Data Analyst crew", "Data Scientist crew", "Investigation crew",
-                 "Engineering Report crew"):
+    for crew in ("AI data analyst", "AI data scientist", "AI investigator", "AI report writer"):
         expect(page.get_by_text(crew)).to_be_visible()
 
-    page.get_by_role("link", name="See the results, starting with Data Quality").click()
-    expect(page.get_by_role("heading", name="Data Quality", level=1)).to_be_visible()
-    _goto(page, "Investigation & Report")
+    page.get_by_role("link", name="See the results, starting with Data quality").click()
+    expect(page.get_by_role("heading", name="Data quality", level=1)).to_be_visible()
+    _goto(page, "Findings")
     caption = page.get_by_test_id("stMain").get_by_test_id("stCaptionContainer").first
-    expect(caption).to_contain_text("Run ")
+    expect(caption).to_contain_text("Analysis ")  # the new analysis, by its number
     expect(caption).not_to_contain_text("Reference")
     expect(page.get_by_text("Report safety checks").first).to_be_visible()

@@ -11,8 +11,8 @@ from foresight.settings import load_settings
 
 APP = str(Path(__file__).resolve().parents[2] / "app" / "streamlit_app.py")
 DEVELOPER = "dev@example.com"
-USER_MENU = ["Run Pipeline", "Data Quality", "EDA & Insights", "Model", "Investigation & Report",
-             "Line Replay", "Ask Foresight", "My activity"]
+USER_MENU = ["Home", "New analysis", "Data quality", "Data insights", "Model", "Findings",
+             "Line replay", "Ask Foresight", "My activity"]
 
 
 @pytest.fixture(autouse=True)
@@ -42,7 +42,7 @@ def test_visitors_only_see_the_sign_in_screen(user):
     at.user = user
     at.run()
     assert not at.exception
-    assert at.button(key="sign-in").label == "Sign in with Google"
+    assert at.button(key="sign-in").label == "Continue with Google"
     assert _menu(at) == [] and not at.get("popover")
     assert not any(t.value == "Run Pipeline" for t in at.title)
     links = [link.proto.label for link in at.get("page_link")]
@@ -111,12 +111,16 @@ def test_a_user_sees_only_their_own_runs_and_the_reference_run():
     at = _app("ada@example.com")
     assert not at.exception
     picker = at.sidebar.selectbox(key="view_run")
-    assert picker.options == ["22 Nov, 09:00 UTC · SECOM", "Reference run"]  # not bob's run
-    assert [e.label for e in at.expander if "runs" in e.label.lower()] == ["Your runs (1)"]
+    assert picker.options == ["Analysis 1 · SECOM · 22 Nov, 09:00 UTC",
+                              "Reference analysis · SECOM"]  # not bob's run
+    at.button(key="home-new").click().run()  # the history is on New analysis
+    assert [e.label for e in at.expander if "analyses" in e.label.lower()] == [
+        "Your analyses (1)"]
 
     at = _app(DEVELOPER, "Ravid Eliav")  # the developer sees every run
     assert len(at.sidebar.selectbox(key="view_run").options) == 3
-    assert "Run history (2)" in [e.label for e in at.expander]
+    at.button(key="home-new").click().run()
+    assert "Analysis history (2)" in [e.label for e in at.expander]
 
 
 def test_recent_questions_include_questions_about_all_runs():
@@ -254,3 +258,23 @@ def test_my_activity_lists_only_the_persons_runs_and_questions():
     runs, questions = at.dataframe[0].value, at.dataframe[1].value
     assert len(runs) == 1 and runs.iloc[0]["you"] == "started"
     assert list(questions["question"]) == ["Mine?"]
+
+    # Phase 8.10: a developer chooses another person and sees their activity, not their own
+    assert not at.selectbox  # no other accounts yet: only the developer's own activity
+    access.add_account(settings, "ada@example.com", "user", DEVELOPER, name="Ada")
+    at = _page("app.activity_page", "developer")
+    picker = at.selectbox(key="activity-person")
+    assert picker.value == DEVELOPER and picker.options == ["You", "Ada · ada@example.com"]
+    picker.set_value("ada@example.com").run()
+    assert not at.exception
+    runs, questions = at.dataframe[0].value, at.dataframe[1].value
+    assert len(runs) == 1 and runs.iloc[0]["they"] == "started"
+    assert list(questions["question"]) == ["Not mine"]
+    assert any("ada@example.com · user" in c.value for c in at.caption)
+    assert at.tabs[0].label.startswith("Their analyses")
+
+
+def test_a_user_has_no_activity_picker():
+    access.add_account(load_settings(), "ada@example.com", "user", DEVELOPER, name="Ada")
+    at = _page("app.activity_page", "user")
+    assert not at.exception and not at.selectbox

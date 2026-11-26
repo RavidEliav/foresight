@@ -7,8 +7,9 @@ from pathlib import Path
 import streamlit as st
 
 from app import ui
-from app.runs import no_run, run_line
+from app.runs import cited, no_run, run_line
 from foresight.settings import Settings
+from foresight.sources import file_title
 
 EXAMPLES = ["What is the model's test PR-AUC?", "Which sensors differ most between failing "
             "and passing runs?", "What are the hypotheses and how confident are they?",
@@ -101,7 +102,7 @@ def _show(item: dict) -> None:
     with st.chat_message("user"):
         st.markdown(item["question"])
     with st.chat_message("assistant", avatar=ui.LOGO_IMAGE):
-        st.markdown(item["answer"])
+        st.markdown(cited(item["answer"]))  # Phase 8.10: sources as plain-name chips
         if item.get("from_history"):
             from app.runs import local_time
 
@@ -114,7 +115,20 @@ def _show(item: dict) -> None:
                     if isinstance(s, str):  # logged answers keep "file § section (score)"
                         st.markdown(f"**{s}**")
                         continue
-                    run = f"{s['run']} · " if s.get("run") else ""
-                    st.markdown(f"**{run}{s['file']} § {s['section']}** · similarity "
-                                f"{s['score']:.2f}")
+                    run = f"{_run_name(s['run'])} › " if s.get("run") else ""
+                    st.markdown(f"**{run}{file_title(s['file'])} › {s['section']}** · "
+                                f"similarity {s['score']:.2f}")
                     st.caption(s["text"])
+
+
+def _run_name(label: str) -> str:
+    """An All runs source's run ("run 20261118T201632841000Z: started ...") as its analysis
+    name."""
+    from app import store
+    from foresight.sources import RUN_ID, run_name
+
+    found = RUN_ID.search(label)
+    if not found:
+        return label
+    numbers = store.analysis_numbers()
+    return run_name(found.group(0), {r: f"Analysis {n}" for r, n in numbers.items()})

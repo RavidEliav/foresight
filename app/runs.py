@@ -143,10 +143,21 @@ def show_markdown_file(run_dir: Path, name: str, downloadable: bool = False) -> 
     text = store.read_text(run_dir, name)
     if text is None:
         return False
-    st.markdown(re.sub(r"\A\s*#\s[^\n]*\n", "", text))
+    st.markdown(cited(re.sub(r"\A\s*#\s[^\n]*\n", "", text)))
     if downloadable:
         download(run_dir, name, text.encode("utf-8"))
     return True
+
+
+def cited(text: str) -> str:
+    """Phase 8.10: the AI's text for st.markdown, its citation tags as plain-name chips
+    ("Model metrics", "Analysis 12 › Insights › Data quality") and run ids as analysis
+    names. The stored text keeps the tags: the checks read them."""
+    from app import store
+    from foresight.sources import readable
+
+    names = {run_id: f"Analysis {n}" for run_id, n in store.analysis_numbers().items()}
+    return readable(text, names, chip=lambda name: f":gray-badge[{name}]")
 
 
 def no_run(what: str) -> None:

@@ -246,7 +246,9 @@ def test_ask_page_answers_with_citations_and_logs_who_asked(run_dir):
     at.chat_input[0].set_value("Which sensors differ between failing and passing runs?").run()
     assert not at.exception
     answers = [m for m in at.chat_message if m.name == "assistant"]
-    assert "[source: " in answers[-1].markdown[0].value
+    # Phase 8.10: the citation shows as a plain-name chip, not the tag
+    shown = answers[-1].markdown[0].value
+    assert ":gray-badge[" in shown and "[source:" not in shown and ".md" not in shown
     assert any(e.label.startswith("Sources") for e in answers[-1].expander)  # developer view
     asked = questions_by(load_settings(), "ada@example.com")
     assert asked[0]["question"].startswith("Which sensors") and asked[0]["run"] == run_dir.name
@@ -254,7 +256,7 @@ def test_ask_page_answers_with_citations_and_logs_who_asked(run_dir):
     user = _ask_page(run_dir, "user")
     user.chat_input[0].set_value("Which sensors differ between failing and passing runs?").run()
     answer = [m for m in user.chat_message if m.name == "assistant"][-1]
-    assert "[source: " in answer.markdown[0].value and not answer.expander  # no sources
+    assert ":gray-badge[" in answer.markdown[0].value and not answer.expander  # no sources
 
     at.chat_input[0].set_value("What is the capital of France?").run()
     answers = [m for m in at.chat_message if m.name == "assistant"]
@@ -266,7 +268,9 @@ def test_ask_page_answers_with_citations_and_logs_who_asked(run_dir):
     at.chat_input[0].set_value("What is the model's test PR-AUC?").run()
     assert not at.exception
     answer = [m for m in at.chat_message if m.name == "assistant"][-1]
-    assert "/" in answer.markdown[0].value and "[source: " in answer.markdown[0].value
+    # the run is named: the reference run has no number
+    assert ":gray-badge[Reference analysis › " in answer.markdown[0].value
+    assert "[source:" not in answer.markdown[0].value
     assert any(e.label.startswith("Sources") for e in answer.expander)
 
     # a question opened from the sidebar's history belongs to this run: the scope follows

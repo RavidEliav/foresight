@@ -208,7 +208,9 @@ def test_e7_ask_foresight_cites_sources_and_refuses_off_topic(app_page: Page, e2
 
     chat.fill("Which sensors differ between failing and passing runs?")
     chat.press("Enter")
-    answers = page.get_by_test_id("stChatMessage").filter(has_text="[source:")
+    # Phase 8.10: each source shows as a chip with its plain name
+    answers = page.get_by_test_id("stChatMessage").filter(
+        has=page.locator(".stMarkdownBadge"))
     expect(answers.first).to_be_visible(timeout=120_000)
 
     chat.fill("What is the capital of France?")

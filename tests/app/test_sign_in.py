@@ -258,3 +258,23 @@ def test_my_activity_lists_only_the_persons_runs_and_questions():
     runs, questions = at.dataframe[0].value, at.dataframe[1].value
     assert len(runs) == 1 and runs.iloc[0]["you"] == "started"
     assert list(questions["question"]) == ["Mine?"]
+
+    # Phase 8.10: a developer chooses another person and sees their activity, not their own
+    assert not at.selectbox  # no other accounts yet: only the developer's own activity
+    access.add_account(settings, "ada@example.com", "user", DEVELOPER, name="Ada")
+    at = _page("app.activity_page", "developer")
+    picker = at.selectbox(key="activity-person")
+    assert picker.value == DEVELOPER and picker.options == ["You", "Ada · ada@example.com"]
+    picker.set_value("ada@example.com").run()
+    assert not at.exception
+    runs, questions = at.dataframe[0].value, at.dataframe[1].value
+    assert len(runs) == 1 and runs.iloc[0]["they"] == "started"
+    assert list(questions["question"]) == ["Not mine"]
+    assert any("ada@example.com · user" in c.value for c in at.caption)
+    assert at.tabs[0].label.startswith("Their analyses")
+
+
+def test_a_user_has_no_activity_picker():
+    access.add_account(load_settings(), "ada@example.com", "user", DEVELOPER, name="Ada")
+    at = _page("app.activity_page", "user")
+    assert not at.exception and not at.selectbox

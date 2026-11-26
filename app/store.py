@@ -218,13 +218,22 @@ def _template(raw_dir: str) -> bytes:
     return to_upload_csv(load_raw(Path(raw_dir)))
 
 
-def upload_template(settings: Settings) -> bytes | None:
-    """The built-in SECOM data in the upload format (None if the raw files are missing)."""
-    from foresight.data.secom import DATA_FILE, LABELS_FILE
+UPLOAD_TEMPLATE = Path(__file__).parent / "assets" / "upload_template.csv"
+
+
+def upload_template() -> bytes:
+    """The upload format with 10 SECOM runs as examples (2 failing): a small file in the repo,
+    so it is always there (Phase 8.10)."""
+    return UPLOAD_TEMPLATE.read_bytes()
+
+
+def example_data(settings: Settings) -> bytes:
+    """All the SECOM runs in the upload format, made when asked for: the raw files are
+    downloaded first if this server has none yet (they are not kept across deploys)."""
+    from foresight.data.secom import ensure_secom
 
     raw_dir = settings.resolve(settings.paths.data_raw_dir)
-    if not all((raw_dir / name).exists() for name in (DATA_FILE, LABELS_FILE)):
-        return None
+    ensure_secom(raw_dir)
     return _template(str(raw_dir))
 
 

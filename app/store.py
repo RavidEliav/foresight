@@ -187,6 +187,14 @@ def run_report(run_dir: Path, zone: tzinfo = UTC, name: str | None = None) -> by
     return build(run_dir, zone, name)
 
 
+def document_pdf(run_dir: Path, name: str, zone: tzinfo = UTC, analysis: str | None = None
+                 ) -> bytes:
+    """One of the run's documents as a PDF (Phase 8.10: every download is a PDF)."""
+    from foresight.run_report import document
+
+    return document(run_dir, name, zone, analysis)
+
+
 def run_data(run_dir: Path) -> tuple:
     """The data a run was started with, comparable with the launch card's choice: its
     scenario (kind, intensity, seed), its uploaded file (by size) or SECOM."""

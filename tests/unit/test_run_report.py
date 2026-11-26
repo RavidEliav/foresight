@@ -71,3 +71,20 @@ def test_save_writes_the_pdf_into_the_run_folder(tmp_path):
     shutil.copytree(REFERENCE, run)
     path = run_report.save(run)
     assert path == run / run_report.RUN_REPORT_FILE and path.read_bytes().startswith(b"%PDF")
+
+
+def test_every_download_is_a_pdf_of_one_document():
+    """Phase 8.10: the page downloads are PDFs, titled and named like the full report, with
+    sources by their plain names and markdown tables as tables."""
+    for name, title in run_report.DOCUMENTS.items():
+        pdf = run_report.document(REFERENCE, name, analysis="Reference analysis")
+        assert pdf.startswith(b"%PDF"), name
+        _, text = _text(pdf)
+        assert text.startswith(title) and "Reference analysis" in text, name
+        assert "[source:" not in text and "](" not in text, name
+    _, evaluation = _text(run_report.document(REFERENCE, "evaluation_report.md"))
+    assert "|---" not in evaluation and "rf_regularized" in evaluation  # a table, not pipes
+    _, contract = _text(run_report.document(REFERENCE, "dataset_contract.json"))
+    assert "label: 0 = pass, 1 = fail" in contract and "f_000: 2743 to 3356" in contract
+    _, insights = _text(run_report.document(REFERENCE, "insights.md"))
+    assert "Sensors that differ most" in insights and "Sources cited" in insights

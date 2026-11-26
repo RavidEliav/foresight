@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pandas as pd
@@ -88,4 +87,4 @@ def _render_contract(run_dir: Path, contract: dict | None) -> None:
         f"{contract['target']['mapping']})"
     )
     st.markdown("**Assumptions**\n" + "\n".join(f"- {a}" for a in contract["assumptions"]))
-    download(run_dir, "dataset_contract.json", json.dumps(contract, indent=2))
+    download(run_dir, "dataset_contract.json")

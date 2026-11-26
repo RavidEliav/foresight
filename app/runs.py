@@ -115,24 +115,22 @@ def run_line(run_dir: Path, more: str = "") -> None:
     st.caption(run_label(run_dir), help=run_help(run_dir, more))
 
 
-# Phase 8.10: a run's files by their plain names, for download buttons and file names
-DOCUMENTS = {"engineering_report.md": "Engineering report", "investigation.md": "Investigation",
-             "insights.md": "Insights", "model_card.md": "Model card",
-             "evaluation_report.md": "Evaluation report", "eda_report.html": "Data report",
-             "dataset_contract.json": "Data Contract"}
-MIME = {".md": "text/markdown", ".json": "application/json", ".html": "text/html"}
 
-
-def download(run_dir: Path, name: str, data: bytes | str, **kwargs) -> None:
+def download(run_dir: Path, name: str, **kwargs) -> None:
     """A download button with a plain label ("Download the engineering report") and a file
-    name a person can read: "Foresight - Analysis 12 - Engineering report.md"."""
-    title = DOCUMENTS.get(name, Path(name).stem.replace("_", " ").capitalize())
-    suffix = Path(name).suffix
+    name a person can read: "Foresight - Analysis 12 - Engineering report.pdf". Every
+    download is a PDF (Phase 8.10), made when the button is pressed, in the reader's zone."""
+    from app import store
+    from foresight.run_report import DOCUMENTS
+
+    title = DOCUMENTS[name]
     label = title if title.startswith("Data Contract") else title.lower()
-    st.download_button(f"Download the {label}", data,
-                       file_name=f"Foresight - {analysis_name(run_dir)} - {title}{suffix}",
-                       mime=MIME.get(suffix, "application/octet-stream"),
-                       key=kwargs.pop("key", f"download-{name}"), **kwargs)
+    zone, analysis = local_zone(), analysis_name(run_dir)  # read now: the PDF is made later
+    st.download_button(f"Download the {label}",
+                       data=lambda: store.document_pdf(run_dir, name, zone, analysis),
+                       file_name=f"Foresight - {analysis} - {title}.pdf", mime="application/pdf",
+                       key=kwargs.pop("key", f"download-{name}"),
+                       icon=kwargs.pop("icon", ":material/picture_as_pdf:"), **kwargs)
 
 
 def show_markdown_file(run_dir: Path, name: str, downloadable: bool = False) -> bool:
@@ -145,7 +143,7 @@ def show_markdown_file(run_dir: Path, name: str, downloadable: bool = False) -> 
         return False
     st.markdown(cited(re.sub(r"\A\s*#\s[^\n]*\n", "", text)))
     if downloadable:
-        download(run_dir, name, text.encode("utf-8"))
+        download(run_dir, name)
     return True
 
 

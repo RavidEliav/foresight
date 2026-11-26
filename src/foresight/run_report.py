@@ -175,6 +175,10 @@ class _Report(FPDF):
                     continue
             if not keep:
                 continue
+            lines = block.splitlines()
+            if all(line.strip().startswith("|") for line in lines):
+                self._table(lines)
+                continue
             for item in re.split(r"\n(?=\s*(?:\d+[.)]|[-*])\s)", block):
                 item = " ".join(line.strip() for line in item.splitlines())
                 if m := re.match(r"(\d+[.)]|[-*])\s+(.*)", item):
@@ -186,6 +190,17 @@ class _Report(FPDF):
                     self.prose(m.group(2), indent=6)
                 else:
                     self.prose(item)
+
+    def _table(self, lines: list[str]) -> None:
+        """A markdown table as a table (columns as wide as their text needs)."""
+        rows = [[re.sub(r"\*\*|`", "", readable(cell.strip(), chip=lambda n: f"({n})"))
+                 for cell in line.strip().strip("|").split("|")]
+                for line in lines if not re.fullmatch(r"[\s|:-]+", line)]
+        columns = max(len(row) for row in rows)
+        rows = [row + [""] * (columns - len(row)) for row in rows]
+        need = [min(max(len(row[i]) for row in rows), 60) + 4 for i in range(columns)]
+        widths = tuple(self.width * n / sum(need) for n in need)
+        self.grid(rows[0], rows[1:], widths, 7.5)
 
     def _lines(self) -> None:
         self.set_draw_color(*LINE)
@@ -258,15 +273,7 @@ def _cover(pdf: _Report, run_dir: Path, facts: dict) -> None:
     pdf.set_line_width(0.9)
     pdf.line(pdf.l_margin, pdf.get_y() + 2, pdf.l_margin + 40, pdf.get_y() + 2)
     pdf.ln(7)
-    if facts["synthetic"]:
-        pdf.set_fill_color(254, 243, 199)
-        pdf.set_text_color(*AMBER)
-        pdf.set_font(FONT, "B", 9.5)
-        pdf.multi_cell(0, 6, "SYNTHETIC SCENARIO: the training period was changed on purpose; "
-                       "every metric is computed on the original SECOM test period.",
-                       fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        pdf.set_text_color(*INK)
-        pdf.ln(3)
+    _synthetic(pdf, facts)
     pdf.set_font(FONT, "", 9.5)
     with pdf.table(col_widths=(42, 132), borders_layout="NONE", line_height=6,
                    text_align="LEFT", first_row_as_headings=False) as table:
@@ -283,6 +290,18 @@ def _cover(pdf: _Report, run_dir: Path, facts: dict) -> None:
     pdf.small("Every statement in the AI's texts names the analysis file it comes from, in "
               "brackets, such as (Model metrics); background knowledge is marked (Background: "
               "...). Associations are not causes.")
+
+
+def _synthetic(pdf: _Report, facts: dict) -> None:
+    if facts["synthetic"]:
+        pdf.set_fill_color(254, 243, 199)
+        pdf.set_text_color(*AMBER)
+        pdf.set_font(FONT, "B", 9.5)
+        pdf.multi_cell(0, 6, "SYNTHETIC SCENARIO: the training period was changed on purpose; "
+                       "every metric is computed on the original SECOM test period.",
+                       fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_text_color(*INK)
+        pdf.ln(3)
 
 
 def _data_quality(pdf: _Report, run_dir: Path) -> None:
@@ -318,6 +337,10 @@ def _data_quality(pdf: _Report, run_dir: Path) -> None:
 def _eda(pdf: _Report, run_dir: Path) -> None:
     pdf.section("2. Data insights", "Descriptive statistics over the whole dataset, and the "
                 "Data Analyst crew's insights.")
+    _eda_body(pdf, run_dir)
+
+
+def _eda_body(pdf: _Report, run_dir: Path) -> None:
     eda = _json(run_dir, "eda_summary.json")
     if eda:
         overview = eda["overview"]
@@ -446,14 +469,7 @@ def _appendix(pdf: _Report, run_dir: Path, manifest: dict | None) -> None:
         pdf.grid(["Status", "Check", "Result"],
                  [[c["status"], c["name"], c["message"]] for c in checks["checks"]],
                  (18, 64, 92), 7.5)
-    cited = sorted({readable(m.group(0), chip=str)
-                    for name in ("engineering_report.md", "insights.md", "model_card.md")
-                    for m in CITATION.finditer(_text(run_dir, name) or "")})
-    if cited:
-        pdf.heading("Sources cited")
-        pdf.set_font(FONT, "", 8)
-        for source in cited:
-            pdf.multi_cell(0, 4.2, f"• {source}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    _sources(pdf, run_dir, ["engineering_report.md", "insights.md", "model_card.md"])
     if manifest:
         pdf.heading("The run")
         packages = manifest.get("packages") or {}
@@ -471,6 +487,108 @@ def _appendix(pdf: _Report, run_dir: Path, manifest: dict | None) -> None:
                                           (manifest.get("durations_s") or {}).items())],
                 ["Packages", ", ".join(f"{k} {v}" for k, v in list(packages.items())[:8])]]
         pdf.grid(None, rows, (32, 142), 8)
+
+
+def _sources(pdf: _Report, run_dir: Path, names: list[str]) -> None:
+    """The sources the documents ``names`` cite, by their plain names."""
+    cited = sorted({readable(m.group(0), chip=str) for name in names
+                    for m in CITATION.finditer(_text(run_dir, name) or "")})
+    if cited:
+        pdf.heading("Sources cited")
+        pdf.set_font(FONT, "", 8)
+        for source in cited:
+            pdf.multi_cell(0, 4.2, f"• {source}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+
+def _contract(pdf: _Report, contract: dict | None) -> None:
+    """The Data Contract a dataset is checked against, as a reader would want it."""
+    if not contract:
+        pdf.prose("This analysis has no Data Contract.")
+        return
+    features, target = contract["features"], contract["target"]
+    pdf.prose("The rules a dataset must follow before Foresight analyses it. An uploaded file "
+              "is checked against them; values outside a range are reported, not removed.")
+    pdf.heading("The dataset")
+    pdf.grid(None, [
+        ["Dataset", f"{contract['dataset']} · {contract['source'].get('page', '')}"],
+        ["Contract version", str(contract["contract_version"])],
+        ["Rows", f"at least {contract['min_rows']}"],
+        ["Run id column", contract["id_column"]],
+        ["Time column", contract["timestamp_column"]],
+        ["Label", f"{target['name']}: 0 = pass, 1 = fail" if target["allowed_values"] == [0, 1]
+         else f"{target['name']}: one of {', '.join(map(str, target['allowed_values']))}"],
+        ["Expected fail rate", " to ".join(f"{v:.0%}" for v in target.get(
+            "expected_fail_rate", [])) or "n/a"],
+        ["Sensors", f"{len(features['required'])} required, {features['dtype']} values, at "
+                    f"most {features['max_missing_ratio']:.0%} missing each"],
+    ], (40, 134), 8.5)
+    pdf.heading("Rules")
+    for rule in contract.get("constraints", []):
+        pdf.markdown(f"- {rule}")
+    pdf.heading("Assumptions")
+    for assumption in contract.get("assumptions", []):
+        pdf.markdown(f"- {assumption}")
+    dropped = contract.get("dropped_columns") or {}
+    if dropped:
+        pdf.heading("Sensors left out")
+        reasons = {"high_missing": "Mostly missing", "constant": "Constant (no information)"}
+        pdf.grid(["Why", "Sensors"], [[f"{reasons.get(k, k)} ({len(v)})", ", ".join(v)]
+                                      for k, v in dropped.items()], (40, 134), 7.5)
+    ranges = features.get("ranges") or {}
+    if ranges:
+        pdf.heading("Sensor value ranges (observed in the reference data)")
+        items = [f"{name}: {low:.4g} to {high:.4g}" for name, (low, high) in ranges.items()]
+        per_row = 3
+        pdf.grid(None, [items[i:i + per_row] + [""] * (per_row - len(items[i:i + per_row]))
+                        for i in range(0, len(items), per_row)], (58, 58, 58), 7)
+
+
+# --- one document as a PDF (Phase 8.10: every download is a PDF) ----------------------------
+
+DOCUMENTS = {"engineering_report.md": "Engineering report", "investigation.md": "Investigation",
+             "insights.md": "Data insights", "model_card.md": "Model card",
+             "evaluation_report.md": "Evaluation report",
+             "dataset_contract.json": "Data Contract"}
+
+
+def document(run_dir: Path, name: str, zone: tzinfo = UTC, analysis: str | None = None) -> bytes:
+    """One of the run's documents (``DOCUMENTS``) as a PDF, titled and named like the full
+    report. Data insights carries the numbers, the insights, the fail-rate chart and the sensors
+    that differ (what the old HTML data report showed)."""
+    run_dir = Path(run_dir)
+    title = DOCUMENTS[name]
+    facts = _facts(run_dir, _json(run_dir, "run_manifest.json"),
+                   _json(run_dir, "progress.json"), zone, analysis)
+    pdf = _Report(facts["label"])
+    pdf.set_title(f"Foresight · {title}")
+    if facts["created"]:
+        pdf.set_creation_date(facts["created"])  # the same run gives the same file
+    pdf.add_page()
+    pdf.set_font(FONT, "B", 22)
+    pdf.set_text_color(*INK)
+    pdf.cell(0, 11, title, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font(FONT, "", 9.5)
+    pdf.set_text_color(*MUTED)
+    pdf.cell(0, 6, f"Foresight · {facts['label']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_draw_color(*ACCENT)
+    pdf.set_line_width(0.9)
+    pdf.line(pdf.l_margin, pdf.get_y() + 2, pdf.l_margin + 40, pdf.get_y() + 2)
+    pdf.set_text_color(*INK)
+    pdf.ln(7)
+    _synthetic(pdf, facts)
+    if name == "insights.md":
+        _eda_body(pdf, run_dir)
+    elif name == "dataset_contract.json":
+        _contract(pdf, _json(run_dir, name))
+    else:
+        text = _text(run_dir, name)
+        if text:
+            pdf.markdown(text)
+        else:
+            pdf.prose(f"This analysis has no {title.lower()}.")
+    if name.endswith(".md"):
+        _sources(pdf, run_dir, [name])
+    return bytes(pdf.output())
 
 
 def _facts(run_dir: Path, manifest: dict | None, progress: dict | None,

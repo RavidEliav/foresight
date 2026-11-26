@@ -88,7 +88,14 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - citations kept; built only from the run's files, so older runs and the reference run get it too; a new run saves `run_report.pdf`
   - "Download full run report" in the sidebar under "Results shown" (Ravid's choice), the one place for it (the second button on Run Pipeline was taken out, #69)
 
-Everything above is on `main` (#66, Nov 25); `main` and `dev` are the same.
+- **8.9 Retrieval evaluation and prompt-injection guards** (#72):
+  - [[Retrieval evaluation]]: 28 questions about the reference run with the sections that answer them, and 8 out-of-scope ones: hit@1 86%, hit@4 93%, MRR 0.89, every out-of-scope question refused before any LLM call; a CI test keeps these floors
+  - the evaluation found the title boost missing "anomalous" against "Anomaly detection" (exact words only): a light stem (first 6 letters) moved it from 4th to 1st
+  - [[ADR-037 Prompt-injection guards on every chat answer]]: leaks (instructions, secrets) withheld at once; causes and numbers not in the excerpts withheld after one more try; the prompt says excerpts and question are data, not instructions
+  - `tests/unit/test_injection.py`: a stand-in model that obeys every attack; every unsafe answer withheld, an honest one still answered
+  - [[Prompt injection evaluation]] (live, gpt-4o-mini): 23 attacks plus 8 ordinary questions. Over four runs it found a misleading "pretend" answer (prompt sentence added), a dictated sentence the model wrote once (guard added) and a causal guard that withheld a real answer (narrowed to sensors). Final run: 0 unsafe, 8 of 8 ordinary questions answered
+
+8.1 to 8.8 are on `main` (#71, Nov 26, approved by Ravid); 8.9 is in review.
 
 ## Test results
 - 290 tests (unit, integration, app and E2E) pass locally and in CI, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)
@@ -126,10 +133,11 @@ Everything above is on `main` (#66, Nov 25); `main` and `dev` are the same.
 - **Browser and server race:** the browser keeps sending what it showed a moment ago (a timer tick in flight, a slider's old value). Code that reacts to a widget change must tell an echo from a real change.
 - **A second reader of a file:** the launch card read `scenario.json` in the form the app writes, but the run's first stage rewrites it. The traceback was in `main`'s log within a minute of Ravid's report.
 - **Fixed waits on the server:** a 30 s wait that never ran out locally gave up on `main`, where a new run's process takes much longer to start.
+- **A guard needs a control:** blocking every attack is easy if real questions are blocked too. The live injection test asks 8 ordinary questions with the same guards, and that is how the over-strict causal guard showed up.
+- **Run a live test more than once:** the model refused a dictated sentence in one run and wrote it in the next.
 - **Wording:** "1175 training runs changed" counted the training period, not the 80 runs actually shifted.
 
 ## Next
 Plan changed on Nov 25 (Ravid): voice and the MCP server are future features, built after the submission (Dec 4), not part of it.
-- **8.9 Course extras:** retrieval evaluation and prompt-injection tests
 - **8.10** Vault close-out, README and release to `main`
 - **After the submission:** voice (ask by voice, answers read aloud) and an MCP server exposing Foresight's tools

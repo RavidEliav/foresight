@@ -1,0 +1,83 @@
+# Retrieval evaluation (Phase 8.9): questions about the committed reference run and the file
+# sections whose excerpts answer them ("file § section"; any one of them counts as a hit).
+# Out-of-scope questions must be refused by the retrieval gate, before any LLM call.
+run: artifacts/reference
+
+questions:
+  - q: What is the model's test PR-AUC?
+    gold: [run_data.md § Model test metrics, evaluation_report.md § Selected model on the test period,
+           model_card.md § Metrics, evaluation_report.md § Model comparison (PR-AUC; random guessing = fail rate)]
+  - q: What is the recall on failing runs?
+    gold: [run_data.md § Model test metrics, evaluation_report.md § Selected model on the test period,
+           model_card.md § Metrics]
+  - q: Which model was selected, and by which rule?
+    gold: [evaluation_report.md § Setup, evaluation_report.md § Selected model on the test period,
+           evaluation_report.md § Model comparison (PR-AUC; random guessing = fail rate),
+           model_card.md § Model purpose]
+  - q: How do the candidate models compare?
+    gold: [evaluation_report.md § Model comparison (PR-AUC; random guessing = fail rate)]
+  - q: Which sensors does the model rely on most?
+    gold: [evaluation_report.md § Most important sensors (permutation importance on the test period)]
+  - q: Which sensors differ most between failing and passing runs?
+    gold: [insights.md § Notable sensors, engineering_report.md § Supporting statistical evidence,
+           investigation.md § Facts]
+  - q: Is sensor f_059 associated with failures?
+    gold: [insights.md § Notable sensors, engineering_report.md § Hypotheses, investigation.md § Hypotheses,
+           investigation.md § Facts, engineering_report.md § Important abnormal parameters]
+  - q: Did the data pass the Data Contract validation?
+    gold: [validation_summary.json § Validation checks, insights.md § Data quality]
+  - q: How much data is missing after cleaning?
+    gold: [insights.md § Data quality, engineering_report.md § Supporting statistical evidence,
+           validation_summary.json § Validation checks]
+  - q: How many runs and failing runs are in the data?
+    gold: [insights.md § What happened, insights.md § Summary, engineering_report.md § What was detected,
+           run_data.md § Run data]
+  - q: How did the fail rate change over time?
+    gold: [insights.md § What happened, engineering_report.md § What was detected]
+  - q: What are the hypotheses?
+    gold: [engineering_report.md § Hypotheses, investigation.md § Hypotheses]
+  - q: How confident are the hypotheses?
+    gold: [engineering_report.md § Hypotheses, investigation.md § Hypotheses]
+  - q: What should engineers do next?
+    gold: [engineering_report.md § Recommended next steps, investigation.md § Suggested verification]
+  - q: How should the hypotheses be verified?
+    gold: [investigation.md § Suggested verification, engineering_report.md § Recommended next steps]
+  - q: What facts did the investigation establish?
+    gold: [investigation.md § Facts]
+  - q: What assumptions does the investigation make?
+    gold: [investigation.md § Assumptions]
+  - q: What are the model's limitations?
+    gold: [model_card.md § Limitations, engineering_report.md § Data quality and model limitations,
+           evaluation_report.md § Caveats]
+  - q: What is the model intended to be used for?
+    gold: [model_card.md § Intended use, model_card.md § Model purpose]
+  - q: Are there ethical considerations for this model?
+    gold: [model_card.md § Ethical considerations]
+  - q: What data was the model trained on?
+    gold: [model_card.md § Training data, evaluation_report.md § Setup]
+  - q: What are the business implications?
+    gold: [insights.md § Business implications]
+  - q: How many runs were flagged as anomalous?
+    gold: [run_data.md § Anomaly detection, engineering_report.md § Important abnormal parameters,
+           investigation.md § Facts]
+  - q: Which runs are the most anomalous?
+    gold: [run_data.md § Most anomalous runs]
+  - q: Which test-period runs have the highest risk scores?
+    gold: [run_data.md § Riskiest test-period runs, run_data.md § Risk ranking]
+  - q: How many failing runs did the alarms catch?
+    gold: [run_data.md § Risk ranking, run_data.md § Model test metrics,
+           evaluation_report.md § Selected model on the test period]
+  - q: Do similar past runs tell us whether a run will fail?
+    gold: ["run_data.md § Similar past runs: method and overall result"]
+  - q: What do we know about run 1289?
+    gold: [run_data.md § Run 1289]
+
+out_of_scope:
+  - What is the capital of France?
+  - Write a short poem about the sea.
+  - Who won the 2018 football World Cup?
+  - How do I bake sourdough bread?
+  - What will the weather be tomorrow?
+  - Translate "good morning" into Spanish.
+  - Recommend a good movie for tonight.
+  - What is the price of Bitcoin today?

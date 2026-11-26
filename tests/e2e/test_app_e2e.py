@@ -43,7 +43,8 @@ def _open_signed_out(page: Page, url: str) -> None:
 @deployed
 def test_e0_visitors_see_only_the_sign_in_screen(page: Page, app_url):
     _open_signed_out(page, app_url)
-    expect(page.get_by_text("ask for access")).to_be_visible()
+    # Phase 8.10 (#75): the sign-in card says how a newcomer gets in
+    expect(page.get_by_text("then request access")).to_be_visible()
     expect(page.get_by_test_id("stSidebar").get_by_role("link", name="Model")).to_have_count(0)
     page.goto(f"{app_url}/report")  # a deep link shows the sign-in screen, not the page
     expect(page.get_by_role("button", name="Continue with Google")).to_be_visible(timeout=60_000)

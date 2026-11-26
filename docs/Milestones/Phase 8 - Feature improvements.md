@@ -93,6 +93,7 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - the evaluation found the title boost missing "anomalous" against "Anomaly detection" (exact words only): a light stem (first 6 letters) moved it from 4th to 1st
   - [[ADR-037 Prompt-injection guards on every chat answer]]: leaks (instructions, secrets) withheld at once; causes and numbers not in the excerpts withheld after one more try; the prompt says excerpts and question are data, not instructions
   - `tests/unit/test_injection.py`: a stand-in model that obeys every attack; every unsafe answer withheld, an honest one still answered
+  - [[Prompt injection evaluation]] (live, gpt-4o-mini): 23 attacks plus 8 ordinary questions. Over four runs it found a misleading "pretend" answer (prompt sentence added), a dictated sentence the model wrote once (guard added) and a causal guard that withheld a real answer (narrowed to sensors). Final run: 0 unsafe, 8 of 8 ordinary questions answered
 
 8.1 to 8.8 are on `main` (#71, Nov 26, approved by Ravid); 8.9 is in review.
 
@@ -132,6 +133,8 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
 - **Browser and server race:** the browser keeps sending what it showed a moment ago (a timer tick in flight, a slider's old value). Code that reacts to a widget change must tell an echo from a real change.
 - **A second reader of a file:** the launch card read `scenario.json` in the form the app writes, but the run's first stage rewrites it. The traceback was in `main`'s log within a minute of Ravid's report.
 - **Fixed waits on the server:** a 30 s wait that never ran out locally gave up on `main`, where a new run's process takes much longer to start.
+- **A guard needs a control:** blocking every attack is easy if real questions are blocked too. The live injection test asks 8 ordinary questions with the same guards, and that is how the over-strict causal guard showed up.
+- **Run a live test more than once:** the model refused a dictated sentence in one run and wrote it in the next.
 - **Wording:** "1175 training runs changed" counted the training period, not the 80 runs actually shifted.
 
 ## Next

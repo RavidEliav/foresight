@@ -22,11 +22,11 @@ def test_the_reference_run_report_holds_every_result_page():
     assert pdf.startswith(b"%PDF")
     pages, text = _text(pdf)
     assert pages >= 8
-    for section in ("Foresight run report", "At a glance", "1. Data Quality",
-                    "2. EDA & Insights", "3. Model", "4. Investigation & Report", "5. Appendix"):
+    for section in ("Foresight analysis report", "At a glance", "1. Data quality",
+                    "2. Data insights", "3. Model", "4. Findings", "5. Appendix"):
         assert section in text, section
     # the numbers the result pages show, the engineering report and its citations
-    assert "Reference run (committed with the app)" in text
+    assert "Reference analysis" in text
     assert "rf_regularized" in text and "5 of 24" in text and "PASS (26 of 26 passed)" in text
     assert "Hypotheses" in text and "[source: eda_summary.json]" in text
     assert "Model comparison" in text and "Cleaning decisions" in text
@@ -50,7 +50,7 @@ def test_a_scenario_run_is_labeled_synthetic_and_a_run_without_some_files_still_
     _, text = _text(run_report.build(run))
     assert "SYNTHETIC SCENARIO" in text and "planted fault on f_031" in text
     assert "05 Jan 2026, 00:00 UTC" in text and "2.5 min" in text
-    assert "4. Investigation & Report" in text
+    assert "4. Findings" in text
 
 
 def test_times_are_in_the_readers_zone_like_the_app():

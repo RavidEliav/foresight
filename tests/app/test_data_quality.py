@@ -17,7 +17,7 @@ def _render(run_dir: str | None) -> AppTest:
 def test_page_without_runs_explains_what_to_do():
     at = _render(None)
     assert not at.exception
-    assert "No run yet" in at.info[0].value
+    assert "No analysis yet" in at.info[0].value
 
 
 def test_page_shows_validation_cleaning_and_contract(secom_env):

@@ -6,7 +6,7 @@ def open_app(page: Page, url: str) -> None:
     """Open the app and wait until Streamlit has finished its first script run."""
     page.goto(url)
     page.wait_for_selector('[data-testid="stApp"]', timeout=60_000)
-    expect(page.get_by_role("heading", name="Run Pipeline")).to_be_visible(timeout=60_000)
+    expect(page.get_by_role("heading", name="New analysis")).to_be_visible(timeout=60_000)
     expect(page.get_by_test_id("stStatusWidget")).to_have_count(0, timeout=60_000)
 
 

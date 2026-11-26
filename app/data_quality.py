@@ -10,7 +10,7 @@ import streamlit as st
 
 from app import ui
 from app.messages import EXPECTED_FOR_UPLOADS
-from app.runs import is_scenario, is_upload, run_label
+from app.runs import download, is_scenario, is_upload, run_line
 from app.store import read_json
 
 STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:",
@@ -18,13 +18,13 @@ STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:
 
 
 def render(run_dir: Path | None) -> None:
-    ui.page_header("Data Quality")
+    ui.page_header("Data quality")
     if run_dir is None:
-        st.info("No run yet. Start one on the Run Pipeline page to validate the SECOM data.")
+        st.info("No analysis yet. Start one on the New analysis page to check the SECOM data.")
         return
 
     summary = read_json(run_dir, "validation_summary.json")
-    st.caption(run_label(run_dir))
+    run_line(run_dir)
     _status(summary, is_upload(run_dir) or is_scenario(run_dir))
 
     profile = read_json(run_dir, "data_profile.json")
@@ -50,7 +50,7 @@ def render(run_dir: Path | None) -> None:
     if shown == "All validation checks":
         ui.table(pd.DataFrame(summary["checks"])[["status", "name", "message"]], max_rows=30)
     elif shown == "Data Contract":
-        _render_contract(read_json(run_dir, "dataset_contract.json"))
+        _render_contract(run_dir, read_json(run_dir, "dataset_contract.json"))
 
 
 def _status(summary: dict, upload: bool) -> None:
@@ -74,7 +74,7 @@ def _status(summary: dict, upload: bool) -> None:
             st.markdown(f":orange-badge[{check['name']}] {check['message']}")
 
 
-def _render_contract(contract: dict | None) -> None:
+def _render_contract(run_dir: Path, contract: dict | None) -> None:
     if not contract:
         st.info("No Data Contract in this run.")
         return
@@ -88,5 +88,4 @@ def _render_contract(contract: dict | None) -> None:
         f"{contract['target']['mapping']})"
     )
     st.markdown("**Assumptions**\n" + "\n".join(f"- {a}" for a in contract["assumptions"]))
-    st.download_button("Download dataset_contract.json", json.dumps(contract, indent=2),
-                       file_name="dataset_contract.json", mime="application/json")
+    download(run_dir, "dataset_contract.json", json.dumps(contract, indent=2))

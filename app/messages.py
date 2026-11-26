@@ -60,9 +60,9 @@ def explain_reason(status: str, reason: str | None, test_fraction: float) -> str
     if status == "interrupted" and not reason:
         return "Stopped sending updates; the cause was not recorded."
     if status == "stopped":
-        return "Stopped from the Run Pipeline page."
+        return "Stopped from the New analysis page."
     if stage := re.match(r"(\w+) (stage|crew) error", reason):
-        what = "step" if stage.group(2) == "stage" else "step's crew"
+        what = "step" if stage.group(2) == "stage" else "step's AI"
         return f"Something went wrong in the {stage.group(1)} {what}."
     return reason or "Stopped."
 
@@ -86,18 +86,20 @@ def explain_failure(progress: RunProgress, test_fraction: float,
         return reasons, hint
     status, reason = progress.effective_status(), progress.failure_reason or ""
     if status == "timeout":
-        return ["The run took longer than the time limit and was stopped."], \
-            "Resume the run below; if it keeps happening, the LLM service may be slow."
+        return ["The analysis took longer than the time limit and was stopped."], \
+            "Resume it with Resume analysis above; if it keeps happening, the AI service may " \
+            "be slow."
     if status == "interrupted":
         if cause is not None:
             return [cause[0]], cause[1]
-        return [reason or "The run stopped sending updates; the cause was not recorded."], \
-            "Resume the run below: the stages it had finished are reused."
+        return [reason or "The analysis stopped sending updates; the cause was not "
+                          "recorded."], \
+            "Resume it with Resume analysis above: the steps it had finished are reused."
     if status == "stopped":
-        return ["The run was stopped from this page."], \
-            "Resume it below (the stages it had finished are reused), or start a different run."
+        return ["The analysis was stopped from this page."], \
+            "Resume it above (the steps it had finished are reused), or start a different one."
     if stage := re.match(r"(\w+) (stage|crew) error", reason):
-        what = "step" if stage.group(2) == "stage" else "step's crew"
+        what = "step" if stage.group(2) == "stage" else "step's AI"
         return [f"Something went wrong in the {stage.group(1)} {what}."], \
-            "Resume the run to try that step again."
-    return [reason or "The run stopped."], None
+            "Resume the analysis to try that step again."
+    return [reason or "The analysis stopped."], None

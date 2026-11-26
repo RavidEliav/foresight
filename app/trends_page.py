@@ -38,7 +38,7 @@ def _kpis(frame: pd.DataFrame) -> None:
     tokens = _median(real.total_tokens)
     latest = ok.sort_values("when").iloc[-1] if not ok.empty else None
     ui.kpis([
-        ("Runs recorded", f"{len(frame)}", f"{len(ok)} successful", None),
+        ("Analyses recorded", f"{len(frame)}", f"{len(ok)} successful", None),
         ("Median run time", "n/a" if minutes is None else f"{minutes / 60:.1f} min",
          "real runs", "Successful runs with real LLM crews, start to finish."),
         ("Median tokens", "n/a" if tokens is None else f"{tokens:,.0f}", "per real run", None),
@@ -51,7 +51,10 @@ def _kpis(frame: pd.DataFrame) -> None:
 
 def _table(frame: pd.DataFrame) -> None:
     checks = frame[["report_pass", "report_warning", "report_error"]].astype("Int64")
+    numbers = store.analysis_numbers()
     table = pd.DataFrame({
+        "analysis": [f"Analysis {numbers[r]}" if r in numbers else "Reference analysis"
+                     for r in frame.run_id],
         "started": frame.when.dt.strftime("%d %b %Y %H:%M"),
         "source": frame.source_name,
         "status": frame.status,
@@ -84,7 +87,8 @@ def render(settings: Settings) -> None:
         st.warning(f"The Supabase run registry could not be read ({error}); showing the run "
                    "folders on this server instead.", icon=":material/cloud_off:")
     if frame.empty:
-        st.info("No runs recorded yet. Start one on Run Pipeline.", icon=":material/insights:")
+        st.info("No analyses recorded yet. Start one on New analysis.",
+                icon=":material/insights:")
         return
     frame = _prepare(frame)
     names = list(dict.fromkeys(frame.source_name))

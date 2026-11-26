@@ -53,54 +53,104 @@ def is_scenario(run_dir: Path) -> bool:
     return _dataset(run_dir).startswith("Scenario")
 
 
-SYNTHETIC = (":orange-badge[SYNTHETIC: training data changed · metrics on the original SECOM "
-             "test period]")
+SYNTHETIC = ":orange-badge[Synthetic]"
+SYNTHETIC_NOTE = ("Synthetic scenario: the training data was changed on purpose; every metric is "
+                  "computed on the original SECOM test period.")
+
+
+def analysis_name(run_dir: Path) -> str:
+    """Phase 8.10: "Analysis 12", or "Reference analysis" for the committed one."""
+    if run_dir.name == "reference":
+        return "Reference analysis"
+    from app import store
+
+    number = store.analysis_numbers().get(run_dir.name)
+    return f"Analysis {number}" if number else "Analysis"
+
+
+def data_kind(run_dir: Path) -> str:
+    """The data in one word: SECOM, Upload or Scenario."""
+    return "Upload" if is_upload(run_dir) else "Scenario" if is_scenario(run_dir) else "SECOM"
 
 
 def describe_run(run_dir: Path) -> str:
-    """Short label for the run selector, e.g. '16 Nov, 23:17 · SECOM' (local time)."""
+    """The analysis for the selector, e.g. 'Analysis 12 · SECOM · 16 Nov, 23:17' (local)."""
     if run_dir.name == "reference":
-        return "Reference run"
+        return "Reference analysis · SECOM"
     started = run_started(run_dir)
-    when = local_time(started, "%d %b, %H:%M") if started else run_dir.name
-    kind = "Upload" if is_upload(run_dir) else "SYNTHETIC" if is_scenario(run_dir) else "SECOM"
-    return f"{when} · {kind}"
+    when = f" · {local_time(started, '%d %b, %H:%M')}" if started else ""
+    return f"{analysis_name(run_dir)} · {data_kind(run_dir)}{when}"
 
 
 def run_details(run_dir: Path) -> str:
-    """Full description of a run, shown under the selector."""
+    """The analysis's data in full, shown under the selector."""
     if run_dir.name == "reference":
-        return "Committed reference run on the SECOM data (UCI), shipped with the app."
-    started = run_started(run_dir)
-    dataset = _dataset(run_dir)
-    return (f"{dataset} · started {local_time(started)}" if started else dataset)
+        return "The reference analysis of the SECOM data, shipped with the app."
+    return _dataset(run_dir)
 
 
 def run_label(run_dir: Path) -> str:
-    if run_dir.name == "reference":
-        return "Reference run · SECOM (UCI), committed with the app"
+    """The short line at the top of a result page; the details are in ``run_help``."""
+    label = describe_run(run_dir)
+    return f"{label} {SYNTHETIC}" if is_scenario(run_dir) else label
+
+
+def run_help(run_dir: Path, more: str = "") -> str:
+    """The tooltip of the run line: the data in full, when it started, and what a synthetic
+    scenario means."""
     started = run_started(run_dir)
-    label = (f"Run started {local_time(started)} · {_dataset(run_dir)}" if started
-             else f"Run `{run_dir.name}`")
-    return f"{SYNTHETIC} {label}" if is_scenario(run_dir) else label
+    parts = [run_details(run_dir)]
+    if started:
+        parts.append(f"Started {local_time(started)}.")
+    if is_scenario(run_dir):
+        parts.append(SYNTHETIC_NOTE)
+    if more:
+        parts.append(more)
+    return " ".join(p if p.endswith(".") else p + "." for p in parts)
 
 
-def show_markdown_file(run_dir: Path, name: str, download_label: str | None = None) -> bool:
-    """Show a crew document; its own level-1 title is dropped because the page has one."""
+def run_line(run_dir: Path, more: str = "") -> None:
+    """Phase 8.10: the analysis in one short line at the top of a page, the rest in its
+    tooltip."""
+    st.caption(run_label(run_dir), help=run_help(run_dir, more))
+
+
+# Phase 8.10: a run's files by their plain names, for download buttons and file names
+DOCUMENTS = {"engineering_report.md": "Engineering report", "investigation.md": "Investigation",
+             "insights.md": "Insights", "model_card.md": "Model card",
+             "evaluation_report.md": "Evaluation report", "eda_report.html": "Data report",
+             "dataset_contract.json": "Data Contract"}
+MIME = {".md": "text/markdown", ".json": "application/json", ".html": "text/html"}
+
+
+def download(run_dir: Path, name: str, data: bytes | str, **kwargs) -> None:
+    """A download button with a plain label ("Download the engineering report") and a file
+    name a person can read: "Foresight - Analysis 12 - Engineering report.md"."""
+    title = DOCUMENTS.get(name, Path(name).stem.replace("_", " ").capitalize())
+    suffix = Path(name).suffix
+    label = title if title.startswith("Data Contract") else title.lower()
+    st.download_button(f"Download the {label}", data,
+                       file_name=f"Foresight - {analysis_name(run_dir)} - {title}{suffix}",
+                       mime=MIME.get(suffix, "application/octet-stream"),
+                       key=kwargs.pop("key", f"download-{name}"), **kwargs)
+
+
+def show_markdown_file(run_dir: Path, name: str, downloadable: bool = False) -> bool:
+    """Show an AI-written document; its own level-1 title is dropped because the page has
+    one."""
     from app import store
 
     text = store.read_text(run_dir, name)
     if text is None:
         return False
     st.markdown(re.sub(r"\A\s*#\s[^\n]*\n", "", text))
-    if download_label:
-        st.download_button(download_label, text.encode("utf-8"), file_name=name,
-                           mime="text/markdown", key=f"download-{name}")
+    if downloadable:
+        download(run_dir, name, text.encode("utf-8"))
     return True
 
 
 def no_run(what: str) -> None:
-    st.info(f"No {what} yet. Start a run on the Run Pipeline page.")
+    st.info(f"No {what} yet. Start an analysis on the New analysis page.")
 
 
 def show_figure(run_dir: Path, relative: str | None, caption: str | None = None) -> None:

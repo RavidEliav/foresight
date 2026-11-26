@@ -10,6 +10,7 @@ id.
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, tzinfo
 from pathlib import Path
 
@@ -174,13 +175,16 @@ def stop_requested(run_dir: Path) -> bool:
     return jobs.stop_requested(run_dir)
 
 
-def run_report(run_dir: Path, zone: tzinfo = UTC) -> bytes:
-    """The run report PDF (Phase 8.8), with its times in the reader's zone: built from the
-    run's files. The one the run saved (UTC) serves a reader whose zone is unknown."""
+def run_report(run_dir: Path, zone: tzinfo = UTC, name: str | None = None) -> bytes:
+    """The run report PDF (Phase 8.8), with its times in the reader's zone and the analysis's
+    name (Phase 8.10): built from the run's files. The one the run saved (UTC, run id) serves
+    a reader whose zone and name are unknown."""
     from foresight.run_report import RUN_REPORT_FILE, build
 
     saved = run_dir / RUN_REPORT_FILE
-    return saved.read_bytes() if zone is UTC and saved.exists() else build(run_dir, zone)
+    if zone is UTC and name is None and saved.exists():
+        return saved.read_bytes()
+    return build(run_dir, zone, name)
 
 
 def run_data(run_dir: Path) -> tuple:
@@ -230,6 +234,30 @@ def _history(key: str, _settings: Settings) -> tuple[list[dict], str | None]:
         get_logger("registry").warning("registry read failed: %s", redact(exc))
         files = _settings.model_copy(update={"database_url": ""})
         return registry.history(files), f"{type(exc).__name__}"
+
+
+RUN_ID = re.compile(r"^\d{8}T\d{6}\d*Z$")  # a run's id is its UTC start time
+
+
+def analysis_numbers(settings: Settings | None = None) -> dict[str, int]:
+    """Phase 8.10: each run is an analysis with a number, its place in start order among all
+    the analyses this environment recorded (the registry, and the run folders on this server).
+    Run ids are start times, so the numbers need no storing and do not change; the committed
+    reference run has no number ("Reference analysis")."""
+    from foresight.settings import load_settings
+
+    settings = settings or load_settings()
+    return _numbers(settings.model_dump_json(), settings)
+
+
+@st.cache_data(ttl=20, show_spinner=False)
+def _numbers(key: str, _settings: Settings) -> dict[str, int]:
+    rows, _ = _history(key, _settings)
+    ids = {r["run_id"] for r in rows if r.get("source") != "reference"}
+    folder = runs_folder(_settings)
+    if folder.exists():
+        ids |= {p.name for p in folder.iterdir() if p.is_dir()}
+    return {run_id: n for n, run_id in enumerate(sorted(i for i in ids if RUN_ID.match(i)), 1)}
 
 
 def run_history(settings: Settings) -> tuple[pd.DataFrame, str, str | None]:

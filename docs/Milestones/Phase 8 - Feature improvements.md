@@ -1,10 +1,10 @@
 ---
 date: 2026-11-20
-updated: 2026-11-25
+updated: 2026-11-26
 phase: 8
 tags: [milestone, features]
 ---
-# Phase 8: Feature improvements (in progress)
+# Phase 8: Feature improvements (done)
 
 Ravid's picks:
 - Supabase run registry and Trends
@@ -12,10 +12,10 @@ Ravid's picks:
 - Scenario Lab
 - line replay with a 3D wafer
 - PDF export
-- voice
-- course extras: retrieval evaluation, injection tests, MCP server
+- voice (moved after the submission)
+- course extras: retrieval evaluation, injection tests, MCP server (the MCP server moved after the submission)
 
-Added on the way: Stop/Resume, sign-in with roles (Nov 20), one screen per page (Nov 22).
+Added on the way: Stop/Resume, sign-in with roles (Nov 20), one screen per page (Nov 22), a real app look (8.10, Nov 26).
 
 Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project, and the Phase 7 list. The phase is time-boxed before Phase 9 (deliverables due Dec 4).
 
@@ -24,7 +24,7 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
 - Synthetic data must be labeled and kept separate, and metrics computed only on the original SECOM data → [[ADR-029 Synthetic scenarios change only the training period]].
 - The RAG chat is an enhancement; the end-to-end workflow ending with `engineering_report` is the primary deliverable. Ravid decided no further RAG changes or extra end-to-end evidence run are needed: the workflow has run end to end since Phase 4, and the reference run passes 26/26 report checks.
 
-## Delivered so far
+## Delivered
 - **8.1 Run registry and Trends** (#36, #39):
   - Supabase Postgres, server-side only; migrations on deploy; startup backfill ([[ADR-026 Two Supabase projects, one Railway project with two environments]], [[ADR-027 Run registry in Supabase Postgres, server-side only]])
   - the Trends page: KPIs, model quality, time per stage, tokens, outcomes as a plain-language list
@@ -102,12 +102,15 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - **PR 3 (#76):** sources by plain names in the chat, the result pages and the PDF ("Analysis 12 › Insights › Data quality", "Model metrics"; run ids in an All runs answer become analysis names; the stored tags are unchanged for the checks); a developer's My activity shows anyone's analyses and questions ("Activity of"); the sign-in pitch fits two lines on a computer
   - **PR 4 (#77):** every download is a PDF, not markdown (Ravid: .md is no use to a user): the engineering report, investigation, model card, evaluation report, Data insights (replaces the HTML data report) and Data Contract, each titled and named like the full report and made when the button is pressed; the upload template stays a CSV
   - **Upload template (#80):** a small template from the repo is always offered (10 SECOM runs, 2 failing); before, the button showed only once the server had the SECOM files, which a deploy removes. All of SECOM in the upload format is a second button, fetched when pressed
+  - **Deployed test E0 (#79):** the deployed-only sign-in test still looked for the old wording and had failed on `dev` since #75; it blocked the release until fixed
+- **Release to `main`** (#78, Nov 26): 8.10; deployed tests passed on `main`.
+- **8.11 Close-out:** this note, Home, the README (status, button names, sources) and the release of #80 and the close-out to `main`.
 
-8.1 to 8.9 are on `main` (#73, Nov 26); 8.10 is in progress.
+All of Phase 8 is on `main`.
 
 ## Test results
-- 290 tests (unit, integration, app and E2E) pass locally and in CI, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)
-- Smoke + E2E green in CI. The deployed tests check the sign-in screen and the public pages; E1–E9 run in CI against the local app, since a test browser cannot sign in with Google.
+- 316 unit, integration and app tests pass (1 skipped) locally and in CI, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)
+- Smoke + E2E: 14 pass against the local app (E0 is skipped there, since a local checkout has no sign-in), and in CI. The deployed tests check the sign-in screen and the public pages; E1–E9 run in CI against the local app, since a test browser cannot sign in with Google.
 - Supabase advisors on both projects: INFO notes only
 
 ## Issues found (lessons)
@@ -145,13 +148,12 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
 - **Run a live test more than once:** the model refused a dictated sentence in one run and wrote it in the next.
 - **Wording:** "1175 training runs changed" counted the training period, not the 80 runs actually shifted.
 - **Check that the element exists before styling it:** CSS for Streamlit's "Running..." badge did nothing, because `toolbarMode = "minimal"` never renders it. The loading line keys on the app's script state instead, after a delay so the timed refreshes don't flash it.
+- **Check the deployed tests, not only the deploy:** E0 runs only against a deployed app, so the local suite passed while `dev`'s deployed tests failed after #75. "Live" was reported from Railway's status and the health check; the deployed-test run is now part of every check after a deploy.
 - **A `.gitignore` path with a slash is anchored:** `.streamlit/secrets.toml` matched only the root, so the secrets the app writes when started from `app/` showed as untracked. The rule is now `**/.streamlit/secrets.toml`.
 
 ## Next
-Plan changed on Nov 25 (Ravid): voice and the MCP server are future features, built after the submission (Dec 4), not part of it. On Nov 26 he added 8.10, making the app look like a real app:
-- **8.10 A real app:**
-  - PR 2 (#75): the home page, the Streamlit look and the sign-in page
-  - PR 3 (#76): readable source chips, and a developer's My activity for anyone
-  - **the main app's address** (done, Nov 26): `main` moved from `foresight-app-main.up.railway.app` to **https://foresight-ai.up.railway.app** (Railway's free address; `foresight` is reserved by Railway). Ravid added the Google redirect URI first; then the Railway rename, a fresh deploy (`RAILWAY_PUBLIC_DOMAIN` gives the app its address), the repository variable `MAIN_URL` for the deployed tests, README and Home. Checked: health 200, sign-in sends Google the new callback, deployed tests 6 passed. The old address now returns 404.
-- **8.11** Vault close-out, README and release to `main`
-- **After the submission:** voice (ask by voice, answers read aloud) and an MCP server exposing Foresight's tools; and a **light mode** with a dark / light switch (Ravid, Nov 26). Not quick: Streamlit 1.67 switches themes only from its own Settings menu, which `toolbarMode = "minimal"` hides, and about 115 colours in the CSS, charts, stage tiles and wafer are made for the dark cleanroom look (ADR-021), so it needs a second palette and every page checked in both modes. About a day; left until after Dec 4
+- **Phase 9, the deliverables (due Dec 4; presentation Dec 9):** the README, slides (10 to 12) and a demo video of at most 5 minutes on `main`.
+- **After the submission** (Ravid's plan changes of Nov 25 and 26): voice (ask by voice, answers read aloud), an MCP server exposing Foresight's tools, and a **light mode** with a dark / light switch. Light mode is not quick: Streamlit 1.67 switches themes only from its own Settings menu, which `toolbarMode = "minimal"` hides, and about 115 colours in the CSS, charts, stage tiles and wafer are made for the dark cleanroom look (ADR-021), so it needs a second palette and every page checked in both modes. About a day.
+- **Optional:** Google OAuth branding (the Foresight logo and name on Google's consent screen).
+
+The main app's address changed on Nov 26 (8.10): `main` moved from `foresight-app-main.up.railway.app` to **https://foresight-ai.up.railway.app** (Railway's free address; `foresight` is reserved by Railway). Ravid added the Google redirect URI first; then the Railway rename, a fresh deploy (`RAILWAY_PUBLIC_DOMAIN` gives the app its address), the repository variable `MAIN_URL` for the deployed tests, README and Home. The old address returns 404.

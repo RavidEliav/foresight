@@ -285,12 +285,63 @@ section[data-testid="stSidebar"] {
   .st-key-card-replay-controls [data-testid="stColumn"]:not(:last-child) button p {
     font-size: .8rem; }  /* short words, no icons (replay_page) */
 }
+/* Phase 8.10: less of Streamlit around the app: no colour strip on top. (Its "Running..." badge
+   lives in the toolbar, which toolbarMode "minimal" leaves out.) Instead, while the page works,
+   a thin cyan line runs across the top. It shows only after 0.6 s, so the short timed reruns
+   (progress every 2 s, the replay ticks) don't make it flash. */
+[data-testid="stDecoration"] { display: none !important; }
+.stApp[data-test-script-state="running"]::before { content: ""; position: fixed; top: 0;
+  left: 0; right: 0; height: 3px; z-index: 1000000; pointer-events: none; opacity: 0;
+  background: linear-gradient(90deg, transparent, #22D3EE, #A78BFA, transparent);
+  background-size: 40% 100%; background-repeat: no-repeat;
+  animation: fs-loading 1.1s ease-in-out infinite, fs-show .2s ease-out .6s forwards; }
+@keyframes fs-loading { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+@keyframes fs-show { to { opacity: 1; } }
+/* the sign-in page (auth.gate_page): no sidebar, one centred card */
+.st-key-gate-page { max-width: 30rem; margin: 3vh auto 0 auto; }
+.fs-hero { text-align: center; }
+.fs-hero .fs-wordmark { font-size: 3.1rem; justify-content: center; }
+.fs-hero .fs-o { width: 4.3rem; height: 4.3rem; }
+.fs-hero .fs-tagline { margin: .3rem 0 1.1rem 0; }
+.fs-pitch { font-size: 1.02rem; line-height: 1.55; color: #CBD5E1; margin: 0 0 .9rem 0; }
+.fs-benefits { list-style: none; padding: 0; margin: 0 auto 1.2rem auto; display: inline-grid;
+  gap: .35rem; text-align: left; }
+.fs-benefits li { color: #E2E8F0; font-size: .95rem; }
+.fs-benefits li::before { content: "✓"; color: #22D3EE; font-weight: 700;
+  margin-right: .55rem; }
+.st-key-sign-in button { background: #FFFFFF !important; color: #1F1F1F !important;
+  border: 1px solid #DADCE0 !important; font-weight: 600; }
+.st-key-sign-in button p { color: #1F1F1F !important; }
 </style>
 """
 
 
+# Google's "G" (its four colours) on the sign-in button, as Google's sign-in guidelines show it
+GOOGLE_G = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#EA4335" d="M2'
+            '4 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6'
+            '.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5'
+            'H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC'
+            '05" d="M10.5 28.6c-.5-1.4-.8-2.9-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4'
+            ' 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-'
+            '2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.1-13.5-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></s'
+            'vg>')
+
+
 def apply_style() -> None:
+    """The theme, plus what needs the logo: the spinner is the spinning wafer, not
+    Streamlit's ring (Phase 8.10)."""
     st.html(STYLE)
+    st.html(f"""<style>
+[data-testid="stSpinnerIcon"] {{ border: none !important; width: 1.15rem !important;
+  height: 1.15rem !important; background: url("{_logo_uri()}") center / contain no-repeat;
+  animation: fs-spin 1.3s linear infinite !important; }}
+.st-key-sign-in button::before {{ content: ""; width: 1.15rem; height: 1.15rem;
+  margin-right: .55rem; background: url("{_svg_uri(GOOGLE_G)}") center / contain no-repeat; }}
+</style>""")
+
+
+def _svg_uri(svg: str) -> str:
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
 
 
 def _logo_uri() -> str:
@@ -305,6 +356,19 @@ def brand() -> None:
         f'<img class="fs-o" alt="" src="{_logo_uri()}">resight</div>'
         '<span class="fs-sr">Foresight</span>'
         '<div class="fs-tagline">Semiconductor yield intelligence</div></div>')
+
+
+def hero_html() -> str:
+    """The sign-in page's top: the large wordmark, what Foresight does, three benefits."""
+    return ('<div class="fs-hero fs-brand"><div class="fs-wordmark" aria-hidden="true">F'
+            f'<img class="fs-o" alt="" src="{_logo_uri()}">resight</div>'
+            '<span class="fs-sr">Foresight</span>'
+            '<div class="fs-tagline">Semiconductor yield intelligence</div>'
+            '<p class="fs-pitch">Find failing production runs early, see which sensors go with '
+            'them, and get a cited engineering report, on the SECOM fab data.</p>'
+            '<ul class="fs-benefits"><li>Checks the data against a contract</li>'
+            '<li>Ranks the riskiest runs and flags anomalies</li>'
+            '<li>Explains them in cited reports and a chat</li></ul></div>')
 
 
 def sidebar_nav(pages: list, current) -> None:

@@ -46,6 +46,13 @@ def _sync_registry(database_url: str) -> bool:
 _sync_registry(settings.database_url)
 
 
+def home_page() -> None:
+    from app import home_page as page
+
+    page.render(settings, VIEWER, SELECTED, {"new": NEW_ANALYSIS, "ask": ASK,
+                                             "findings": FINDINGS})
+
+
 def run_pipeline_page() -> None:
     from app import run_page
 
@@ -162,8 +169,8 @@ def developer_only_page() -> None:
 
 # Every page's address, so a saved link or a home-screen shortcut opens the app (signed out:
 # the sign-in screen; a developer page for a user: a note) instead of "Page not found"
-PATHS = ["data-quality", "eda", "model", "report", "replay", "trends", "ask", "activity",
-         "users"]
+PATHS = ["new", "data-quality", "eda", "model", "report", "replay", "trends", "ask",
+         "activity", "users"]
 DEVELOPER_PATHS = ["trends", "users"]
 
 
@@ -196,13 +203,18 @@ DATA_QUALITY = st.Page(data_quality_page, title="Data quality", icon=":material/
 ASK = st.Page(ask_page, title="Ask Foresight", icon=":material/forum:", url_path="ask")
 ACTIVITY = st.Page(activity_page, title="My activity", icon=":material/history:",
                    url_path="activity")
+# Phase 8.10: the app opens on Home; New analysis has its own address
+NEW_ANALYSIS = st.Page(run_pipeline_page, title="New analysis", icon=":material/play_arrow:",
+                       url_path="new")
+FINDINGS = st.Page(report_page, title="Findings", icon=":material/description:",
+                   url_path="report")
 MENU = [
-    st.Page(run_pipeline_page, title="New analysis", icon=":material/play_arrow:", default=True),
+    st.Page(home_page, title="Home", icon=":material/home:", default=True),
+    NEW_ANALYSIS,
     DATA_QUALITY,
     st.Page(eda_page, title="Data insights", icon=":material/bar_chart:", url_path="eda"),
     st.Page(model_page, title="Model", icon=":material/model_training:", url_path="model"),
-    st.Page(report_page, title="Findings", icon=":material/description:",
-            url_path="report"),
+    FINDINGS,
     st.Page(replay_page, title="Line replay", icon=":material/slow_motion_video:",
             url_path="replay"),
     *([st.Page(trends_page, title="Trends", icon=":material/trending_up:", url_path="trends")]
@@ -218,6 +230,7 @@ legal_page.back_to(MENU[0], "Back to Foresight")
 navigation = st.navigation(
     [*MENU, *PUBLIC, *([] if VIEWER.developer else
                        _placeholders(developer_only_page, DEVELOPER_PATHS))], position="hidden")
+st.set_page_config(page_title=f"{navigation.title} · Foresight")  # the browser tab (8.10)
 ui.brand()
 if VIEWER.developer:
     ui.environment_badge(settings)

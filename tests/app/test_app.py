@@ -9,11 +9,16 @@ from foresight.flow import run_pipeline
 APP = str(Path(__file__).resolve().parents[2] / "app" / "streamlit_app.py")
 
 
-def _app() -> AppTest:
-    return AppTest.from_file(APP, default_timeout=60).run()
+def _app(home: bool = False) -> AppTest:
+    """The app, on New analysis (Phase 8.10: it opens on Home; Start a new analysis leads
+    there) or on Home."""
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    if not home and not at.exception:
+        at.button(key="home-new").click().run()
+    return at
 
 
-DEVELOPER_MENU = ["New analysis", "Data quality", "Data insights", "Model", "Findings",
+DEVELOPER_MENU = ["Home", "New analysis", "Data quality", "Data insights", "Model", "Findings",
                   "Line replay", "Trends", "Ask Foresight", "My activity", "Users & access"]
 
 
@@ -22,6 +27,9 @@ def test_app_loads_with_brand_menu_and_environment_badge():
     at = _app()
     assert not at.exception
     assert at.title[0].value == "New analysis"
+    home = _app(home=True)  # Phase 8.10: the app opens on Home
+    assert not home.exception and home.title[0].value == "Home"
+    assert home.button(key="home-new").label == "Start a new analysis"
     assert any("Environment: local" in md.value for md in at.sidebar.markdown)
     brand = at.sidebar.get("html")[0].proto.body
     assert "Semiconductor yield intelligence" in brand and "data:image/svg+xml" in brand

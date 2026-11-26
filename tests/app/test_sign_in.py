@@ -11,7 +11,7 @@ from foresight.settings import load_settings
 
 APP = str(Path(__file__).resolve().parents[2] / "app" / "streamlit_app.py")
 DEVELOPER = "dev@example.com"
-USER_MENU = ["New analysis", "Data quality", "Data insights", "Model", "Findings",
+USER_MENU = ["Home", "New analysis", "Data quality", "Data insights", "Model", "Findings",
              "Line replay", "Ask Foresight", "My activity"]
 
 
@@ -42,7 +42,7 @@ def test_visitors_only_see_the_sign_in_screen(user):
     at.user = user
     at.run()
     assert not at.exception
-    assert at.button(key="sign-in").label == "Sign in with Google"
+    assert at.button(key="sign-in").label == "Continue with Google"
     assert _menu(at) == [] and not at.get("popover")
     assert not any(t.value == "Run Pipeline" for t in at.title)
     links = [link.proto.label for link in at.get("page_link")]
@@ -113,11 +113,13 @@ def test_a_user_sees_only_their_own_runs_and_the_reference_run():
     picker = at.sidebar.selectbox(key="view_run")
     assert picker.options == ["Analysis 1 · SECOM · 22 Nov, 09:00 UTC",
                               "Reference analysis · SECOM"]  # not bob's run
+    at.button(key="home-new").click().run()  # the history is on New analysis
     assert [e.label for e in at.expander if "analyses" in e.label.lower()] == [
         "Your analyses (1)"]
 
     at = _app(DEVELOPER, "Ravid Eliav")  # the developer sees every run
     assert len(at.sidebar.selectbox(key="view_run").options) == 3
+    at.button(key="home-new").click().run()
     assert "Analysis history (2)" in [e.label for e in at.expander]
 
 

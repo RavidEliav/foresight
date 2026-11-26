@@ -45,4 +45,5 @@ Ravid asked for Foresight to look like a real app rather than a developer's proj
 - A deleted registry record would renumber the later analyses; nothing deletes records.
 - Without Supabase, the numbers come from the run folders on this server.
 - The tests, the end-to-end tests and the README follow the new names.
-- The home page, the Streamlit look and the sign-in page are the next 8.10 PR; readable sources and the developer's My activity for anyone are the third.
+- PR 2 (#75) added the rest of the look: the app opens on a Home page (New analysis moved to `/new`), the sign-in page is one centred card with a "Continue with Google" button, the spinner is the Foresight logo, the tab title names the page, and a thin cyan line at the top shows that a page is working (Streamlit's own badge is not shown with `toolbarMode = "minimal"`).
+- Readable sources and the developer's My activity for anyone are the third PR.

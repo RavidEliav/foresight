@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 PORT = 8599
-PAGES = {"run": "", "data-quality": "data-quality", "eda": "eda", "model": "model",
+PAGES = {"home": "", "run": "new", "data-quality": "data-quality", "eda": "eda", "model": "model",
          "report": "report", "replay": "replay", "trends": "trends", "ask": "ask",
          "activity": "activity", "users": "users"}
 # The browser window, not the screen: a laptop at 1920x1080 with 125% scaling (the Windows

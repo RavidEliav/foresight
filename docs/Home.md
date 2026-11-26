@@ -22,7 +22,7 @@ Multi-agent semiconductor yield intelligence on SECOM. Author: Ravid Eliav.
 
 ## Links
 - GitHub: https://github.com/RavidEliav/foresight
-- Railway `main`: https://foresight-app-main.up.railway.app
+- Railway `main`: https://foresight-ai.up.railway.app
 - Railway `dev`: https://foresight-app-dev.up.railway.app
 - Supabase dev: https://supabase.com/dashboard/project/lfnfhwmrqijrdpzwbeqd · main: https://supabase.com/dashboard/project/qfzqtuzzfsorieczisjn
 - Presentation: _pending_

@@ -8,7 +8,7 @@ Author: **Ravid Eliav** · AI Developers Course, Final Project
 
 | Environment | Branch | URL |
 |---|---|---|
-| `main` (stable) | `main` | https://foresight-app-main.up.railway.app |
+| `main` (stable) | `main` | https://foresight-ai.up.railway.app |
 | `dev` (testing) | `dev` | https://foresight-app-dev.up.railway.app |
 
 ## Architecture

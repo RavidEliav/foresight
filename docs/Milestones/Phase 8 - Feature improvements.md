@@ -146,6 +146,6 @@ Plan changed on Nov 25 (Ravid): voice and the MCP server are future features, bu
 - **8.10 A real app:**
   - PR 2: the home page, the Streamlit look and the sign-in page
   - PR 3: readable source chips, and a developer's My activity for anyone
-  - the main app's address (Ravid asked)
+  - **the main app's address** (done, Nov 26): `main` moved from `foresight-app-main.up.railway.app` to **https://foresight-ai.up.railway.app** (Railway's free address; `foresight` is reserved by Railway). Ravid added the Google redirect URI first; then the Railway rename, a fresh deploy (`RAILWAY_PUBLIC_DOMAIN` gives the app its address), the repository variable `MAIN_URL` for the deployed tests, README and Home. Checked: health 200, sign-in sends Google the new callback, deployed tests 6 passed. The old address now returns 404.
 - **8.11** Vault close-out, README and release to `main`
 - **After the submission:** voice (ask by voice, answers read aloud) and an MCP server exposing Foresight's tools

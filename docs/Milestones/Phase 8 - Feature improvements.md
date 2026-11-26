@@ -98,6 +98,7 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
 - **Release to `main`** (#73, Nov 26).
 - **8.10 A real app, not a project** (Ravid's step before the close-out):
   - **PR 1 (#74):** each run is an analysis with a number, "Analysis 12 · SECOM · 25 Nov, 15:18"; plain page names (New analysis, Data quality, Data insights, Findings, Line replay); "AI data analyst" instead of crews, "checks" instead of gates; a short run line with the details in its tooltip; plain download names; no environment badge on `main` ([[ADR-038 Runs are analyses with a number and plain names]])
+  - **PR 2 (#75):** a **Home** page where the app opens (start a new analysis, ask, the analysis shown at a glance with its top finding, recent analyses and questions; on a phone the finding is a tab of the card); a sign-in page that is one centred card (wordmark, what Foresight does for an engineer, a white "Continue with Google" button, Privacy and Terms); less Streamlit (no colour strip, the Foresight logo as the spinner, "Findings · Foresight" in the browser tab, a thin cyan loading line after 0.6 s)
 
 8.1 to 8.9 are on `main` (#73, Nov 26); 8.10 is in progress.
 
@@ -140,11 +141,13 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
 - **A guard needs a control:** blocking every attack is easy if real questions are blocked too. The live injection test asks 8 ordinary questions with the same guards, and that is how the over-strict causal guard showed up.
 - **Run a live test more than once:** the model refused a dictated sentence in one run and wrote it in the next.
 - **Wording:** "1175 training runs changed" counted the training period, not the 80 runs actually shifted.
+- **Check that the element exists before styling it:** CSS for Streamlit's "Running..." badge did nothing, because `toolbarMode = "minimal"` never renders it. The loading line keys on the app's script state instead, after a delay so the timed refreshes don't flash it.
+- **A `.gitignore` path with a slash is anchored:** `.streamlit/secrets.toml` matched only the root, so the secrets the app writes when started from `app/` showed as untracked. The rule is now `**/.streamlit/secrets.toml`.
 
 ## Next
 Plan changed on Nov 25 (Ravid): voice and the MCP server are future features, built after the submission (Dec 4), not part of it. On Nov 26 he added 8.10, making the app look like a real app:
 - **8.10 A real app:**
-  - PR 2: the home page, the Streamlit look and the sign-in page
+  - PR 2 (#75): the home page, the Streamlit look and the sign-in page
   - PR 3: readable source chips, and a developer's My activity for anyone
   - **the main app's address** (done, Nov 26): `main` moved from `foresight-app-main.up.railway.app` to **https://foresight-ai.up.railway.app** (Railway's free address; `foresight` is reserved by Railway). Ravid added the Google redirect URI first; then the Railway rename, a fresh deploy (`RAILWAY_PUBLIC_DOMAIN` gives the app its address), the repository variable `MAIN_URL` for the deployed tests, README and Home. Checked: health 200, sign-in sends Google the new callback, deployed tests 6 passed. The old address now returns 404.
 - **8.11** Vault close-out, README and release to `main`

@@ -170,12 +170,12 @@ def idle_watch(settings: Settings) -> None:
 # --- what a visitor without access sees --------------------------------------------------------
 
 def gate_page(settings: Settings, state: Session, privacy, terms) -> None:
-    """The page in place of the app: sign in, ask for access, or wait for approval."""
-    _, middle, _ = st.columns([1, 2, 1])
-    with middle:
-        ui.page_header("Foresight")
-        st.markdown("Semiconductor yield intelligence on the SECOM manufacturing data: data "
-                    "validation, failure prediction, investigation reports and a cited chat.")
+    """The page in place of the app: sign in, ask for access, or wait for approval. Phase
+    8.10: one centred card with what Foresight does, no sidebar."""
+    st.html("<style>[data-testid='stSidebar'], [data-testid='stSidebarCollapsedControl'], "
+            "[data-testid='stExpandSidebarButton'] { display: none !important; }</style>")
+    with st.container(key="gate-page"):
+        st.html(ui.hero_html())
         if state.status == "not_configured":
             ui.friendly_error("Sign-in is not configured on this server, so nobody can sign "
                               "in. The developer needs to set GOOGLE_CLIENT_ID, "
@@ -190,21 +190,20 @@ def gate_page(settings: Settings, state: Session, privacy, terms) -> None:
             _no_access(settings, state.account)
         st.html('<div class="fs-gap"></div>')
         # a row as wide as its links: fixed columns cut the labels in a narrow window
-        with st.container(key="legal-links", horizontal=True, gap="small"):
+        with st.container(key="gate-footer", horizontal=True, gap="small",
+                          vertical_alignment="center", horizontal_alignment="center"):
             st.page_link(privacy, label="Privacy", icon=":material/shield:", width="content")
             st.page_link(terms, label="Terms", icon=":material/gavel:", width="content")
+            st.caption("© 2026 Foresight", width="content")
 
 
 def _sign_in(settings: Settings) -> None:
     with st.container(key="card-sign-in"):
-        ui.label("Sign in")
-        st.markdown("Sign in with your Google account. The session ends when you sign out, "
-                    f"close the browser, or after {settings.auth.idle_minutes} minutes "
-                    "without activity.")
-        st.button("Sign in with Google", key="sign-in", type="primary",
-                  icon=":material/login:", on_click=st.login)
-        st.caption("New here? Sign in with Google first, then ask for access: the developer "
-                   "approves it by email, and from then on one click signs you in.")
+        st.button("Continue with Google", key="sign-in", on_click=st.login, width="stretch",
+                  help=f"The session ends when you sign out, close the browser, or after "
+                       f"{settings.auth.idle_minutes} minutes without activity.")
+        st.caption("New here? Continue with Google, then request access: a developer approves "
+                   "it by email, and from then on one click signs you in.")
 
 
 def _no_access(settings: Settings, account) -> None:
@@ -215,7 +214,7 @@ def _no_access(settings: Settings, account) -> None:
         if status == "pending" or st.session_state.get(REQUEST_SENT):
             ui.label("Request sent")
             st.info(f"Your request for **{email}** is waiting for the developer's approval. "
-                    "Once it is approved, Sign in with Google takes you straight in.",
+                    "Once it is approved, Continue with Google takes you straight in.",
                     icon=":material/hourglass_top:")
             if st.session_state.get(REQUEST_SENT) == "not emailed":
                 st.caption("The email to the developer could not be sent; the request is saved "

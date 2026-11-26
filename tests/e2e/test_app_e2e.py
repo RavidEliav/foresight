@@ -33,8 +33,8 @@ def _show_reference_run(page: Page) -> None:
 def _open_signed_out(page: Page, url: str) -> None:
     """The sign-in screen of an app with sign-in; skips for an app without (local, CI)."""
     page.goto(url)
-    sign_in = page.get_by_role("button", name="Sign in with Google")
-    expect(sign_in.or_(page.get_by_role("heading", name="New analysis"))).to_be_visible(
+    sign_in = page.get_by_role("button", name="Continue with Google")
+    expect(sign_in.or_(page.get_by_role("heading", name="Home"))).to_be_visible(
         timeout=60_000)
     if not sign_in.is_visible():
         pytest.skip("this app has no sign-in configured (a local checkout)")
@@ -46,7 +46,7 @@ def test_e0_visitors_see_only_the_sign_in_screen(page: Page, app_url):
     expect(page.get_by_text("ask for access")).to_be_visible()
     expect(page.get_by_test_id("stSidebar").get_by_role("link", name="Model")).to_have_count(0)
     page.goto(f"{app_url}/report")  # a deep link shows the sign-in screen, not the page
-    expect(page.get_by_role("button", name="Sign in with Google")).to_be_visible(timeout=60_000)
+    expect(page.get_by_role("button", name="Continue with Google")).to_be_visible(timeout=60_000)
     expect(page.get_by_text("Key findings")).to_have_count(0)
     expect(page.get_by_test_id("stException")).to_have_count(0)
 
@@ -169,7 +169,7 @@ FIT = r"""() => {
 }"""
 PHONE_AGENT = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
                "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1")
-PATHS = {"New analysis": "", "Data quality": "data-quality", "Data insights": "eda",
+PATHS = {"Home": "", "New analysis": "new", "Data quality": "data-quality", "Data insights": "eda",
          "Model": "model", "Findings": "report", "Line replay": "replay",
          "Trends": "trends", "Ask Foresight": "ask", "My activity": "activity",
          "Users & access": "users"}
@@ -233,6 +233,7 @@ def _broken_csv(path) -> None:
 def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_path, e2e_runs):
     upload = tmp_path / "broken.csv"
     _broken_csv(upload)
+    _goto(app_page, "New analysis")  # the app opens on Home (Phase 8.10)
     app_page.get_by_text("Upload a CSV").click()
     app_page.get_by_test_id("stFileUploaderDropzoneInput").set_input_files(str(upload))
     expect(app_page.get_by_test_id("stFileChipName").filter(has_text="broken.csv")  # the chip
@@ -257,6 +258,7 @@ def test_e5_broken_upload_is_stopped_by_the_contract_gate(app_page: Page, tmp_pa
 
 def test_e6_full_run_shows_progress_then_the_new_report(app_page: Page, e2e_runs):
     page = app_page
+    _goto(page, "New analysis")
     page.get_by_role("button", name="Run analysis").click()
 
     expect(page.get_by_text("AI data analyst")).to_be_visible(timeout=60_000)

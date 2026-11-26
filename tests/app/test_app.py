@@ -13,16 +13,15 @@ def _app() -> AppTest:
     return AppTest.from_file(APP, default_timeout=60).run()
 
 
-DEVELOPER_MENU = ["Run Pipeline", "Data Quality", "EDA & Insights", "Model",
-                  "Investigation & Report", "Line Replay", "Trends", "Ask Foresight",
-                  "My activity", "Users & access"]
+DEVELOPER_MENU = ["New analysis", "Data quality", "Data insights", "Model", "Findings",
+                  "Line replay", "Trends", "Ask Foresight", "My activity", "Users & access"]
 
 
 def test_app_loads_with_brand_menu_and_environment_badge():
     """A local checkout without Google keys opens as a local developer (Phase 8.6)."""
     at = _app()
     assert not at.exception
-    assert at.title[0].value == "Run Pipeline"
+    assert at.title[0].value == "New analysis"
     assert any("Environment: local" in md.value for md in at.sidebar.markdown)
     brand = at.sidebar.get("html")[0].proto.body
     assert "Semiconductor yield intelligence" in brand and "data:image/svg+xml" in brand
@@ -159,9 +158,9 @@ def test_finished_run_shows_stages_gates_and_becomes_viewable(monkeypatch, secom
     assert any("Data Contract: PASS" in md.value for md in at.markdown)
     stepper = next(h.proto.body for h in at.get("html") if "fs-stepper" in h.proto.body)
     assert stepper.count('class="fs-stage fs-done"') == 5
-    assert "Data Analyst crew · done" in stepper
+    assert "AI data analyst · done" in stepper
     assert stepper.count("fs-gate-pass") + stepper.count("fs-gate-warning") == 3
-    assert "Run history (1)" in [e.label for e in at.expander]
+    assert "Analysis history (1)" in [e.label for e in at.expander]
     at.run()  # the next rerun lists the new run first in the sidebar selector
     selector = at.sidebar.selectbox(key="view_run")
     assert Path(selector.value).parent == jobs.runs_dir(secom_env)
@@ -250,7 +249,7 @@ def test_a_running_run_can_be_stopped_then_resumed(monkeypatch):
     assert any("was stopped" in w.value for w in at.warning)
     stepper = next(h.proto.body for h in at.get("html") if "fs-stepper" in h.proto.body)
     assert 'class="fs-stage fs-stopped"' in stepper
-    assert at.button(key="continue").label == "Resume run"
+    assert at.button(key="continue").label == "Resume analysis"
     at.button(key="continue").click().run()
     assert resumed == [run_id]
 
@@ -309,7 +308,7 @@ def test_a_slow_stop_starts_the_new_run_once_the_old_one_has_stopped(monkeypatch
     at.button(key="run").click().run()
     assert stops == [run_id] and not started  # still stopping: nothing started yet
     assert at.button(key="run").disabled
-    assert any("the new run starts as soon as it has stopped" in c.value for c in at.caption)
+    assert any("the new one starts as soon as it has stopped" in c.value for c in at.caption)
 
     tracker.finish("stopped", "stopped by the user")  # the old run's process stops
     at.run()  # the page's next refresh
@@ -361,6 +360,6 @@ def test_an_archived_run_is_loaded_again_when_picked(monkeypatch):
 
     at = _app()
     assert not at.exception
-    assert at.sidebar.selectbox(key="view_run").options[0].endswith("SECOM")
+    assert at.sidebar.selectbox(key="view_run").options[0].startswith("Analysis 1 · SECOM")
     assert (folder / "validation_summary.json").exists()  # loaded for the result pages
     assert not archive.is_stub(folder)

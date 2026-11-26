@@ -23,7 +23,7 @@ FONT = "DejaVu"
 INK, MUTED, ACCENT, AMBER, LINE = (15, 23, 42), (100, 116, 139), (8, 145, 178), (180, 83, 9), \
     (203, 213, 225)
 CITATION = re.compile(r"\[(?:source|background):[^\]]*\]")
-SECTIONS = ["Data Quality", "EDA & Insights", "Model", "Investigation & Report", "Appendix"]
+SECTIONS = ["Data quality", "Data insights", "Model", "Findings", "Appendix"]
 
 
 def _json(run_dir: Path, name: str) -> dict | None:
@@ -73,7 +73,7 @@ class _Report(FPDF):
         self.add_font(FONT, "B", str(fonts / "DejaVuSans-Bold.ttf"))
         self.add_font(FONT, "I", str(fonts / "DejaVuSans-Oblique.ttf"))
         self.add_font(FONT, "BI", str(fonts / "DejaVuSans-BoldOblique.ttf"))
-        self.set_title("Foresight run report")
+        self.set_title("Foresight analysis report")
         self.set_author("Foresight")
         self.set_creator("Foresight")
 
@@ -81,7 +81,7 @@ class _Report(FPDF):
         self.set_y(-12)
         self.set_font(FONT, "", 7.5)
         self.set_text_color(*MUTED)
-        self.cell(0, 5, f"Foresight run report · {self.run_label}", align="L")
+        self.cell(0, 5, f"Foresight · {self.run_label}", align="L")
         self.set_x(self.l_margin)
         self.cell(0, 5, f"page {self.page_no()} of {{nb}}", align="R")
 
@@ -246,7 +246,7 @@ def _cover(pdf: _Report, run_dir: Path, facts: dict) -> None:
     pdf.add_page()
     pdf.set_font(FONT, "B", 26)
     pdf.set_text_color(*INK)
-    pdf.cell(0, 13, "Foresight run report", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 13, "Foresight analysis report", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font(FONT, "", 10)
     pdf.set_text_color(*MUTED)
     pdf.cell(0, 6, "Semiconductor yield intelligence on the SECOM manufacturing data",
@@ -283,7 +283,7 @@ def _cover(pdf: _Report, run_dir: Path, facts: dict) -> None:
 
 
 def _data_quality(pdf: _Report, run_dir: Path) -> None:
-    pdf.section("1. Data Quality", "The Data Contract checks on the run's data, and how the "
+    pdf.section("1. Data quality", "The Data Contract checks on the run's data, and how the "
                 "data was cleaned.")
     summary = _json(run_dir, "validation_summary.json")
     profile = _json(run_dir, "data_profile.json")
@@ -313,7 +313,7 @@ def _data_quality(pdf: _Report, run_dir: Path) -> None:
 
 
 def _eda(pdf: _Report, run_dir: Path) -> None:
-    pdf.section("2. EDA & Insights", "Descriptive statistics over the whole dataset, and the "
+    pdf.section("2. Data insights", "Descriptive statistics over the whole dataset, and the "
                 "Data Analyst crew's insights.")
     eda = _json(run_dir, "eda_summary.json")
     if eda:
@@ -394,7 +394,7 @@ def _model(pdf: _Report, run_dir: Path) -> None:
 
 
 def _investigation(pdf: _Report, run_dir: Path) -> None:
-    pdf.section("4. Investigation & Report", "Anomalies, risk ranking, similar past runs and "
+    pdf.section("4. Findings", "Anomalies, risk ranking, similar past runs and "
                 "the engineering report.")
     anomaly = _json(run_dir, "anomaly_summary.json")
     risk = _json(run_dir, "risk_summary.json")
@@ -471,7 +471,7 @@ def _appendix(pdf: _Report, run_dir: Path, manifest: dict | None) -> None:
 
 
 def _facts(run_dir: Path, manifest: dict | None, progress: dict | None,
-           zone: tzinfo = UTC) -> dict:
+           zone: tzinfo = UTC, name: str | None = None) -> dict:
     """The cover's facts and the numbers at a glance."""
     run_id = run_dir.name
     dataset = (progress or {}).get("dataset") or "SECOM (UCI)"
@@ -480,13 +480,13 @@ def _facts(run_dir: Path, manifest: dict | None, progress: dict | None,
     finished = _when((progress or {}).get("finished_at"))
     metrics = _json(run_dir, "model_metrics.json")
     checks = _json(run_dir, "report_checks.json")
-    name = ("Reference run (committed with the app)" if not _run_time(run_id)
-            else run_id)
-    rows = [["Run", name],
+    # the app names it ("Analysis 12", Phase 8.10); a report saved by the run has its id
+    name = name or ("Reference analysis" if not _run_time(run_id) else run_id)
+    rows = [["Analysis", name],
             ["Dataset", dataset],
             ["Started", _shown(started, zone, with_zone=True) if started else "n/a"]]
     if started and finished:
-        rows.append(["Run time", f"{(finished - started).total_seconds() / 60:.1f} min"])
+        rows.append(["Took", f"{(finished - started).total_seconds() / 60:.1f} min"])
     if metrics:
         rows.append(["Model", f"{metrics['selected_model']} · "
                               f"{metrics['operating_point']['rule']}"])
@@ -517,18 +517,18 @@ def _facts(run_dir: Path, manifest: dict | None, progress: dict | None,
         if "fails_found" in test:
             glance.append(("Failing runs caught", f"{test['fails_found']} of "
                            f"{test['fails_total']}", f"with {test['alarms']} alarms"))
-    label = f"{dataset} · {_shown(started, zone)}" if started else dataset
+    label = " · ".join([name, dataset] + ([_shown(started, zone)] if started else []))
     return {"rows": rows, "glance": glance, "synthetic": dataset.startswith("Scenario"),
             "created": finished or started, "label": label}
 
 
-def build(run_dir: Path, zone: tzinfo = UTC) -> bytes:
+def build(run_dir: Path, zone: tzinfo = UTC, name: str | None = None) -> bytes:
     """The run report of ``run_dir`` as PDF bytes, with its times in ``zone`` (the reader's,
-    as in the app; the saved report uses UTC)."""
+    as in the app; the saved report uses UTC) and the analysis's ``name`` ("Analysis 12")."""
     run_dir = Path(run_dir)
     manifest = _json(run_dir, "run_manifest.json")
     progress = _json(run_dir, "progress.json")
-    facts = _facts(run_dir, manifest, progress, zone)
+    facts = _facts(run_dir, manifest, progress, zone, name)
     pdf = _Report(facts["label"])
     if facts["created"]:
         pdf.set_creation_date(facts["created"])  # the same run gives the same file

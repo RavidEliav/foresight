@@ -7,7 +7,7 @@ from pathlib import Path
 import streamlit as st
 
 from app import ui
-from app.runs import no_run, run_label
+from app.runs import no_run, run_line
 from foresight.settings import Settings
 
 EXAMPLES = ["What is the model's test PR-AUC?", "Which sensors differ most between failing "
@@ -34,13 +34,13 @@ def render(run_dir: Path | None, settings: Settings) -> None:
                                  label_visibility="collapsed") or SCOPES[0]
     every = scope == "All runs"
     if every:
-        runs = "All recorded runs" if ui.developer() else "Your runs and the reference run"
-        st.caption(f"{runs} · answers come only from the runs' reports, say which run "
-                   "each statement is about and cite it; anything else gets \"Not found in the "
-                   "recorded runs.\"")
+        runs = "All analyses" if ui.developer() else "Your analyses and the reference analysis"
+        st.caption(runs, help="Answers come only from the analyses' reports, say which "
+                   "analysis each statement is about and show its sources; anything else gets "
+                   "\"Not found in the recorded runs.\"")
     else:
-        st.caption(f"{run_label(run_dir)} · answers come only from this run's reports and cite "
-                   "them; anything else gets \"Not found in this run's artifacts.\"")
+        run_line(run_dir, "Answers come only from this analysis's reports and show their "
+                          "sources; anything else gets \"Not found in this run's artifacts.\"")
 
     key = "all_runs" if every else str(run_dir)
     history: list[dict] = st.session_state.setdefault("chat", {}).setdefault(key, [])

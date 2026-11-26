@@ -11,8 +11,8 @@ from foresight.settings import load_settings
 
 APP = str(Path(__file__).resolve().parents[2] / "app" / "streamlit_app.py")
 DEVELOPER = "dev@example.com"
-USER_MENU = ["Run Pipeline", "Data Quality", "EDA & Insights", "Model", "Investigation & Report",
-             "Line Replay", "Ask Foresight", "My activity"]
+USER_MENU = ["New analysis", "Data quality", "Data insights", "Model", "Findings",
+             "Line replay", "Ask Foresight", "My activity"]
 
 
 @pytest.fixture(autouse=True)
@@ -111,12 +111,14 @@ def test_a_user_sees_only_their_own_runs_and_the_reference_run():
     at = _app("ada@example.com")
     assert not at.exception
     picker = at.sidebar.selectbox(key="view_run")
-    assert picker.options == ["22 Nov, 09:00 UTC · SECOM", "Reference run"]  # not bob's run
-    assert [e.label for e in at.expander if "runs" in e.label.lower()] == ["Your runs (1)"]
+    assert picker.options == ["Analysis 1 · SECOM · 22 Nov, 09:00 UTC",
+                              "Reference analysis · SECOM"]  # not bob's run
+    assert [e.label for e in at.expander if "analyses" in e.label.lower()] == [
+        "Your analyses (1)"]
 
     at = _app(DEVELOPER, "Ravid Eliav")  # the developer sees every run
     assert len(at.sidebar.selectbox(key="view_run").options) == 3
-    assert "Run history (2)" in [e.label for e in at.expander]
+    assert "Analysis history (2)" in [e.label for e in at.expander]
 
 
 def test_recent_questions_include_questions_about_all_runs():

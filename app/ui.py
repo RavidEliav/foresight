@@ -355,16 +355,17 @@ def run_report_button(run_dir: Path) -> None:
     that run in one PDF (Phase 8.8; the one place for it). The PDF is made when the button is
     pressed, not on every page."""
     from app import store
-    from app.runs import local_zone
+    from app.runs import analysis_name, local_zone
 
     zone = local_zone()  # read now: the PDF is made outside the page run, without the browser
+    name = analysis_name(run_dir)
     st.sidebar.download_button(
-        "Download full run report", data=lambda: store.run_report(run_dir, zone),
-        file_name=f"foresight-run-report-{run_dir.name}.pdf", mime="application/pdf",
+        "Download the full report", data=lambda: store.run_report(run_dir, zone, name),
+        file_name=f"Foresight - {name} - Full report.pdf", mime="application/pdf",
         key="run-report", icon=":material/picture_as_pdf:", width="stretch", type="primary",
-        help="Every result page of this run in one PDF: Data Quality, EDA & Insights, Model, "
-             "Investigation & Report (with the engineering report) and the report's checks.")
-    st.sidebar.caption("All result pages of this run in one PDF.")  # the whole run, not a page
+        help="Every result page of this analysis in one PDF: Data quality, Data insights, "
+             "Model, Findings (with the engineering report) and the report's checks.")
+    st.sidebar.caption("All result pages of this analysis in one PDF.")  # the whole run, not a page
 
 
 def extended(labels: list[str], key: str) -> str | None:
@@ -498,7 +499,11 @@ def md(text: str) -> str:
 
 
 def environment_badge(settings: Settings) -> None:
+    """Which app a developer is in, on dev and a local checkout; main is the product, so it
+    shows no environment (Phase 8.10)."""
     env = settings.environment
+    if env == "main":
+        return
     st.sidebar.markdown(f":{ENV_COLORS.get(env, 'blue')}-badge[Environment: {env}]")
 
 

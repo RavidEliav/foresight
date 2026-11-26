@@ -124,10 +124,10 @@ def test_e3_report_labels_facts_and_hypotheses_and_downloads(app_page: Page):
     _open_extended(app_page, "Engineering report")
     with app_page.expect_download() as download:
         app_page.get_by_role("button", name="Download the engineering report").click()
-    text = Path(download.value.path()).read_text(encoding="utf-8")
+    # Phase 8.10: every download is a PDF
     assert download.value.suggested_filename == (
-        "Foresight - Reference analysis - Engineering report.md")
-    assert text.startswith("# Engineering report") and "## Hypotheses" in text
+        "Foresight - Reference analysis - Engineering report.pdf")
+    assert Path(download.value.path()).read_bytes().startswith(b"%PDF")
     # Phase 8.8: the whole run in one PDF, from under the sidebar's run choice
     with app_page.expect_download(timeout=60_000) as report:
         app_page.get_by_test_id("stSidebar").get_by_role(

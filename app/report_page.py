@@ -75,10 +75,8 @@ def render(run_dir: Path | None) -> None:
         _render_wafer(run_dir)
 
     if not ui.developer():  # users get the report; Extended data is the developer view
-        report = store.read_bytes(run_dir, "engineering_report.md")
-        if report is not None:
-            download(run_dir, "engineering_report.md", report, type="primary",
-                     icon=":material/download:")
+        if store.exists(run_dir, "engineering_report.md"):
+            download(run_dir, "engineering_report.md", type="primary")
         return
     shown = ui.extended(TABS, "report")
     if shown == "Engineering report":
@@ -282,7 +280,7 @@ def _render_investigation(run_dir: Path) -> None:
         with st.container(border=True):
             st.markdown(f":{color}-badge[{title}] :gray[{meaning}]")
             st.markdown(cited(body))
-    download(run_dir, "investigation.md", text.encode("utf-8"))
+    download(run_dir, "investigation.md")
 
 
 def _render_checks(checks: dict | None) -> None:

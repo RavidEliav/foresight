@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app import charts, store, ui
-from app.runs import download, no_run, read_json, run_line, show_markdown_file
+from app.runs import no_run, read_json, run_line, show_markdown_file
 
 
 def render(run_dir: Path | None) -> None:
@@ -72,10 +72,9 @@ def render(run_dir: Path | None) -> None:
             ui.label("Correlation between the sensors that differ most")
             charts.correlation(run_dir, top)
     elif shown == "Full insights":
+        # one PDF: the numbers, these insights, the fail-rate chart and the sensors that
+        # differ (Phase 8.10: it replaces the HTML data report)
         show_markdown_file(run_dir, "insights.md", downloadable=True)
-        report = store.read_bytes(run_dir, "eda_report.html")
-        if report is not None:
-            download(run_dir, "eda_report.html", report)
 
 
 def _summary_section(run_dir: Path) -> None:

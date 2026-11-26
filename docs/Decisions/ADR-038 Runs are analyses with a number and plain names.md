@@ -38,7 +38,7 @@ Ravid asked for Foresight to look like a real app rather than a developer's proj
   - "checks" instead of gates
   - "Run analysis", "Stop analysis" and "Resume analysis"
   - failure messages that point at the Resume analysis button, which is above them since #58
-- **Downloads:** "Download the engineering report", saved as `Foresight - Analysis 12 - Engineering report.md`. The full PDF is "Download the full report".
+- **Downloads:** "Download the engineering report", saved as `Foresight - Analysis 12 - Engineering report.pdf`. Every download is a PDF (PR 4, #77, Ravid: markdown is no use to a user): each document is built like the full report, and the Data insights PDF replaces the HTML data report. The upload template stays a CSV, since it is data to fill in. The full PDF is "Download the full report".
 - **`main` shows no environment badge.** `dev` and a local checkout still do.
 
 ## Consequences

@@ -28,7 +28,9 @@ def test_the_reference_run_report_holds_every_result_page():
     # the numbers the result pages show, the engineering report and its citations
     assert "Reference analysis" in text
     assert "rf_regularized" in text and "5 of 24" in text and "PASS (26 of 26 passed)" in text
-    assert "Hypotheses" in text and "[source: eda_summary.json]" in text
+    # Phase 8.10: sources by their plain names
+    assert "Hypotheses" in text and "(Data insights)" in text and "[source:" not in text
+    assert "Sources cited" in text
     assert "Model comparison" in text and "Cleaning decisions" in text
     assert "SYNTHETIC" not in text
 

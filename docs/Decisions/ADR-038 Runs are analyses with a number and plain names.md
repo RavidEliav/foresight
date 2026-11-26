@@ -46,4 +46,4 @@ Ravid asked for Foresight to look like a real app rather than a developer's proj
 - Without Supabase, the numbers come from the run folders on this server.
 - The tests, the end-to-end tests and the README follow the new names.
 - PR 2 (#75) added the rest of the look: the app opens on a Home page (New analysis moved to `/new`), the sign-in page is one centred card with a "Continue with Google" button, the spinner is the Foresight logo, the tab title names the page, and a thin cyan line at the top shows that a page is working (Streamlit's own badge is not shown with `toolbarMode = "minimal"`).
-- Readable sources and the developer's My activity for anyone are the third PR.
+- PR 3 (#76): sources by plain names. The tags stay in the stored text, since the chat's citation guard and the report checks read them; only what is shown changes (`foresight/sources.py`: chips in the app, "(Model metrics)" in the PDF, its appendix "Sources cited"). A developer's My activity has an "Activity of" picker over the accounts.

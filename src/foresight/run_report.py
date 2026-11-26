@@ -18,6 +18,8 @@ from pathlib import Path
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
+from foresight.sources import readable
+
 RUN_REPORT_FILE = "run_report.pdf"
 FONT = "DejaVu"
 INK, MUTED, ACCENT, AMBER, LINE = (15, 23, 42), (100, 116, 139), (8, 145, 178), (180, 83, 9), \
@@ -131,8 +133,9 @@ class _Report(FPDF):
             self._styled(before.rstrip(" "), size)
             self.set_font(FONT, "", size - 2)
             self.set_text_color(*MUTED)
-            # the space goes with the tag, so a line breaks before it, not inside it
-            self.write(5, (" " if before.endswith(" ") else "") + match.group(0))
+            # the space goes with the source, so a line breaks before it, not inside it; the
+            # source by its plain name, "(Model metrics)" (Phase 8.10)
+            self.write(5, (" " if before.endswith(" ") else "") + readable(match.group(0)))
             self.set_text_color(*INK)
             pos = match.end()
         self._styled(text[pos:], size)
@@ -277,9 +280,9 @@ def _cover(pdf: _Report, run_dir: Path, facts: dict) -> None:
     if facts["glance"]:
         pdf.heading("At a glance")
         pdf.numbers(facts["glance"])
-    pdf.small("Every statement in the crews' texts cites the run file it comes from "
-              "([source: ...]); background knowledge is cited as [background: ...]. "
-              "Associations are not causes.")
+    pdf.small("Every statement in the AI's texts names the analysis file it comes from, in "
+              "brackets, such as (Model metrics); background knowledge is marked (Background: "
+              "...). Associations are not causes.")
 
 
 def _data_quality(pdf: _Report, run_dir: Path) -> None:
@@ -443,11 +446,11 @@ def _appendix(pdf: _Report, run_dir: Path, manifest: dict | None) -> None:
         pdf.grid(["Status", "Check", "Result"],
                  [[c["status"], c["name"], c["message"]] for c in checks["checks"]],
                  (18, 64, 92), 7.5)
-    cited = sorted({m.group(0)[1:-1].split(":", 1)[1].strip()
+    cited = sorted({readable(m.group(0), chip=str)
                     for name in ("engineering_report.md", "insights.md", "model_card.md")
                     for m in CITATION.finditer(_text(run_dir, name) or "")})
     if cited:
-        pdf.heading("Files and sections cited")
+        pdf.heading("Sources cited")
         pdf.set_font(FONT, "", 8)
         for source in cited:
             pdf.multi_cell(0, 4.2, f"• {source}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)

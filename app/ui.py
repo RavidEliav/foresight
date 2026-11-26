@@ -304,6 +304,8 @@ section[data-testid="stSidebar"] {
 .fs-hero .fs-o { width: 4.3rem; height: 4.3rem; }
 .fs-hero .fs-tagline { margin: .3rem 0 1.1rem 0; }
 .fs-pitch { font-size: 1.02rem; line-height: 1.55; color: #CBD5E1; margin: 0 0 .9rem 0; }
+/* on a computer the pitch reaches a little past the card, so it is two lines */
+@media (min-width: 640px) { .fs-pitch { margin: 0 -1.5rem .9rem -1.5rem; } }
 .fs-benefits { list-style: none; padding: 0; margin: 0 auto 1.2rem auto; display: inline-grid;
   gap: .35rem; text-align: left; }
 .fs-benefits li { color: #E2E8F0; font-size: .95rem; }

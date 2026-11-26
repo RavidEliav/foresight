@@ -99,6 +99,7 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
 - **8.10 A real app, not a project** (Ravid's step before the close-out):
   - **PR 1 (#74):** each run is an analysis with a number, "Analysis 12 · SECOM · 25 Nov, 15:18"; plain page names (New analysis, Data quality, Data insights, Findings, Line replay); "AI data analyst" instead of crews, "checks" instead of gates; a short run line with the details in its tooltip; plain download names; no environment badge on `main` ([[ADR-038 Runs are analyses with a number and plain names]])
   - **PR 2 (#75):** a **Home** page where the app opens (start a new analysis, ask, the analysis shown at a glance with its top finding, recent analyses and questions; on a phone the finding is a tab of the card); a sign-in page that is one centred card (wordmark, what Foresight does for an engineer, a white "Continue with Google" button, Privacy and Terms); less Streamlit (no colour strip, the Foresight logo as the spinner, "Findings · Foresight" in the browser tab, a thin cyan loading line after 0.6 s)
+  - **PR 3 (#76):** sources by plain names in the chat, the result pages and the PDF ("Analysis 12 › Insights › Data quality", "Model metrics"; run ids in an All runs answer become analysis names; the stored tags are unchanged for the checks); a developer's My activity shows anyone's analyses and questions ("Activity of"); the sign-in pitch fits two lines on a computer
 
 8.1 to 8.9 are on `main` (#73, Nov 26); 8.10 is in progress.
 
@@ -148,7 +149,7 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
 Plan changed on Nov 25 (Ravid): voice and the MCP server are future features, built after the submission (Dec 4), not part of it. On Nov 26 he added 8.10, making the app look like a real app:
 - **8.10 A real app:**
   - PR 2 (#75): the home page, the Streamlit look and the sign-in page
-  - PR 3: readable source chips, and a developer's My activity for anyone
+  - PR 3 (#76): readable source chips, and a developer's My activity for anyone
   - **the main app's address** (done, Nov 26): `main` moved from `foresight-app-main.up.railway.app` to **https://foresight-ai.up.railway.app** (Railway's free address; `foresight` is reserved by Railway). Ravid added the Google redirect URI first; then the Railway rename, a fresh deploy (`RAILWAY_PUBLIC_DOMAIN` gives the app its address), the repository variable `MAIN_URL` for the deployed tests, README and Home. Checked: health 200, sign-in sends Google the new callback, deployed tests 6 passed. The old address now returns 404.
 - **8.11** Vault close-out, README and release to `main`
 - **After the submission:** voice (ask by voice, answers read aloud) and an MCP server exposing Foresight's tools

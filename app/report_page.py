@@ -11,8 +11,9 @@ import pandas as pd
 import streamlit as st
 
 from app import charts, store, ui
-from app.runs import download, no_run, read_json, run_line, show_markdown_file
+from app.runs import cited, download, no_run, read_json, run_line, show_markdown_file
 from foresight.crews.summary import SUMMARY_FILE, InvestigationSummary
+from foresight.sources import file_title
 
 STATUS_ICON = {"PASS": ":material/check_circle:", "WARNING": ":material/warning:",
                "ERROR": ":material/cancel:"}
@@ -198,7 +199,7 @@ def _render_findings(overview: InvestigationSummary) -> None:
     with st.container(key="card-summary"):
         ui.label("Key findings")
         st.html(f'<div class="fs-headline">{_escape(overview.headline)}</div>')
-        st.markdown("\n".join(f"- {ui.md(f.text)} :gray-badge[{f.source}]"
+        st.markdown("\n".join(f"- {cited(ui.md(f.text))} :gray-badge[{file_title(f.source)}]"
                               for f in overview.key_findings))
 
 
@@ -215,8 +216,8 @@ def _render_hypotheses(overview: InvestigationSummary) -> None:
                 color = ui.CONFIDENCE_COLORS[card.confidence]
                 st.markdown(f"**H{card.number}** :{color}-badge[{card.confidence} confidence]")
                 st.markdown(f"**{ui.md(card.title)}**")
-                st.markdown(f":gray[Evidence:] {ui.md(card.evidence)}")
-                st.markdown(f":blue[Verify:] {ui.md(card.verify)}")
+                st.markdown(f":gray[Evidence:] {cited(ui.md(card.evidence))}")
+                st.markdown(f":blue[Verify:] {cited(ui.md(card.verify))}")
 
 
 def _escape(text: str) -> str:
@@ -280,7 +281,7 @@ def _render_investigation(run_dir: Path) -> None:
             continue
         with st.container(border=True):
             st.markdown(f":{color}-badge[{title}] :gray[{meaning}]")
-            st.markdown(body)
+            st.markdown(cited(body))
     download(run_dir, "investigation.md", text.encode("utf-8"))
 
 

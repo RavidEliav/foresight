@@ -34,9 +34,20 @@ TITLE_BOOST = 0.3  # hybrid retrieval: + 0.3 x share of the question's words in 
 ID_BOOST = 0.3  # + 0.3 when a number in the question (e.g. a run id) is in the section title
 
 
+STEM = 6  # longer words compare by their first 6 letters: verified ~ verification
+
+
+def _stem(word: str) -> str:
+    word = word.rstrip("s")
+    return word[:STEM] if len(word) > STEM and not word.isdigit() else word
+
+
 def content_words(text: str) -> set[str]:
-    return {w.rstrip("s") for w in re.findall(r"[a-z0-9_]+", text.lower())} - \
-        {w.rstrip("s") for w in STOPWORDS}
+    """A text's words for the title boost, lightly stemmed (Phase 8.9: the retrieval
+    evaluation found "verified" missing "Suggested verification", "anomalous" missing
+    "Anomaly detection")."""
+    return {_stem(w) for w in re.findall(r"[a-z0-9_]+", text.lower())} - \
+        {_stem(w) for w in STOPWORDS}
 
 
 def title_boost(words: set[str], section: str) -> float:

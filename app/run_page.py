@@ -92,11 +92,22 @@ def _launch(settings: Settings, run_dir: Path | None, progress: RunProgress | No
             st.caption("Columns: `timestamp` (dd/mm/yyyy HH:MM:SS or ISO), `label` (-1 pass, "
                        "1 fail) and the 590 sensor columns in SECOM order. The file goes "
                        "through the same Data Contract checks as the built-in data.")
-            template = store.upload_template(settings)
-            if template is not None:
-                st.download_button("Download a template (the SECOM data in this format)",
-                                   template,
-                                   file_name="secom_upload_format.csv", mime="text/csv")
+            # Phase 8.10: a small template is always there; the full SECOM file on request
+            with st.container(key="upload-templates", horizontal=True, gap="small"):
+                st.download_button(
+                    "Download a template", store.upload_template(),
+                    file_name="Foresight - Upload template.csv", mime="text/csv",
+                    key="upload-template", icon=":material/download:",
+                    help="The columns in the right order, with 10 SECOM runs (2 failing) as "
+                         "examples: replace them with your runs. A real file needs at least "
+                         "100 runs.")
+                st.download_button(
+                    "Download the SECOM data as an example",
+                    data=lambda: store.example_data(settings),
+                    file_name="Foresight - SECOM data in the upload format.csv",
+                    mime="text/csv", key="upload-example", icon=":material/dataset:",
+                    help="All 1,567 SECOM runs in this format (about 6 MB): a file that "
+                         "passes every check.")
         same = running and _chosen(source, upload, scenario) == store.run_data(run_dir)
         pending = running and PENDING in st.session_state
         with st.container(key="launch-actions", horizontal=True, vertical_alignment="center"):

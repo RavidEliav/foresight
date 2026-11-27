@@ -1,8 +1,9 @@
 """Phase 9: the README's screenshots (docs/images). Starts the app as a local developer (no
 Google keys) on an empty runs folder, so it shows the reference analysis, with the real chat
-(OPENAI_API_KEY from .env: one question, well under 0.1 cent; --mock for none). Saves each
-page at a laptop's window size, a few pages on a phone, an analysis in progress (stopped right
-after), and the sign-in page of the main app.
+(OPENAI_API_KEY from .env: one question and the first stages of one analysis, about a cent;
+--mock for none). Saves every page at a laptop's window size in the menu's order, an analysis
+with its fourth stage running (stopped right after), four phone views, and the sign-in page of
+the main app. The README's diagrams come from scripts/readme_art.py.
 
     python scripts/take_screenshots.py [--mock] [--out docs/images] [--sign-in URL]
 """
@@ -32,6 +33,11 @@ PHONE_AGENT = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebK
 QUESTION = "Which sensors differ most between failing and passing runs?"
 PAGES = {"data-quality": "data-quality", "insights": "eda", "model": "model",
          "findings": "report"}
+# The New analysis picture: stages 1-3 done, 4 running, 5 waiting (the stage tiles' classes)
+STAGES_AT = """(want) => [...document.querySelectorAll('.fs-stage')]
+  .map(e => [...e.classList].find(c => c !== 'fs-stage')).join() === want"""
+AT_FOURTH = "fs-done,fs-done,fs-done,fs-running,fs-pending"
+NAME = "Ravid Eliav"  # the local developer's name, shown as "Hi, Ravid" (main shows yours)
 
 # The local checkout's environment badge and the sign-in greeting: main shows neither
 TIDY = """() => {
@@ -69,6 +75,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=ROOT / "docs" / "images")
     parser.add_argument("--sign-in", default="https://foresight-ai.up.railway.app",
                         help="the app whose sign-in page is captured (empty: none)")
+    parser.add_argument("--name", default=NAME, help="the name in the top right corner")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -76,7 +83,7 @@ def main() -> int:
     env = dict(os.environ, MOCK_LLM="true" if args.mock else "false", GOOGLE_CLIENT_ID="",
                SUPABASE_DB_URL="", SUPABASE_URL="", SUPABASE_SECRET_KEY="",
                FORESIGHT_RUNS_DIR=str(runs), FORESIGHT_MODELS_DIR=str(ROOT / "runs" / ".models"),
-               PYTHONUNBUFFERED="1")
+               FORESIGHT_LOCAL_NAME=args.name, PYTHONUNBUFFERED="1")
     env.pop("RAILWAY_ENVIRONMENT_NAME", None)
     server = subprocess.Popen([sys.executable, "-m", "streamlit", "run", "app/streamlit_app.py",
                                "--server.port", str(PORT), "--server.headless", "true"],
@@ -106,10 +113,10 @@ def main() -> int:
             shot(laptop, args.out, "home")
             for name, path in PAGES.items():
                 open_page(laptop, path, 3500)
+                if name == "findings":  # the anomaly timeline and the run map
+                    laptop.get_by_role("tab", name="Anomalies and run map").click()
+                    laptop.wait_for_timeout(4000)
                 shot(laptop, args.out, name)
-            laptop.get_by_role("tab", name="Simulated wafer").click()
-            laptop.wait_for_timeout(3500)
-            shot(laptop, args.out, "findings-wafer")
 
             open_page(laptop, "replay", 3000)  # most of the test period, at 30 runs a second
             laptop.get_by_text("30 runs/s", exact=True).click()
@@ -119,30 +126,53 @@ def main() -> int:
             shot(laptop, args.out, "line-replay")
             laptop.get_by_role("button", name="Pause", exact=True).click()
 
-            # an analysis in progress, stopped once the picture is taken
-            open_page(laptop, "new")
-            laptop.get_by_role("button", name="Run analysis").click()
-            laptop.locator(".fs-stage.fs-done").first.wait_for(timeout=180_000)
-            laptop.wait_for_timeout(2500)
-            shot(laptop, args.out, "new-analysis")
-            laptop.get_by_role("button", name="Stop analysis").click()
-            laptop.wait_for_timeout(5000)
-            laptop.close()
-
             phone = browser.new_page(viewport=PHONE, is_mobile=True, has_touch=True,
                                      user_agent=PHONE_AGENT, device_scale_factor=2)
-            for name, path in (("phone-home", ""), ("phone-findings", "report"),
-                               ("phone-model", "model")):
-                open_page(phone, path, 3500)
-                shot(phone, args.out, name)
+            open_page(phone, "eda", 3000)
+            phone.get_by_role("tab", name="Fail rate over time").tap()
+            phone.wait_for_timeout(3500)
+            shot(phone, args.out, "phone-insights")
+            open_page(phone, "replay", 3000)  # the whole test period, then the newest wafer
+            phone.get_by_role("button", name="End", exact=True).tap()
+            settle(phone, 3000)
+            phone.get_by_role("tab", name="Wafer").tap()
+            phone.wait_for_timeout(4000)
+            shot(phone, args.out, "phone-replay")
+
+            # an analysis in progress: three stages done, the fourth running, the fifth
+            # waiting; stopped once the pictures are taken
+            open_page(laptop, "new")
+            laptop.get_by_role("button", name="Run analysis").click()
+            try:
+                laptop.locator(".fs-stage").first.wait_for(timeout=60_000)
+                # the page shows a running analysis when it loads: the phone opens it now
+                phone.goto(f"{BASE}/new")
+                phone.locator(".fs-stage").first.wait_for(timeout=60_000)
+                for page in (laptop, phone):
+                    page.wait_for_function(STAGES_AT, arg=AT_FOURTH, timeout=600_000,
+                                           polling=500)
+                laptop.wait_for_timeout(1500)
+                shot(laptop, args.out, "new-analysis")
+                shot(phone, args.out, "phone-new-analysis")
+            finally:  # never leave the analysis running
+                laptop.get_by_role("button", name="Stop analysis").click()
+                laptop.wait_for_timeout(5000)
+            laptop.close()
             phone.close()
 
             if args.sign_in:
-                visitor = browser.new_page(viewport=LAPTOP)
-                visitor.goto(args.sign_in)
-                visitor.get_by_role("button", name="Continue with Google").wait_for(timeout=90_000)
-                visitor.wait_for_timeout(2000)
-                shot(visitor, args.out, "sign-in")
+                for name, size, extra in (
+                        ("sign-in", LAPTOP, {}),
+                        ("phone-sign-in", PHONE, {"is_mobile": True, "has_touch": True,
+                                                  "user_agent": PHONE_AGENT,
+                                                  "device_scale_factor": 2})):
+                    visitor = browser.new_page(viewport=size, **extra)
+                    visitor.goto(args.sign_in)
+                    visitor.get_by_role("button", name="Continue with Google").wait_for(
+                        timeout=90_000)
+                    visitor.wait_for_timeout(2000)
+                    shot(visitor, args.out, name)
+                    visitor.close()
             browser.close()
     finally:
         server.terminate()

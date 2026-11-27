@@ -103,7 +103,9 @@ def session(settings: Settings) -> Session:
     """Check the visitor: signed in, approved, not idle for too long."""
     configure(settings)
     if not required(settings):
-        local = Viewer(email="", name="Local developer", role="developer", local=True)
+        # FORESIGHT_LOCAL_NAME names the local developer ("Hi, Ravid"; the README's pictures)
+        local = Viewer(email="", name=os.getenv("FORESIGHT_LOCAL_NAME") or "Local developer",
+                       role="developer", local=True)
         st.session_state[VIEWER] = local
         return Session("ok", local)
     st.session_state.pop(VIEWER, None)

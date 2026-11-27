@@ -21,7 +21,7 @@
 <p align="center">
   <a href="https://github.com/RavidEliav/foresight/actions/workflows/ci.yml"><img src="https://github.com/RavidEliav/foresight/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white" alt="Python 3.11">
-  <img src="https://img.shields.io/badge/CrewAI-Flow-FF5A50" alt="CrewAI Flow">
+  <img src="https://img.shields.io/badge/CrewAI-Flow-FF5A50?logo=crewai&logoColor=white" alt="CrewAI Flow">
   <img src="https://img.shields.io/badge/Streamlit-1.67-FF4B4B?logo=streamlit&logoColor=white" alt="Streamlit">
   <img src="https://img.shields.io/badge/deployed%20on-Railway-0B0D0E?logo=railway&logoColor=white" alt="Railway">
   <img src="https://img.shields.io/badge/license-MIT-22D3EE" alt="MIT license">
@@ -56,20 +56,20 @@ The app is behind Google sign-in: a new visitor asks for access, and a developer
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/new-analysis.webp" alt="New analysis: five stages with live progress"><br><b>New analysis.</b> Five stages with live progress, checks between them; stop and resume.</td>
-    <td width="50%"><img src="docs/images/data-quality.webp" alt="Data quality: the Data Contract validation and cleaning decisions"><br><b>Data quality.</b> The Data Contract validation and every cleaning decision.</td>
+    <td width="50%" valign="top"><img src="docs/images/new-analysis.webp" alt="New analysis: five stages with live progress"><br><b>New analysis.</b> Five stages with live progress, checks between them; stop and resume.</td>
+    <td width="50%" valign="top"><img src="docs/images/data-quality.webp" alt="Data quality: the Data Contract validation and cleaning decisions"><br><b>Data quality.</b> The Data Contract validation and every cleaning decision.</td>
   </tr>
   <tr>
-    <td><img src="docs/images/insights.webp" alt="Data insights: fail rate over time and the AI data analyst's summary"><br><b>Data insights.</b> Fail rate over time, the sensors that differ, the AI data analyst's summary.</td>
-    <td><img src="docs/images/model.webp" alt="Model: metrics with confidence intervals and risk scores over time"><br><b>Model.</b> Metrics with 95% confidence intervals against random guessing, and why the alarm budget beats a fixed threshold.</td>
+    <td valign="top"><img src="docs/images/insights.webp" alt="Data insights: fail rate over time and the AI data analyst's summary"><br><b>Data insights.</b> Fail rate over time, the sensors that differ, the AI data analyst's summary.</td>
+    <td valign="top"><img src="docs/images/model.webp" alt="Model: metrics with confidence intervals and risk scores over time"><br><b>Model.</b> Metrics with 95% confidence intervals against random guessing, and why the alarm budget beats a fixed threshold.</td>
   </tr>
   <tr>
-    <td><img src="docs/images/findings-wafer.webp" alt="Findings: a simulated 3D wafer of the riskiest run"><br><b>Findings.</b> Hypotheses with confidence and how to verify them, the run map, and a simulated 3D wafer of any test run.</td>
-    <td><img src="docs/images/line-replay.webp" alt="Line replay: the test period played back run by run"><br><b>Line replay.</b> The test period played back run by run, as if live: alarms, catches and the newest wafer.</td>
+    <td valign="top"><img src="docs/images/findings-wafer.webp" alt="Findings: a simulated 3D wafer of the riskiest run"><br><b>Findings.</b> Hypotheses with confidence and how to verify them, the run map, and a simulated 3D wafer of any test run.</td>
+    <td valign="top"><img src="docs/images/line-replay.webp" alt="Line replay: the test period played back run by run"><br><b>Line replay.</b> The test period played back run by run, as if live: alarms, catches and the newest wafer.</td>
   </tr>
   <tr>
-    <td><img src="docs/images/ask.webp" alt="Ask Foresight: an answer with its source"><br><b>Ask Foresight.</b> Answers only from the analysis's reports, with sources; anything else is refused.</td>
-    <td><img src="docs/images/home.webp" alt="Home: the analysis at a glance"><br><b>Home.</b> The analysis at a glance, its top finding, and a full PDF report of every page.</td>
+    <td valign="top"><img src="docs/images/ask.webp" alt="Ask Foresight: an answer with its source"><br><b>Ask Foresight.</b> Answers only from the analysis's reports, with sources; anything else is refused.</td>
+    <td valign="top"><img src="docs/images/home.webp" alt="Home: the analysis at a glance"><br><b>Home.</b> The analysis at a glance, its top finding, and a full PDF report of every page.</td>
   </tr>
 </table>
 
@@ -83,14 +83,18 @@ The app is behind Google sign-in: a new visitor asks for access, and a developer
 ## How it works
 
 ```mermaid
-flowchart LR
-    data[("SECOM or<br>an uploaded CSV")] --> s1["1 · Load the data<br>check the Data Contract"]
-    s1 -- check --> s2["2 · EDA and features<br><i>AI data analyst</i>"]
-    s2 -- check --> s3["3 · Train and evaluate models<br><i>AI data scientist</i>"]
-    s3 --> s4["4 · Anomalies and risk ranking<br><i>AI investigator</i>"]
-    s4 -- check --> s5["5 · Engineering report<br>and 26 output checks<br><i>AI report writer</i>"]
-    s5 --> out[("Run files, PDF,<br>chat index")]
-    out --> app["Streamlit app<br>and Ask Foresight"]
+flowchart TB
+    data[("SECOM or an uploaded CSV")]
+    subgraph flow["CrewAI Flow · about 2.5 minutes"]
+        direction LR
+        s1["1 · Load the data<br>Data Contract"] -- check --> s2["2 · EDA and features<br><i>AI data analyst</i>"]
+        s2 -- check --> s3["3 · Models<br><i>AI data scientist</i>"]
+        s3 --> s4["4 · Anomalies and risk<br><i>AI investigator</i>"]
+        s4 -- check --> s5["5 · Report and 26 checks<br><i>AI report writer</i>"]
+    end
+    data --> flow
+    flow --> out[("Run files · PDF reports · chat index")]
+    out --> app["Streamlit app · Ask Foresight"]
 ```
 
 1. **Load and check.** The raw files are validated, cleaned (features over 50% missing and constant ones dropped, the rest kept and imputed on the training split only) and checked against the committed Data Contract. An error stops the run with a plain-language reason.
@@ -113,7 +117,7 @@ flowchart LR
 
 On the real SECOM data (the [reference analysis](artifacts/reference), gpt-4o-mini, every check passing):
 
-| | |
+| Measure | Result |
 |---|---|
 | Failing runs caught in the test period | **5 of 24** with 40 alarms (21%, 95% CI 4–35%) |
 | Alarm precision | **12.5%**, about twice the test period's fail rate (6.1%) |
@@ -127,7 +131,7 @@ SECOM is hard: 590 anonymized sensors, 6.6% failing runs, and drift over time. F
 
 ## Features
 
-| | |
+| Feature | What it does |
 |---|---|
 | **Three kinds of data** | SECOM (built in), an uploaded CSV (template on the page) or a **Scenario Lab** run: synthetic changes such as a planted fault, drift, an outage or noise, applied to the training period only, with a check that the analysis found them |
 | **Background analyses** | Runs continue when the page closes, can be stopped and resumed, and stay within an hourly limit and a timeout |

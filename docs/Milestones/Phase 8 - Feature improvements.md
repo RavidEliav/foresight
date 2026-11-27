@@ -102,14 +102,15 @@ Sources: the course `Final_Project` folder, Daniel's lectures, the BanAI project
   - **PR 3 (#76):** sources by plain names in the chat, the result pages and the PDF ("Analysis 12 › Insights › Data quality", "Model metrics"; run ids in an All runs answer become analysis names; the stored tags are unchanged for the checks); a developer's My activity shows anyone's analyses and questions ("Activity of"); the sign-in pitch fits two lines on a computer
   - **PR 4 (#77):** every download is a PDF, not markdown (Ravid: .md is no use to a user): the engineering report, investigation, model card, evaluation report, Data insights (replaces the HTML data report) and Data Contract, each titled and named like the full report and made when the button is pressed; the upload template stays a CSV
   - **Upload template (#80):** a small template from the repo is always offered (10 SECOM runs, 2 failing); before, the button showed only once the server had the SECOM files, which a deploy removes. All of SECOM in the upload format is a second button, fetched when pressed
+  - **Phone tables (#82):** on Ravid's iPhone, My activity and Users & access did not scroll: a swipe on a table went to Streamlit's grid (a canvas), not the page. A phone now gets plain tables, which scroll natively (up to 100 rows, so none are lost); computers keep the grid
   - **Deployed test E0 (#79):** the deployed-only sign-in test still looked for the old wording and had failed on `dev` since #75; it blocked the release until fixed
 - **Release to `main`** (#78, Nov 26): 8.10; deployed tests passed on `main`.
-- **8.11 Close-out:** this note, Home, the README (status, button names, sources) and the release of #80 and the close-out to `main`.
+- **8.11 Close-out:** this note, Home, the README (status, button names, sources) and the release of #80, #82 and the close-out to `main`.
 
 All of Phase 8 is on `main`.
 
 ## Test results
-- 316 unit, integration and app tests pass (1 skipped) locally and in CI, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)
+- 317 unit, integration and app tests pass (1 skipped) locally and in CI, plus the Postgres test in CI (a pgvector Postgres 17 service container: registry, chunks, chat history)
 - Smoke + E2E: 14 pass against the local app (E0 is skipped there, since a local checkout has no sign-in), and in CI. The deployed tests check the sign-in screen and the public pages; E1–E9 run in CI against the local app, since a test browser cannot sign in with Google.
 - Supabase advisors on both projects: INFO notes only
 
@@ -140,7 +141,7 @@ All of Phase 8 is on `main`.
 - **Run dates in summaries (#53):** Ravid's "all runs" question was answered "not found in recorded runs": the summary named runs by date, and the date's numbers were not in any excerpt's text, only in the run ids.
 - **Swapping widgets moves the page (#56):** Line Replay's Play and Pause were two buttons. For a moment the browser showed both, and the slider disappeared while playing, so the cards jumped. One button with a fixed key whose label changes, and a slider that always shows, keep every element in place.
 - **Fit on another machine (8.7):** Line Replay fit locally but measured 730 px on CI's 730 px window, because the reference run's label is longer. A fit test needs a margin.
-- **A phone is not a narrow window:** the phone checks found what a narrow desktop browser could not show: the header over the menu, an iPhone zooming into small text fields, Plotly taking pinches, a dropdown opening the keyboard. The phone view keys off the user agent, and E9 runs with an iPhone user agent.
+- **A phone is not a narrow window:** the phone checks found what a narrow desktop browser could not show: the header over the menu, an iPhone zooming into small text fields, Plotly taking pinches, a dropdown opening the keyboard, Streamlit's table grid keeping a swipe (#82; Chromium's phone emulation scrolled it fine). The phone view keys off the user agent, and E9 runs with an iPhone user agent.
 - **Browser and server race:** the browser keeps sending what it showed a moment ago (a timer tick in flight, a slider's old value). Code that reacts to a widget change must tell an echo from a real change.
 - **A second reader of a file:** the launch card read `scenario.json` in the form the app writes, but the run's first stage rewrites it. The traceback was in `main`'s log within a minute of Ravid's report.
 - **Fixed waits on the server:** a 30 s wait that never ran out locally gave up on `main`, where a new run's process takes much longer to start.

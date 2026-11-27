@@ -238,6 +238,18 @@ def test_users_and_access_approves_requests_and_adds_people():
     assert access.get_account(settings, "ada@example.com") is None
 
 
+def test_a_phone_gets_plain_tables_that_scroll_with_the_page(monkeypatch):
+    """On a phone the grid (a canvas) kept a swipe for itself, so Users & access and My
+    activity did not scroll: a phone gets plain tables, every row of the 35 accounts shown."""
+    settings = load_settings()
+    for i in range(35):
+        access.add_account(settings, f"person{i:02d}@example.com", "user", DEVELOPER)
+    monkeypatch.setattr("app.ui.phone", lambda: True)
+    at = _page("app.access_page", "developer")
+    assert not at.exception and not at.dataframe
+    assert len(at.table[0].value) == 36  # the 35 and the developer, not the first 30
+
+
 def test_my_activity_lists_only_the_persons_runs_and_questions():
     from foresight import jobs
     from foresight.progress import ProgressTracker

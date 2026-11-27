@@ -501,6 +501,7 @@ def kpis(items: list[tuple[str, str, str | None, str | None]]) -> None:
 
 WRAP_CHARS = 60  # a column with longer text makes the table wrap its cells (Phase 8.7)
 MAX_TABLE_PX = 1000  # wider than a laptop's page: the table wraps its cells instead
+PHONE_ROWS = 100  # a phone's plain table shows this many rows (the grid scrolls through all)
 
 
 def _shown(value) -> str:
@@ -533,10 +534,16 @@ def table(frame, column_config: dict | None = None, max_rows: int = 12) -> None:
     """A compact table that fits its content (Phase 8.7): every column as wide as its header
     or longest value, height fitted to the rows. A table with long text (more than
     ``WRAP_CHARS`` characters in a cell), or wider than a laptop's page, is shown with wrapped
-    cells instead, so nothing is hidden behind a cut-off column."""
+    cells instead, so nothing is hidden behind a cut-off column.
+
+    A phone always gets the wrapped table: the grid is a canvas that keeps a swipe for itself,
+    so the page did not scroll while a finger was on it. The plain table scrolls with the page
+    and shows up to ``PHONE_ROWS`` rows, the ones a computer scrolls through in the grid."""
     longest = max((len(_shown(v)) for c in frame.columns for v in frame[c]), default=0)
     widths = column_widths(frame)
-    if longest > WRAP_CHARS or sum(widths.values()) > MAX_TABLE_PX:
+    on_phone = phone()
+    if on_phone or longest > WRAP_CHARS or sum(widths.values()) > MAX_TABLE_PX:
+        max_rows = max(max_rows, PHONE_ROWS) if on_phone else max_rows
         shown = frame.head(max_rows) if len(frame) > max_rows else frame
         shown = pd.DataFrame({column: [_formatted(v, (column_config or {}).get(column))
                                        for v in shown[column]] for column in shown.columns})

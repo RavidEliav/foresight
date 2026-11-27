@@ -2,8 +2,9 @@
 Google keys) on an empty runs folder, so it shows the reference analysis, with the real chat
 (OPENAI_API_KEY from .env: one question and the first stages of one analysis, about a cent;
 --mock for none). Saves every page at a laptop's window size in the menu's order, an analysis
-with its fourth stage running (stopped right after), four phone views, and the sign-in page of
-the main app. The README's diagrams come from scripts/readme_art.py.
+with its fourth stage running (stopped right after), Trends after three more real analyses
+(about 5 cents in all, 15 minutes), four phone views, and the sign-in page of the main app.
+The README's diagrams come from scripts/readme_art.py.
 
     python scripts/take_screenshots.py [--mock] [--out docs/images] [--sign-in URL]
 """
@@ -11,6 +12,7 @@ the main app. The README's diagrams come from scripts/readme_art.py.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -37,6 +39,8 @@ PAGES = {"data-quality": "data-quality", "insights": "eda", "model": "model",
 STAGES_AT = """(want) => [...document.querySelectorAll('.fs-stage')]
   .map(e => [...e.classList].find(c => c !== 'fs-stage')).join() === want"""
 AT_FOURTH = "fs-done,fs-done,fs-done,fs-running,fs-pending"
+# Trends' history: real analyses of SECOM and two scenarios (about a cent each)
+HISTORY = [None, {"kind": "planted_fault"}, {"kind": "drift"}]
 NAME = "Ravid Eliav"  # the local developer's name, shown as "Hi, Ravid" (main shows yours)
 
 # The local checkout's environment badge and the sign-in greeting: main shows neither
@@ -62,6 +66,19 @@ def shot(page: Page, out: Path, name: str) -> None:
     Image.open(BytesIO(page.screenshot())).convert("RGB").save(
         out / f"{name}.webp", "WEBP", quality=90, method=6)
     print("saved", name)
+
+
+def analyse(env: dict, runs: Path, recipe: dict | None) -> None:
+    """One analysis from the command line, to the end (SECOM, or a scenario recipe)."""
+    command = [sys.executable, "-m", "foresight.cli", "run"]
+    if recipe:
+        path = runs / f"recipe-{recipe['kind']}.json"
+        path.write_text(json.dumps(recipe), encoding="utf-8")
+        command += ["--scenario", str(path)]
+    subprocess.run(command, cwd=ROOT, env=dict(env, PYTHONPATH=str(ROOT / "src")),
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1200,
+                   check=False)
+    print("analysis done:", (recipe or {}).get("kind", "SECOM"))
 
 
 def open_page(page: Page, path: str, wait_ms: int = 2500) -> None:
@@ -157,8 +174,17 @@ def main() -> int:
             finally:  # never leave the analysis running
                 laptop.get_by_role("button", name="Stop analysis").click()
                 laptop.wait_for_timeout(5000)
-            laptop.close()
             phone.close()
+
+            # Trends: a few real analyses, so it has tokens and stage times to show
+            for recipe in HISTORY:
+                analyse(env, runs, recipe)
+            open_page(laptop, "trends", 3000)
+            laptop.get_by_role("tab", name="LLM tokens per run").click()
+            laptop.get_by_role("tab", name="Where the run time goes").click()
+            laptop.wait_for_timeout(3500)
+            shot(laptop, args.out, "trends")
+            laptop.close()
 
             if args.sign_in:
                 for name, size, extra in (

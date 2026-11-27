@@ -93,7 +93,9 @@ def pipeline() -> tuple[str, str, str]:
 <div class="row"><div class="glass pill">SECOM or an uploaded CSV</div></div>
 <div class="down"></div>
 <div class="flow"><div class="label">CrewAI Flow · about 2.5 minutes</div>
-  <div class="tiles">{''.join(tiles)}</div></div>
+  <div class="tiles">{''.join(tiles)}</div>
+  <div class="checks"><i></i>Checks: the Data Contract after 1 · features after 2 ·
+  evidence after 4. An error stops the analysis with a plain reason.</div></div>
 <div class="down"></div>
 <div class="row"><div class="glass pill">Run files · PDF reports · chat index (embeddings)</div>
   <div class="arrow"></div><div class="glass pill">Streamlit app · Ask Foresight</div></div>"""
@@ -118,6 +120,9 @@ def pipeline() -> tuple[str, str, str]:
 .gate {{ background: {GREEN}; }}
 .gate::after {{ content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px;
   border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); background: {GREEN}; }}
+.checks {{ margin-top: 14px; text-align: center; font-size: 12px; color: #94A3B8; }}
+.checks i {{ display: inline-block; width: 7px; height: 7px; background: {GREEN};
+  transform: rotate(45deg); border-radius: 1px; margin-right: 8px; vertical-align: 1px; }}
 .gate span {{ position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
   font-size: 10px; color: {GREEN}; font-weight: 600; }}"""
     return body, extra, "20px 22px 22px"

@@ -71,8 +71,8 @@ Every page, in the menu's order:
     <td valign="top"><img src="docs/images/line-replay.webp" alt="Line replay: the test period played back run by run"><br><b>Line replay.</b> The test period played back run by run: alarms, catches and a simulated wafer of the newest run.</td>
   </tr>
   <tr>
+    <td valign="top"><img src="docs/images/trends.webp" alt="Trends: LLM tokens per run and where the run time goes"><br><b>Trends</b> (developers). Every analysis over time: LLM tokens per run, where the run time goes, model quality and outcomes.</td>
     <td valign="top"><img src="docs/images/ask.webp" alt="Ask Foresight: an answer with its source"><br><b>Ask Foresight.</b> Answers only from the analysis's reports, with sources; anything else is refused.</td>
-    <td valign="top"></td>
   </tr>
 </table>
 
